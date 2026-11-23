@@ -1,0 +1,7 @@
+# shadcn instructions
+
+Use the latest shadcn to install components with Bun, for example:
+
+```bash
+bunx shadcn@latest add button
+```
