@@ -2,7 +2,7 @@
 
 FROM ghcr.io/astral-sh/uv:0.13 AS uv
 
-FROM python:3.15-slim
+FROM docker.io/library/python:3.15-slim
 
 COPY --from=uv /uv /uvx /bin/
 

@@ -1,12 +1,14 @@
 # syntax=docker/dockerfile:1
 
-FROM oven/bun:1 AS build
+FROM docker.io/oven/bun:1 AS build
 
 WORKDIR /app
 
 COPY package.json bun.lock ./
 COPY web/package.json ./web/package.json
-RUN bun install --frozen-lockfile
+# No install scripts: better-sqlite3 (devDependency, drizzle-kit CLI only) would
+# need python/gyp here, while the shipped app uses bun:sqlite and never loads it.
+RUN bun install --frozen-lockfile --ignore-scripts
 
 COPY web ./web
 
@@ -15,7 +17,7 @@ ENV VITE_MAPBOX_TOKEN=$VITE_MAPBOX_TOKEN
 
 RUN bun run --cwd web build
 
-FROM oven/bun:1-slim
+FROM docker.io/oven/bun:1-slim
 
 WORKDIR /app
 
