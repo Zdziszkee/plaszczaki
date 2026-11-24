@@ -21,7 +21,13 @@
     "py:lint": "uv run --directory scraper ruff check .",
     "py:format": "uv run --directory scraper ruff format .",
     "py:typecheck": "uv run --directory scraper ty check",
-    "py:check": "bun run py:lint && uv run --directory scraper ruff format --check && bun run py:typecheck"
+    "py:check": "bun run py:lint && uv run --directory scraper ruff format --check && bun run py:typecheck",
+    "deploy:up": "bash deploy/plaszczaki.sh up",
+    "deploy:build": "bash deploy/plaszczaki.sh build",
+    "deploy:down": "bash deploy/plaszczaki.sh down",
+    "deploy:restart": "bash deploy/plaszczaki.sh restart",
+    "deploy:status": "bash deploy/plaszczaki.sh status",
+    "deploy:logs": "bash deploy/plaszczaki.sh logs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.5"
