@@ -1,132 +1,118 @@
 # plaszczaki
 
-A TanStack Start v1 app with file-based routing, TanStack Query, Drizzle ORM on SQLite, Better Auth, shadcn/ui, Tailwind CSS v4, Biome, and Nitro (`preset: 'bun'`).
+Polish real-estate data platform: a TanStack Start web app and a Python collection
+sidecar, sharing one repo-level workspace and runtime data directory.
+
+## Layout
+
+```text
+web/        TanStack Start app (routes, UI, Drizzle/SQLite, Better Auth)
+scraper/    Python sidecar (scraping + source list in scraper/config/sources.json)
+deploy/     Containerfiles and Podman quadlets
+data/       Runtime only: SQLite DB + scraper output (gitignored)
+```
+
+`scraper/config/sources.json` is the single source of truth for the portal list:
+
+```json
+{ "urls": ["https://www.otodom.pl"] }
+```
+
+It is loaded and validated by `scraper/src/plaszczaki_scraper/config.py`. The web app
+does not read it.
 
 ## Requirements
 
-- [Bun](https://bun.sh/) >= 1.4 (developed on Bun 1.4.0)
-- Use Bun for every command in this repo: `bun`, `bun run`, and `bunx`
-- Do not use npm, pnpm, or yarn — the repo has a `bun.lock`
+- Bun >= 1.4 (developed on 1.4.0) — use `bun`, `bun run`, `bunx` only
+- Python 3.15 + uv 0.13+ (scraper)
+- Podman + systemd/Quadlet (deployment, optional)
 
-## Development
+## Setup
 
 ```bash
-bun install
-bun --bun run dev
+bun install                      # installs the web workspace
+uv sync --directory scraper --locked
+cp web/.env.local.example web/.env.local
 ```
 
-The dev server runs at <http://localhost:3000>.
-
-`bun --bun` makes Vite run on the Bun runtime. Keep it for the Vite scripts (`dev`, `build`, `preview`, `generate-routes`).
-
-## Production
-
-Build with the Nitro Bun preset, then start the built server:
+## Web app
 
 ```bash
-bun --bun run build
-bun run start
+bun run dev                      # http://localhost:3000
+bun run build                    # web/.output (Nitro bun preset)
+bun run start                    # run the built server
 ```
 
-- Build output: `.output/`
-- Server entry: `.output/server/index.mjs`
-- Preview the production build locally: `bun --bun run preview`
+Root scripts delegate to `web/` with `bun run --cwd web <script>`. Use
+`bun --bun` for Vite commands so they run on the Bun runtime.
 
-## Environment
+### Environment
 
-Create `.env.local` in the project root:
+`web/.env.local` is loaded by Vite and Drizzle:
 
 ```bash
-DATABASE_URL="dev.db"
+DATABASE_URL="../data/plaszczaki.db"
 BETTER_AUTH_URL=http://localhost:3000
 BETTER_AUTH_SECRET=
+VITE_MAPBOX_TOKEN=
 ```
 
-`.env.local` is gitignored. Never commit secrets.
+`DATABASE_URL` is relative to `web/`. In containers it is absolute (`/data/plaszczaki.db`).
+Never commit `.env.local` or secrets.
 
-## Database
+### Database
 
-The app uses SQLite through Bun's native `bun:sqlite` driver and Drizzle ORM (`drizzle-orm/bun-sqlite`). The database file is `dev.db` by default, configured by `DATABASE_URL`.
+SQLite via `bun:sqlite` and Drizzle ORM.
 
-- Schema: `src/db/schema.ts`
-- Client: `src/db/index.ts`
-- Drizzle Kit config: `drizzle.config.ts` (loads `.env.local`, then `.env`)
+- Schema: `web/src/db/schema.ts`
+- Client: `web/src/db/index.ts`
+- Drizzle Kit config: `web/drizzle.config.ts`
+- Migrations: `web/drizzle/`
+- Database file: `data/plaszczaki.db`
 
 ```bash
-bun run db:generate   # generate SQL migrations in ./drizzle
-bun run db:push       # push the schema directly to the database
-bun run db:migrate    # apply generated migrations
-bun run db:studio     # open Drizzle Studio
+bun run db:generate
+bun run db:push
+bun run db:migrate
+bun run db:studio
 ```
 
-`bun run db:pull` is also available for introspecting an existing database.
-
-## Auth
-
-Better Auth is configured in `src/lib/auth.ts` with the Drizzle SQLite adapter and email/password enabled. The React client is `src/lib/auth-client.ts`; the handler is `src/routes/api/auth/$.ts`.
-
-Set `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL` in `.env.local`. Generate a secret:
+## Scraper
 
 ```bash
-bunx --bun @better-auth/cli secret
+uv run --directory scraper python -m plaszczaki_scraper
+bun run py:lint
+bun run py:format
+bun run py:typecheck
+bun run py:check
 ```
 
-Better Auth tables (`user`, `session`, `account`, `verification`) are defined in `src/db/schema.ts`. Generate and apply their migrations with the Drizzle scripts above, or run:
+The source config lives at `scraper/config/sources.json`; `load_source_urls()`
+validates it (https only, no unknown keys, no normalized duplicates).
+
+## Deploy (Podman + Quadlet)
 
 ```bash
-bunx --bun @better-auth/cli migrate
+podman build -f deploy/containers/web.Containerfile -t localhost/plaszczaki-web:0.1.0 .
+podman build -f deploy/containers/scraper.Containerfile -t localhost/plaszczaki-scraper:0.1.0 scraper/
+
+cp deploy/quadlet/*.container deploy/quadlet/*.timer ~/.config/containers/systemd/
+systemctl --user daemon-reload
+systemctl --user start plaszczaki-web
 ```
 
-## shadcn/ui
+Environment files expected by the quadlets live outside the repo:
 
-Components use the `new-york` style and these aliases from `components.json`:
+- `~/.config/plaszczaki/web.env`
+- `~/.config/plaszczaki/scraper.env`
 
-- `#/components`
-- `#/components/ui`
-- `#/lib/utils`
-
-Add a component:
+## Checks
 
 ```bash
-bunx shadcn@latest add <component>
-# e.g.
-bunx shadcn@latest add button
-```
-
-Tailwind CSS v4 is wired through `@tailwindcss/vite`; global styles live in `src/styles.css`.
-
-## Linting and formatting
-
-Biome handles both:
-
-```bash
-bun --bun run check
-bun --bun run format
-bun --bun run lint
-```
-
-`check` runs the linter and formatter together; `format` and `lint` apply or report one at a time. `src/routeTree.gen.ts` and `src/styles.css` are excluded in `biome.json`.
-
-## Project structure
-
-```text
-src/
-  routes/            file-based routes (createFileRoute); __root.tsx is the app shell
-  routes/api/        server route handlers (e.g. /api/auth/*)
-  db/                Drizzle client and schema
-  lib/auth.ts        Better Auth server config (plus auth-client.ts, utils.ts)
-  integrations/      TanStack Query provider/devtools and Better Auth UI
-  components/        shared UI and components/ui
-  router.tsx         router factory with SSR Query integration
-  routeTree.gen.ts   generated route tree (do not edit)
-  styles.css         Tailwind entry
-```
-
-## Verification
-
-There is no test runner configured in `package.json`. Verify changes with:
-
-```bash
-bun --bun run check
+bun run check        # Biome lint + format
+bun run typecheck    # tsc --noEmit in web/
+bun run py:check     # ruff + ty
 bun --bun run build
 ```
+
+There is no Bun test runner configured.

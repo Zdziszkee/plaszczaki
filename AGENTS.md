@@ -1,24 +1,33 @@
 # Project conventions
 
+## Layout
+- `web/` — TanStack Start app (routes, components, db, auth).
+- `scraper/` — Python sidecar; the source list lives in `scraper/config/sources.json` (`{ "urls": [...] }`), loaded and validated by `scraper/src/plaszczaki_scraper/config.py`.
+- `deploy/` — Containerfiles and Podman quadlets; install them to `~/.config/containers/systemd`.
+- `data/` — runtime only (SQLite DB, scraper output); gitignored.
+
 ## Package manager
 - Bun only: `bun`, `bun run`, `bunx`. Never npm, pnpm, or yarn.
+- Root `package.json` is a Bun workspace (`web/`). App scripts run from the root (`bun run dev`) or with `bun --cwd web <script>`.
 - Use `bun --bun run <script>` for Vite scripts (`dev`, `build`, `preview`, `generate-routes`) so they run on the Bun runtime.
 - Do not run `bun install`/`bun add` unless asked.
 
 ## Code
-- Import from the project root with the `#/*` alias (for example `#/db`, `#/lib/auth`, `#/components/ui/button`).
-- Routes live in `src/routes` and use `createFileRoute`; `src/routes/__root.tsx` is the app shell.
-- Server code: use `createServerFn` from `@tanstack/react-start` (see `src/routes/demo/drizzle.tsx`) or server route handlers via a route's `server.handlers` (see `src/routes/api/auth/$.ts`).
-- Database: schema in `src/db/schema.ts`, client in `src/db/index.ts`, Drizzle config in `drizzle.config.ts`. After schema changes use the drizzle-kit scripts: `bun run db:generate`, `bun run db:push`, `bun run db:migrate`.
-- Auth server config: `src/lib/auth.ts`; client: `src/lib/auth-client.ts`; handler: `src/routes/api/auth/$.ts`.
-- Do not edit the generated `src/routeTree.gen.ts`.
+- Import from the app root with the `#/*` alias (for example `#/db`, `#/lib/auth`, `#/components/ui/button`).
+- Routes live in `web/src/routes` and use `createFileRoute`; `web/src/routes/__root.tsx` is the app shell.
+- Server code: use `createServerFn` from `@tanstack/react-start` (see `web/src/routes/demo/drizzle.tsx`) or server route handlers via a route's `server.handlers` (see `web/src/routes/api/auth/$.ts`).
+- Database: schema in `web/src/db/schema.ts`, client in `web/src/db/index.ts`, Drizzle config in `web/drizzle.config.ts`. After schema changes use the drizzle-kit scripts: `bun run db:generate`, `bun run db:push`, `bun run db:migrate`.
+- Auth server config: `web/src/lib/auth.ts`; client: `web/src/lib/auth-client.ts`; handler: `web/src/routes/api/auth/$.ts`.
+- Do not edit the generated `web/src/routeTree.gen.ts`.
 
 ## Environment
-- Put local env vars in `.env.local` (`DATABASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`).
+- Put local env vars in `web/.env.local` (`DATABASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`).
+- `DATABASE_URL` defaults to `../data/plaszczaki.db` relative to `web/`.
 - Never commit secrets or `.env*` files (except checked-in examples).
 
 ## Verify before done
-- Run `bun --bun run check` (Biome lint + format) and fix issues.
+- Run `bun run check` (Biome lint + format) and fix issues.
+- Run `bun run typecheck` and `bun run py:check` when the change touches `web/` or `scraper/`.
 - Build with `bun --bun run build` when the change affects routing or the server.
 - There is no test runner configured in `package.json`; do not claim tests passed.
 - Do not commit unless explicitly asked.

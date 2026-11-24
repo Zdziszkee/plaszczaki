@@ -1,0 +1,11 @@
+.git
+node_modules
+web/node_modules
+web/.output
+.output
+data
+**/.env.local
+scraper/.venv
+scraper/.ruff_cache
+scraper/.ty_cache
+__pycache__

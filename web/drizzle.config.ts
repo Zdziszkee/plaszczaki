@@ -8,6 +8,6 @@ export default defineConfig({
   schema: './src/db/schema.ts',
   dialect: 'sqlite',
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? 'dev.db',
+    url: process.env.DATABASE_URL ?? '../data/plaszczaki.db',
   },
 })
