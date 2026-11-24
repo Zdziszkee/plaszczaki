@@ -1,6 +1,11 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { desc } from "drizzle-orm";
+import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
+import { Badge } from "#/components/ui/badge";
+import { Button } from "#/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "#/components/ui/card";
+import { Input } from "#/components/ui/input";
 import { db } from "#/db/index";
 import { todos } from "#/db/schema";
 
@@ -47,75 +52,84 @@ function DemoDrizzle() {
 	};
 
 	return (
-		<main className="demo-page demo-center">
-			<section className="demo-panel w-full max-w-2xl">
-				<header className="mb-8 flex items-center gap-4">
-					<span className="demo-card flex h-14 w-14 items-center justify-center p-3">
-						<img src="/drizzle.svg" alt="Drizzle Logo" className="h-8 w-8" />
-					</span>
-					<div>
-						<p className="island-kicker mb-2">Database</p>
-						<h1 className="demo-title">Drizzle Demo</h1>
+		<main className="mx-auto w-full max-w-3xl px-4 py-12">
+			<Card>
+				<CardHeader>
+					<div className="flex items-center gap-3">
+						<div className="flex size-12 items-center justify-center rounded-md border bg-muted p-2">
+							<img src="/drizzle.svg" alt="Drizzle Logo" className="size-8" />
+						</div>
+						<div className="flex flex-col gap-1">
+							<Badge variant="secondary" className="w-fit">
+								Database
+							</Badge>
+							<CardTitle>Drizzle Demo</CardTitle>
+						</div>
 					</div>
-				</header>
-
-				<h2 className="demo-section-title mb-4">Todos</h2>
-
-				<ul className="space-y-3 mb-6">
-					{todos.map((todo) => (
-						<li key={todo.id} className="demo-list-item">
-							<div className="flex items-center justify-between">
-								<span className="font-medium">{todo.title}</span>
-								<span className="demo-muted text-xs">#{todo.id}</span>
-							</div>
-						</li>
-					))}
-					{todos.length === 0 && (
-						<li className="demo-list-item text-center demo-muted">
-							No todos yet. Create one below!
-						</li>
-					)}
-				</ul>
-
-				<form
-					onSubmit={handleSubmit}
-					className="flex flex-col gap-2 sm:flex-row"
-				>
-					<input
-						type="text"
-						name="title"
-						placeholder="Add a new todo..."
-						className="demo-input min-w-0 flex-1"
-					/>
-					<button type="submit" className="demo-button whitespace-nowrap">
-						Add Todo
-					</button>
-				</form>
-
-				<div className="demo-card mt-8">
-					<h3 className="demo-section-title mb-2">Powered by Drizzle ORM</h3>
-					<p className="demo-muted mb-4 text-sm">
-						Next-generation ORM for Node.js & TypeScript with PostgreSQL
-					</p>
-					<div className="space-y-2 text-sm">
-						<p className="font-medium">Setup Instructions:</p>
-						<ol className="demo-muted list-inside list-decimal space-y-2">
-							<li>
-								Configure your <code>DATABASE_URL</code> in .env.local
-							</li>
-							<li>
-								Run: <code>bunx --bun drizzle-kit generate</code>
-							</li>
-							<li>
-								Run: <code>bunx --bun drizzle-kit migrate</code>
-							</li>
-							<li>
-								Optional: <code>bunx --bun drizzle-kit studio</code>
-							</li>
-						</ol>
+				</CardHeader>
+				<CardContent className="flex flex-col gap-6">
+					<div className="flex flex-col gap-3">
+						<h2 className="text-lg font-semibold">Todos</h2>
+						<ul className="flex flex-col gap-2">
+							{todos.map((todo) => (
+								<li key={todo.id}>
+									<Card className="gap-0 py-3">
+										<CardContent className="flex items-center justify-between px-4">
+											<span className="font-medium">{todo.title}</span>
+											<Badge variant="outline">#{todo.id}</Badge>
+										</CardContent>
+									</Card>
+								</li>
+							))}
+							{todos.length === 0 && (
+								<li>
+									<Card className="gap-0 py-3">
+										<CardContent className="px-4 text-center text-sm text-muted-foreground">
+											No todos yet. Create one below!
+										</CardContent>
+									</Card>
+								</li>
+							)}
+						</ul>
 					</div>
-				</div>
-			</section>
+
+					<form
+						onSubmit={handleSubmit}
+						className="flex flex-col gap-2 sm:flex-row"
+					>
+						<Input
+							type="text"
+							name="title"
+							placeholder="Add a new todo..."
+							className="min-w-0 flex-1"
+						/>
+						<Button type="submit" className="whitespace-nowrap">
+							Add Todo
+						</Button>
+					</form>
+				</CardContent>
+			</Card>
+
+			<Alert className="mt-6">
+				<AlertTitle>Powered by Drizzle ORM</AlertTitle>
+				<AlertDescription>
+					<p>Next-generation ORM for Node.js & TypeScript.</p>
+					<ol className="mt-2 flex list-inside list-decimal flex-col gap-2">
+						<li>
+							Configure your <code>DATABASE_URL</code> in .env.local
+						</li>
+						<li>
+							Run: <code>bunx --bun drizzle-kit generate</code>
+						</li>
+						<li>
+							Run: <code>bunx --bun drizzle-kit migrate</code>
+						</li>
+						<li>
+							Optional: <code>bunx --bun drizzle-kit studio</code>
+						</li>
+					</ol>
+				</AlertDescription>
+			</Alert>
 		</main>
 	);
 }

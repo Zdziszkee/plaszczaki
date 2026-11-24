@@ -3,6 +3,14 @@ import { useEffect, useRef, useState } from "react";
 
 import "mapbox-gl/dist/mapbox-gl.css";
 
+import { Button } from "#/components/ui/button";
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "#/components/ui/card";
 import {
 	type LayerToggles,
 	MAPBOX_TOKEN,
@@ -25,25 +33,26 @@ import { pruneBadTileCache, resetTileCache } from "./tile-cache";
 function MissingToken() {
 	return (
 		<div className="flex h-full items-center justify-center p-6">
-			<div className="max-w-md rounded-xl border border-white/10 bg-slate-900/90 p-6 text-center text-sm text-slate-200">
-				<p className="mb-2 text-base font-semibold text-slate-50">
-					Brak klucza Mapbox
-				</p>
-				<p className="text-slate-400">
-					Dodaj publiczny token do <code>.env.local</code> jako{" "}
-					<code>VITE_MAPBOX_TOKEN=pk.…</code> i zrestartuj serwer. Token
-					utworzysz na{" "}
-					<a
-						className="text-sky-300 underline"
-						href="https://account.mapbox.com"
-						target="_blank"
-						rel="noreferrer"
-					>
-						account.mapbox.com
-					</a>
-					.
-				</p>
-			</div>
+			<Card className="max-w-md text-center">
+				<CardHeader>
+					<CardTitle>Brak klucza Mapbox</CardTitle>
+					<CardDescription>
+						Dodaj publiczny token do <code>.env.local</code> jako{" "}
+						<code>VITE_MAPBOX_TOKEN=pk.…</code> i zrestartuj serwer.
+					</CardDescription>
+				</CardHeader>
+				<CardContent>
+					<Button asChild variant="link" className="px-0">
+						<a
+							href="https://account.mapbox.com"
+							target="_blank"
+							rel="noreferrer"
+						>
+							Utwórz token na account.mapbox.com
+						</a>
+					</Button>
+				</CardContent>
+			</Card>
 		</div>
 	);
 }
@@ -180,9 +189,9 @@ export default function MapView({ toggles }: { toggles: LayerToggles }) {
 			popupRef.current = new mapboxgl.Popup({ closeButton: true, offset: 12 })
 				.setLngLat(event.lngLat)
 				.setHTML(
-					`<div style="font:12px/1.4 system-ui,sans-serif;color:#e2e8f0">
+					`<div style="font:12px/1.4 system-ui,sans-serif;color:var(--popover-foreground)">
 						<div style="font-weight:600;margin-bottom:2px">${height}</div>
-						<div style="color:#94a3b8">${lat}, ${lng}</div>
+						<div style="color:var(--muted-foreground)">${lat}, ${lng}</div>
 					</div>`,
 				)
 				.addTo(map);
@@ -204,14 +213,16 @@ export default function MapView({ toggles }: { toggles: LayerToggles }) {
 		<div className="relative h-full w-full">
 			<div ref={containerRef} className="h-full w-full" />
 			{toggles.elevation && (
-				<div className="pointer-events-none absolute bottom-4 right-4 z-10 min-w-36 rounded-lg border border-white/10 bg-slate-950/85 px-3 py-2 text-slate-100 shadow-lg backdrop-blur">
-					<div className="text-[10px] uppercase tracking-wide text-slate-400">
-						Wysokość (n.p.m.)
-					</div>
-					<div className="font-mono text-base tabular-nums">
-						{elevation === null ? "—" : `${elevation} m`}
-					</div>
-				</div>
+				<Card className="pointer-events-none absolute right-4 bottom-16 z-20 min-w-36 gap-0 bg-card/90 py-2 shadow-lg backdrop-blur">
+					<CardContent className="px-3">
+						<div className="text-xs text-muted-foreground">
+							Wysokość (n.p.m.)
+						</div>
+						<div className="font-mono text-base tabular-nums">
+							{elevation === null ? "—" : `${elevation} m`}
+						</div>
+					</CardContent>
+				</Card>
 			)}
 		</div>
 	);

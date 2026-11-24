@@ -1,37 +1,58 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "#/components/ui/card";
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "#/components/ui/card";
 
 export const Route = createFileRoute("/")({ component: App });
 
+const FEATURES = [
+	{
+		title: "Type-Safe Routing",
+		description: "Routes and links stay in sync across every page.",
+	},
+	{
+		title: "Server Functions",
+		description: "Call server code from your UI without API boilerplate.",
+	},
+	{
+		title: "Streaming by Default",
+		description:
+			"Ship progressively rendered responses for faster experiences.",
+	},
+	{
+		title: "Tailwind Native",
+		description:
+			"Design quickly with utility-first styling and reusable tokens.",
+	},
+];
+
 function App() {
 	return (
-		<main className="page-wrap px-4 pb-8 pt-14">
-			<section className="island-shell rise-in relative overflow-hidden rounded-[2rem] px-6 py-10 sm:px-10 sm:py-14">
-				<div className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(79,184,178,0.32),transparent_66%)]" />
-				<div className="pointer-events-none absolute -bottom-20 -right-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(47,106,74,0.18),transparent_66%)]" />
-				<p className="island-kicker mb-3">TanStack Start Base Template</p>
-				<h1 className="display-title mb-5 max-w-3xl text-4xl leading-[1.02] font-bold tracking-tight text-[var(--sea-ink)] sm:text-6xl">
-					Start simple, ship quickly.
-				</h1>
-				<p className="mb-8 max-w-2xl text-base text-[var(--sea-ink-soft)] sm:text-lg">
-					This base starter intentionally keeps things light: two routes, clean
-					structure, and the essentials you need to build from scratch.
-				</p>
-				<div className="flex flex-wrap gap-3">
-					<Button
-						asChild
-						size="lg"
-						className="rounded-full border border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.14)] text-[var(--lagoon-deep)] no-underline shadow-none hover:bg-[rgba(79,184,178,0.24)]"
-					>
+		<main className="mx-auto w-full max-w-5xl px-4 pb-8 pt-14">
+			<Card>
+				<CardHeader>
+					<Badge variant="secondary" className="w-fit">
+						TanStack Start Base Template
+					</Badge>
+					<CardTitle className="max-w-3xl text-4xl leading-tight font-bold tracking-tight sm:text-6xl">
+						Start simple, ship quickly.
+					</CardTitle>
+					<CardDescription className="max-w-2xl text-base sm:text-lg">
+						This base starter intentionally keeps things light: two routes,
+						clean structure, and the essentials you need to build from scratch.
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="flex flex-wrap gap-3">
+					<Button asChild size="lg">
 						<Link to="/about">About This Starter</Link>
 					</Button>
-					<Button
-						asChild
-						variant="outline"
-						size="lg"
-						className="rounded-full border-[rgba(23,58,64,0.2)] bg-white/50 text-[var(--sea-ink)] no-underline hover:border-[rgba(23,58,64,0.35)] hover:bg-white/70"
-					>
+					<Button asChild variant="outline" size="lg">
 						<a
 							href="https://tanstack.com/router"
 							target="_blank"
@@ -40,51 +61,29 @@ function App() {
 							Router Guide
 						</a>
 					</Button>
-				</div>
-			</section>
+				</CardContent>
+			</Card>
 
 			<section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-				{[
-					[
-						"Type-Safe Routing",
-						"Routes and links stay in sync across every page.",
-					],
-					[
-						"Server Functions",
-						"Call server code from your UI without creating API boilerplate.",
-					],
-					[
-						"Streaming by Default",
-						"Ship progressively rendered responses for faster experiences.",
-					],
-					[
-						"Tailwind Native",
-						"Design quickly with utility-first styling and reusable tokens.",
-					],
-				].map(([title, desc], index) => (
-					<Card
-						key={title}
-						className="island-shell feature-card rise-in"
-						style={{ animationDelay: `${index * 90 + 80}ms` }}
-					>
+				{FEATURES.map((feature) => (
+					<Card key={feature.title}>
 						<CardHeader>
-							<CardTitle className="text-base text-[var(--sea-ink)]">
-								{title}
-							</CardTitle>
+							<CardTitle className="text-base">{feature.title}</CardTitle>
+							<CardDescription>{feature.description}</CardDescription>
 						</CardHeader>
-						<CardContent>
-							<p className="m-0 text-sm text-[var(--sea-ink-soft)]">{desc}</p>
-						</CardContent>
 					</Card>
 				))}
 			</section>
 
-			<Card className="island-shell mt-8">
+			<Card className="mt-8">
 				<CardHeader>
-					<CardTitle className="island-kicker text-sm">Quick Start</CardTitle>
+					<CardTitle>Quick Start</CardTitle>
+					<CardDescription>
+						Where to look first when customizing the starter.
+					</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<ul className="m-0 list-disc space-y-2 pl-5 text-sm text-[var(--sea-ink-soft)]">
+					<ul className="flex list-disc flex-col gap-2 pl-5 text-sm text-muted-foreground">
 						<li>
 							Edit <code>src/routes/index.tsx</code> to customize the home page.
 						</li>

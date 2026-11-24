@@ -1,5 +1,8 @@
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { Badge } from "#/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "#/components/ui/card";
+import { Separator } from "#/components/ui/separator";
 
 interface Todo {
 	id: number;
@@ -25,20 +28,28 @@ function TanStackQueryDemo() {
 	const { data: todos } = useSuspenseQuery(todosQueryOptions);
 
 	return (
-		<main className="demo-page demo-center">
-			<section className="demo-panel w-full max-w-2xl">
-				<p className="island-kicker mb-2">TanStack Query</p>
-				<h1 className="demo-title mb-6">
-					TanStack Query SSR with ensureQueryData
-				</h1>
-				<ul className="mb-4 space-y-2">
-					{todos.map((todo) => (
-						<li key={todo.id} className="demo-list-item">
-							<span className="text-base font-medium">{todo.name}</span>
-						</li>
-					))}
-				</ul>
-			</section>
+		<main className="mx-auto w-full max-w-3xl px-4 py-12">
+			<Card>
+				<CardHeader>
+					<Badge variant="secondary" className="w-fit">
+						TanStack Query
+					</Badge>
+					<CardTitle>TanStack Query SSR with ensureQueryData</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<ul className="flex flex-col gap-3">
+						{todos.map((todo, index) => (
+							<li key={todo.id}>
+								{index > 0 ? <Separator className="mb-3" /> : null}
+								<div className="flex items-center justify-between">
+									<span className="text-base font-medium">{todo.name}</span>
+									<Badge variant="outline">#{todo.id}</Badge>
+								</div>
+							</li>
+						))}
+					</ul>
+				</CardContent>
+			</Card>
 		</main>
 	);
 }

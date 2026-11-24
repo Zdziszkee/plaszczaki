@@ -1,10 +1,27 @@
+import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Button } from "#/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuLabel,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "#/components/ui/dropdown-menu";
 
 type ThemeMode = "light" | "dark" | "auto";
 
+const MODE_LABELS: Record<ThemeMode, string> = {
+	light: "Jasny",
+	dark: "Ciemny",
+	auto: "Systemowy",
+};
+
 function getInitialMode(): ThemeMode {
 	if (typeof window === "undefined") {
-		return "auto";
+		return "dark";
 	}
 
 	const stored = window.localStorage.getItem("theme");
@@ -12,7 +29,7 @@ function getInitialMode(): ThemeMode {
 		return stored;
 	}
 
-	return "auto";
+	return "dark";
 }
 
 function applyThemeMode(mode: ThemeMode) {
@@ -32,7 +49,7 @@ function applyThemeMode(mode: ThemeMode) {
 }
 
 export default function ThemeToggle() {
-	const [mode, setMode] = useState<ThemeMode>("auto");
+	const [mode, setMode] = useState<ThemeMode>("dark");
 
 	useEffect(() => {
 		const initialMode = getInitialMode();
@@ -54,28 +71,38 @@ export default function ThemeToggle() {
 		};
 	}, [mode]);
 
-	function toggleMode() {
-		const nextMode: ThemeMode =
-			mode === "light" ? "dark" : mode === "dark" ? "auto" : "light";
+	function changeMode(nextMode: ThemeMode) {
 		setMode(nextMode);
 		applyThemeMode(nextMode);
 		window.localStorage.setItem("theme", nextMode);
 	}
 
-	const label =
-		mode === "auto"
-			? "Theme mode: auto (system). Click to switch to light mode."
-			: `Theme mode: ${mode}. Click to switch mode.`;
-
 	return (
-		<button
-			type="button"
-			onClick={toggleMode}
-			aria-label={label}
-			title={label}
-			className="rounded-full border border-[var(--chip-line)] bg-[var(--chip-bg)] px-3 py-1.5 text-sm font-semibold text-[var(--sea-ink)] shadow-[0_8px_22px_rgba(30,90,72,0.08)] transition hover:-translate-y-0.5"
-		>
-			{mode === "auto" ? "Auto" : mode === "dark" ? "Dark" : "Light"}
-		</button>
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button variant="outline" size="sm" className="gap-2">
+					{mode === "dark" ? (
+						<MoonIcon data-icon="inline-start" />
+					) : mode === "light" ? (
+						<SunIcon data-icon="inline-start" />
+					) : (
+						<MonitorIcon data-icon="inline-start" />
+					)}
+					<span className="hidden sm:inline">{MODE_LABELS[mode]}</span>
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end" className="w-40">
+				<DropdownMenuLabel>Motyw</DropdownMenuLabel>
+				<DropdownMenuSeparator />
+				<DropdownMenuRadioGroup
+					value={mode}
+					onValueChange={(value) => changeMode(value as ThemeMode)}
+				>
+					<DropdownMenuRadioItem value="light">Jasny</DropdownMenuRadioItem>
+					<DropdownMenuRadioItem value="dark">Ciemny</DropdownMenuRadioItem>
+					<DropdownMenuRadioItem value="auto">Systemowy</DropdownMenuRadioItem>
+				</DropdownMenuRadioGroup>
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 }

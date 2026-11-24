@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { ArrowLeftIcon } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
 import {
 	DEFAULT_TOGGLES,
@@ -6,6 +7,9 @@ import {
 	TOGGLES_STORAGE_KEY,
 } from "#/components/map/constants";
 import MapControls from "#/components/map/MapControls";
+import { Badge } from "#/components/ui/badge";
+import { Button } from "#/components/ui/button";
+import { Spinner } from "#/components/ui/spinner";
 
 // mapbox-gl touches `window` at module load, so it must never be imported
 // during SSR. The dynamic import only runs after mount on the client.
@@ -34,7 +38,8 @@ function sanitizeToggles(value: unknown): Partial<LayerToggles> {
 
 function MapFallback() {
 	return (
-		<div className="flex h-full items-center justify-center text-sm text-slate-400">
+		<div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+			<Spinner />
 			Ładowanie mapy…
 		</div>
 	);
@@ -74,7 +79,7 @@ function MapPage() {
 	};
 
 	return (
-		<div className="fixed inset-0 z-[60] bg-slate-950 text-slate-100">
+		<div className="fixed inset-0 z-[60] bg-background text-foreground">
 			{mounted ? (
 				<Suspense fallback={<MapFallback />}>
 					<MapView toggles={toggles} />
@@ -83,17 +88,17 @@ function MapPage() {
 				<MapFallback />
 			)}
 
-			<div className="pointer-events-none absolute left-4 top-4 z-20 flex flex-col gap-3">
-				<div className="pointer-events-auto flex items-center gap-3">
-					<Link
-						to="/"
-						className="rounded-full border border-white/15 bg-slate-950/80 px-3 py-1.5 text-sm font-semibold text-slate-100 no-underline shadow-lg backdrop-blur transition hover:bg-slate-900"
-					>
-						← Wróć
-					</Link>
-					<span className="rounded-full border border-white/10 bg-slate-950/70 px-3 py-1.5 text-sm text-slate-200 backdrop-blur">
+			<div className="pointer-events-none absolute top-4 left-4 z-20 flex flex-col gap-3">
+				<div className="pointer-events-auto flex items-center gap-2">
+					<Button asChild variant="secondary" size="sm">
+						<Link to="/">
+							<ArrowLeftIcon data-icon="inline-start" />
+							Wróć
+						</Link>
+					</Button>
+					<Badge variant="secondary" className="h-8 px-3">
 						Mapa Polski
-					</span>
+					</Badge>
 				</div>
 				<MapControls toggles={toggles} onChange={onChange} />
 			</div>
