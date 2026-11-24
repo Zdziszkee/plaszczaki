@@ -1,0 +1,25 @@
+[Unit]
+Description=plaszczaki web
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+Image=localhost/plaszczaki-web:0.1.0
+ContainerName=plaszczaki-web
+PublishPort=3000:3000
+Volume=%h/Projects/plaszczaki/data:/data
+EnvironmentFile=%h/.config/plaszczaki/web.env
+Environment=HOME=/tmp
+Environment=TZ=Europe/Warsaw
+Tmpfs=/tmp:size=256m
+DropCapability=all
+NoNewPrivileges=true
+PidsLimit=512
+Memory=1g
+Network=default
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

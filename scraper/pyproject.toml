@@ -1,0 +1,42 @@
+[project]
+name = "plaszczaki-scraper"
+version = "0.1.0"
+description = "Data collection sidecar for plaszczaki"
+readme = "README.md"
+authors = [{ name = "Zdziszkee", email = "zdziszkee@gmail.com" }]
+requires-python = ">=3.15"
+dependencies = []
+
+[project.scripts]
+plaszczaki-scraper = "plaszczaki_scraper:main"
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = ["ruff>=0.17.6,<0.18", "ty==0.0.109"]
+
+[tool.ruff]
+target-version = "py315"
+line-length = 100
+extend-exclude = [".venv", "__pycache__", ".ruff_cache"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF"]
+# The formatter owns line wrapping; E501 would only fire on unsplittable strings.
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["plaszczaki_scraper"]
+
+[tool.ruff.format]
+quote-style = "double"
+line-ending = "lf"
+docstring-code-format = true
+
+[tool.ty.environment]
+python-version = "3.15"
+
+[tool.ty.terminal]
+output-format = "concise"

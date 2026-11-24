@@ -1,0 +1,26 @@
+[Unit]
+Description=plaszczaki scraper
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+Image=localhost/plaszczaki-scraper:0.1.0
+ContainerName=plaszczaki-scraper
+Volume=%h/Projects/plaszczaki/data/out:/data/out
+EnvironmentFile=%h/.config/plaszczaki/scraper.env
+Environment=HOME=/tmp
+Environment=TZ=Europe/Warsaw
+ReadOnly=true
+Tmpfs=/tmp:size=512m
+DropCapability=all
+NoNewPrivileges=true
+PidsLimit=256
+Memory=1g
+Network=default
+
+[Service]
+TimeoutStartSec=600
+Restart=no
+
+[Install]
+WantedBy=default.target

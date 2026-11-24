@@ -1,0 +1,11 @@
+[Unit]
+Description=plaszczaki scraper (disabled until the first spider exists)
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=15m
+Persistent=true
+Unit=plaszczaki-scraper.service
+
+[Install]
+WantedBy=timers.target
