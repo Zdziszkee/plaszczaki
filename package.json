@@ -25,7 +25,7 @@
     "py:typecheck": "uv run --directory scraper ty check",
     "py:test": "uv run --directory scraper pytest",
     "py:check": "bun run py:lint && uv run --directory scraper ruff format --check && bun run py:typecheck",
-    "deploy": "bash deploy/plaszczaki.sh",
+    "deploy": "bash deploy/plaszczaki.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.5"

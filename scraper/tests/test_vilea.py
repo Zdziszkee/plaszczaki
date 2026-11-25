@@ -114,3 +114,18 @@ def test_missing_cards_are_rejected() -> None:
     query = _adapter().queries(("malopolskie",))[0]
     with pytest.raises(ParseError, match="listing cards"):
         _adapter().parse_search("<html><body>nope</body></html>", query)
+
+
+def test_empty_results_page_is_a_zero_result_search() -> None:
+    query = _adapter().queries(("malopolskie",))[1]
+    assert query.offer_type == "rent"
+    html = (
+        '<html><body><section class="section--gray">'
+        '<div class="section-middle-intersection__wrapper empty-results">'
+        "<h3>Brak ofert</h3></div></section></body></html>"
+    )
+
+    page = _adapter().parse_search(html, query)
+
+    assert page.items == []
+    assert page.current_page == 1

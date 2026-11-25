@@ -1,0 +1,29 @@
+[Unit]
+Description=plaszczaki scraper non-incremental full pass
+
+[Container]
+Image=localhost/plaszczaki-scraper:0.1.0
+ContainerName=plaszczaki-full
+Volume=%h/Projects/plaszczaki/data:/data
+EnvironmentFile=%h/.config/plaszczaki/scraper.env
+Environment=HOME=/tmp
+Environment=TZ=Europe/Warsaw
+Environment=PYTHONUNBUFFERED=1
+Environment=DATABASE_URL=/data/plaszczaki.db
+Environment=PLASZCZAKI_CACHE_DIR=/data/cache
+Exec=run-all --mode run --newest --only-non-incremental --lock-file /data/cache/full.lock
+ReadOnly=true
+Tmpfs=/tmp:size=512m
+DropCapability=all
+NoNewPrivileges=true
+PidsLimit=256
+Memory=2g
+Network=default
+
+[Service]
+# Large aggregators (okolica, txo) can need several nightly passes to backfill.
+TimeoutStartSec=43200
+Restart=no
+
+[Install]
+WantedBy=default.target

@@ -59,6 +59,8 @@ uv run python -m plaszczaki_scraper run-all --tier 1
 uv run python -m plaszczaki_scraper run --source otodom --newest
 uv run python -m plaszczaki_scraper watch --once
 uv run python -m plaszczaki_scraper watch --interval 60
+uv run python -m plaszczaki_scraper cycle --limit 200
+uv run python -m plaszczaki_scraper run-all --mode run --newest --only-non-incremental
 uv run python -m plaszczaki_scraper geocode --limit 100
 uv run python -m plaszczaki_scraper geocode --limit 100 --enqueue-existing --requeue-rejected
 uv run python -m plaszczaki_scraper list-sources
@@ -77,10 +79,28 @@ uv run python -m plaszczaki_scraper verify-schema
 cycle reads the newest pages
 (`incremental_pages`, default 2), skips listings already in the database, and
 hydrates only new detail pages. `watch --once` is suitable for a systemd timer.
+
+`cycle` is the scheduled entry point: it partitions the watchable sources into
+independent lanes and runs one pass over each:
+
+- `malopolskie:sale`, `malopolskie:rent`, `slaskie:sale`, `slaskie:rent` — each
+  lane has its own `--limit` budget and its own last-run timestamp, so a rent
+  pass never masks a sale pass and a śląskie pass never masks a małopolskie one.
+- `other` — auction/lease/mixed queries (`offer_type` not sale/rent).
+- `national` — sources whose search URLs are identical for both voivodeships
+  (Gdom, Poczta Polska, AMW, Nieruchomościowi), so they run once, not twice.
+
 `--offer-type rent` / `--offer-type sale` and `--region slaskie` /
-`--region malopolskie` are independent jobs: the last-run timestamp includes
-the filters, so a rent pass never masks a sale pass and a śląskie pass never
-masks a małopolskie one.
+`--region malopolskie` on `watch` remain available for one-off jobs; the mode key
+includes the filters.
+
+`run-all --only-non-incremental` runs the enabled adapters that `watch` does not
+poll (the `incremental: false` ones) in one full pass. The nightly
+`plaszczaki-full.timer` calls it with `--newest`, so those sources are refreshed
+from the newest pages instead of being left to a manual backfill. Sources are
+ordered by query count, with the large aggregators last, so a timeout cannot
+starve the rest of the catalog; `okolica` and `txo` may need several nightly
+passes to backfill their full city × category matrix.
 
 `geocode` drains the street-level geocoding queue in
 `data/cache/geocode.db` with Nominatim at 1 req/s. Queries are structured
@@ -91,7 +111,7 @@ street when the building cannot be resolved; the building number comes from
 matcher rejected. Only house/street results are accepted; city-only addresses
 stay unlocated. Geocoding data © OpenStreetMap contributors.
 
-`gdom` runs inside `watch`, not as a separate service or quadlet: it is configured
+`gdom` runs inside `cycle`, not as a separate service or quadlet: it is configured
 with `crawl_delay_mode: "defer"` and `hydrate_details: false`. Its robots.txt asks
 for a 20-minute crawl delay, so the client records the last request time per host
 and a pass makes at most one request, stopping with a `deferred` stat when the
@@ -144,8 +164,8 @@ query, and `--dry-run` prints records without writing.
 
 `PLASZCZAKI_CONFIG_DIR` overrides the config directory and
 `PLASZCZAKI_SOURCES_CONFIG` points directly at a `sources.json` file.
-`DATABASE_URL` points at the SQLite file (defaults to `../data/plaszczaki.db`
-relative to the repo root; the container uses `/data/plaszczaki.db`).
+`DATABASE_URL` points at the SQLite file (defaults to `data/plaszczaki.db`
+under the repo root; the container uses `/data/plaszczaki.db`).
 `PLASZCZAKI_CACHE_DIR` stores robots cache and reports (default `data/cache`).
 
 ## Database
@@ -188,17 +208,22 @@ podman build -t localhost/plaszczaki-scraper:0.1.0 -f ../deploy/containers/scrap
 podman run --rm -v "$PWD/../data:/data" localhost/plaszczaki-scraper:0.1.0
 ```
 
-The container defaults to `watch --once --limit 200`, which is what the timer
-runs. Override the command for a backfill or a dry run.
+The container defaults to `cycle --limit 200`, which is what the five-minute
+timer runs. Override the command for a backfill or a dry run.
 
 Scheduled runs are defined in `../deploy/quadlet/` and installed to:
 
 - `~/.config/containers/systemd/plaszczaki-scraper.container`
 - `~/.config/systemd/user/plaszczaki-scraper.timer`
+- `~/.config/containers/systemd/plaszczaki-full.container`
+- `~/.config/systemd/user/plaszczaki-full.timer`
 - `~/.config/containers/systemd/plaszczaki-review.container`
 - `~/.config/systemd/user/plaszczaki-review.timer`
 
-`bun run deploy` copies and enables both timers: the scraper runs `watch --once`
-every five minutes and `plaszczaki-review.timer` runs the monthly parked-source
-review. There is no gdom unit; gdom is a slow lane inside `watch`. The scraper
-container binds `data/` read-write so it can write the database and robots cache.
+`bun run deploy` copies and enables all timers: the scraper runs `cycle --limit
+200` every five minutes, `plaszczaki-full.timer` runs the nightly
+`run-all --newest --only-non-incremental` pass at 02:30 with its own lock file,
+and `plaszczaki-review.timer` runs the monthly parked-source review. There is no
+gdom unit; gdom is a slow lane inside `cycle`. The scraper container binds
+`data/` read-write so it can write the database and robots cache; the full-pass
+container writes concurrently through SQLite WAL.

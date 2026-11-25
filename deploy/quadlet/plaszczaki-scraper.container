@@ -11,6 +11,7 @@ Environment=TZ=Europe/Warsaw
 Environment=PYTHONUNBUFFERED=1
 Environment=DATABASE_URL=/data/plaszczaki.db
 Environment=PLASZCZAKI_CACHE_DIR=/data/cache
+Exec=cycle --limit 200
 ReadOnly=true
 Tmpfs=/tmp:size=512m
 DropCapability=all

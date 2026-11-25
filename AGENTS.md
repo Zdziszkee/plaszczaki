@@ -4,7 +4,7 @@
 - `web/` — TanStack Start app (routes, components, db, auth).
 - `scraper/` — Python sidecar; `scraper/config/sources.json` is the single config (catalog fields plus adapter settings for implemented sources, with `defaults.rps` and `refresh_minutes`), and the geographic scope is `scraper/config/regions.json`. It writes listings directly to `data/plaszczaki.db`; the schema is owned by Drizzle.
 - `deploy/` — Containerfiles and Podman quadlets; install them to `~/.config/containers/systemd`.
-- `data/` — runtime only (SQLite DB, scraper output); gitignored.
+- `data/` — runtime only: the single listings DB `data/plaszczaki.db`, the geocode queue/cache `data/cache/geocode.db`, and scraper output; gitignored.
 
 ## Package manager
 - Bun only: `bun`, `bun run`, `bunx`. Never npm, pnpm, or yarn.
@@ -22,7 +22,7 @@
 
 ## Environment
 - Put local env vars in `web/.env.local` (`DATABASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`).
-- `DATABASE_URL` defaults to `../data/plaszczaki.db` relative to `web/`.
+- `DATABASE_URL` defaults to `../data/plaszczaki.db` relative to `web/`; the resolver in `web/src/db/database-url.ts` anchors it to the repo root so every command opens `data/plaszczaki.db` whatever its cwd.
 - Never commit secrets or `.env*` files (except checked-in examples).
 
 ## Verify before done

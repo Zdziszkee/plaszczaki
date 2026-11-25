@@ -44,30 +44,6 @@ export function postedWithinCondition(window: PostedWithin, now?: Date): SQL {
 	return gte(postedAtExpression(), postedWithinCutoff(window, now));
 }
 
-/**
- * Keep one representative row per canonical identity.
- *
- * Duplicates are preserved in the database (per-source provenance) and only
- * collapsed for the map. The representative is the row with the most complete
- * data, then the most recently seen.
- */
-export function primaryListingCondition(): SQL {
-	return sql`${listing.id} = (
-		SELECT l2.id FROM listing l2
-		WHERE coalesce(l2.canonical_key, 'id:' || l2.id)
-			= coalesce(${listing.canonicalKey}, 'id:' || ${listing.id})
-		ORDER BY
-			(l2.lat IS NOT NULL) DESC,
-			(l2.street IS NOT NULL) DESC,
-			(l2.price_pln IS NOT NULL) DESC,
-			(l2.area_m2 IS NOT NULL) DESC,
-			(l2.description IS NOT NULL) DESC,
-			l2.last_seen_at DESC,
-			l2.id DESC
-		LIMIT 1
-	)`;
-}
-
 export function buildListingConditions(
 	filters: ListingFilters,
 	bbox: BBox | null,
@@ -75,12 +51,6 @@ export function buildListingConditions(
 ): SQL[] {
 	const skip = new Set<FilterKey>(omit);
 	const conditions: SQL[] = [isNotNull(listing.lat), isNotNull(listing.lng)];
-
-	// A source filter needs every row of that source, not only the rows that
-	// won the cross-source representative selection.
-	if (!filters.sourceId) {
-		conditions.push(primaryListingCondition());
-	}
 
 	if (bbox) {
 		conditions.push(

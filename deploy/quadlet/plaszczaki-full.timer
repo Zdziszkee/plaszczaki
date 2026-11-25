@@ -1,0 +1,12 @@
+[Unit]
+Description=plaszczaki non-incremental full pass (nightly)
+
+[Timer]
+OnCalendar=*-*-* 02:30
+AccuracySec=10m
+RandomizedDelaySec=20m
+Persistent=true
+Unit=plaszczaki-full.service
+
+[Install]
+WantedBy=timers.target

@@ -9,7 +9,7 @@ sidecar, sharing one repo-level workspace and runtime data directory.
 web/        TanStack Start app (routes, UI, Drizzle/SQLite, Better Auth)
 scraper/    Python sidecar (scraping + sources/adapter config in scraper/config/sources.json)
 deploy/     Containerfiles and Podman quadlets
-data/       Runtime only: SQLite DB + scraper output (gitignored)
+data/       Runtime only: the single listings DB (plaszczaki.db), geocode cache, scraper output (gitignored)
 ```
 
 `scraper/config/sources.json` is the single source of truth for both the portal
@@ -85,7 +85,8 @@ VITE_MAPBOX_TOKEN=
 ```
 
 `DATABASE_URL` is relative to `web/`. In containers it is absolute (`/data/plaszczaki.db`).
-Never commit `.env.local` or secrets.
+Relative values are resolved against the repository root, so the app always opens the
+same file no matter which directory a command runs from. Never commit `.env.local` or secrets.
 
 ### Mapa
 
@@ -147,7 +148,11 @@ SQLite via `bun:sqlite` and Drizzle ORM.
 - Client: `web/src/db/index.ts`
 - Drizzle Kit config: `web/drizzle.config.ts`
 - Migrations: `web/drizzle/`
-- Database file: `data/plaszczaki.db`
+- Database file: `data/plaszczaki.db` — the only listings database; both the web
+  app and the scraper resolve this file regardless of their working directory
+
+The scraper's Nominatim queue/cache is a separate file at
+`data/cache/geocode.db`; it is not part of the Drizzle schema.
 
 ```bash
 bun run db:generate
@@ -164,6 +169,8 @@ uv run --directory scraper python -m plaszczaki_scraper run --source otodom --ne
 uv run --directory scraper python -m plaszczaki_scraper run --source otodom --mode discover
 uv run --directory scraper python -m plaszczaki_scraper run --source otodom --mode backfill
 uv run --directory scraper python -m plaszczaki_scraper watch --once
+uv run --directory scraper python -m plaszczaki_scraper cycle --limit 200
+uv run --directory scraper python -m plaszczaki_scraper run-all --mode run --newest --only-non-incremental
 uv run --directory scraper python -m plaszczaki_scraper geocode --limit 100 --enqueue-existing
 uv run --directory scraper python -m plaszczaki_scraper geocode --limit 100 --requeue-rejected
 uv run --directory scraper python -m plaszczaki_scraper list-sources
@@ -256,14 +263,16 @@ first `bun run deploy`, mode 0600):
 Images are fully qualified (`docker.io/...`); Quadlets are generated into
 `/run/user/$UID/systemd/generator` and autostart at login via their
 `WantedBy=default.target`. The scraper is a one-shot job — starting it runs once
-and exits. Deploy enables two timers: `plaszczaki-scraper.timer` runs
-`watch --once --limit 200` every five minutes, and `plaszczaki-review.timer`
-runs the monthly parked-source review. Backfills are still run manually because
-they take many hours; there is no separate gdom unit.
+and exits. Deploy enables three timers: `plaszczaki-scraper.timer` runs
+`cycle --limit 200` (independent małopolskie/śląskie × rent/sale lanes, plus
+other/national) every five minutes, `plaszczaki-full.timer` runs
+`run-all --newest --only-non-incremental` nightly for the sources the
+incremental lanes never poll, and `plaszczaki-review.timer` runs the monthly
+parked-source review. There is no separate gdom unit.
 
 Refresh cadence lives in `scraper/config/sources.json` (`refresh_minutes`) and
-`watch` reads it directly. `gdom` is not a separate service or quadlet: it runs
-inside `watch` with `crawl_delay_mode: "defer"` and `hydrate_details: false`.
+`cycle` reads it directly. `gdom` is not a separate service or quadlet: it runs
+inside `cycle` with `crawl_delay_mode: "defer"` and `hydrate_details: false`.
 Because its robots.txt asks for a 20-minute crawl delay, the client records the
 last request time per host, makes at most one request per pass, and stops with a
 `deferred` stat until the delay elapses. It rotates one category per pass

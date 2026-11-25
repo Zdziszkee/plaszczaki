@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -17,7 +18,7 @@ from plaszczaki_scraper.config import (
     repo_root,
 )
 from plaszczaki_scraper.db import Database
-from plaszczaki_scraper.models import Listing
+from plaszczaki_scraper.models import Listing, OfferType
 from plaszczaki_scraper.regions import RegionRegistry
 
 NOW = 1_700_000_000_000
@@ -360,3 +361,135 @@ def test_watch_loop_exits_cleanly_on_keyboard_interrupt(
         )
 
     assert len(reports) == 1
+
+
+class LaneAdapter:
+    """Queries per region so the lane planner can classify the source."""
+
+    def __init__(self, per_region: dict[str, list[Query]]) -> None:
+        self.per_region = per_region
+
+    def queries(self, regions: tuple[str, ...]) -> list[Query]:
+        return [query for region in regions for query in self.per_region.get(region, [])]
+
+
+def _lane_query(region: str, offer: OfferType, suffix: str) -> Query:
+    return Query(
+        key=f"{region}:{offer}:{suffix}",
+        url=f"https://example.test/{suffix}",
+        region=region,
+        offer_type=offer,
+        property_type="flat",
+    )
+
+
+def _lane_catalog() -> SourcesConfig:
+    return _catalog(
+        _source("regional"),
+        _source("national"),
+        _source("auction"),
+    )
+
+
+def _lane_adapters() -> dict[str, LaneAdapter]:
+    return {
+        "regional": LaneAdapter(
+            {
+                "malopolskie": [
+                    _lane_query("malopolskie", "sale", "mal-sale"),
+                    _lane_query("malopolskie", "rent", "mal-rent"),
+                ],
+                "slaskie": [
+                    _lane_query("slaskie", "sale", "sla-sale"),
+                    _lane_query("slaskie", "rent", "sla-rent"),
+                ],
+            },
+        ),
+        "national": LaneAdapter(
+            {
+                "malopolskie": [_lane_query("malopolskie", "sale", "national")],
+                "slaskie": [_lane_query("slaskie", "sale", "national")],
+            },
+        ),
+        "auction": LaneAdapter(
+            {
+                "malopolskie": [_lane_query("malopolskie", "auction", "mal-auction")],
+                "slaskie": [_lane_query("slaskie", "auction", "sla-auction")],
+            },
+        ),
+    }
+
+
+def _patch_lane_build(monkeypatch: pytest.MonkeyPatch) -> None:
+    adapters = _lane_adapters()
+
+    def fake_build(config: SourceConfig, *, regions: RegionRegistry) -> LaneAdapter:
+        return adapters[config.id]
+
+    monkeypatch.setattr(watch, "build_adapter", fake_build)
+
+
+def test_plan_watch_lanes_splits_regions_types_and_national_feeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_lane_build(monkeypatch)
+
+    plan = watch.plan_watch_lanes(_lane_catalog(), _regions())
+
+    assert [lane["key"] for lane in plan] == [
+        "malopolskie:sale",
+        "slaskie:sale",
+        "malopolskie:rent",
+        "slaskie:rent",
+        "other",
+        "national",
+    ]
+    by_key = {lane["key"]: lane for lane in plan}
+    assert by_key["malopolskie:sale"]["sources"] == ["regional"]
+    assert by_key["slaskie:sale"]["sources"] == ["regional"]
+    assert by_key["malopolskie:rent"]["sources"] == ["regional"]
+    assert by_key["other"]["sources"] == ["auction"]
+    assert by_key["other"]["offer_types"] == ("lease", "auction", "other")
+    assert by_key["national"]["sources"] == ["national"]
+    assert by_key["national"]["offer_types"] == ()
+
+
+def test_run_watch_lanes_uses_one_pass_per_lane(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_lane_build(monkeypatch)
+    calls: list[dict[str, Any]] = []
+
+    def fake_run_watch_once(**kwargs: Any) -> dict[str, Any]:
+        calls.append(kwargs)
+        return {"sources": len(kwargs["sources"]), "results": []}
+
+    monkeypatch.setattr(watch, "run_watch_once", fake_run_watch_once)
+
+    with _database(tmp_path) as db:
+        report = watch.run_watch_lanes(
+            db=db,
+            catalog=_lane_catalog(),
+            regions=_regions(),
+            now_ms=NOW,
+        )
+
+    assert report["lanes"] == 6
+    assert [call["offer_types"] for call in calls] == [
+        ("sale",),
+        ("sale",),
+        ("rent",),
+        ("rent",),
+        watch.SECONDARY_OFFER_TYPES,
+        (),
+    ]
+    assert [tuple(call["region_ids"] or ()) for call in calls] == [
+        ("malopolskie",),
+        ("slaskie",),
+        ("malopolskie",),
+        ("slaskie",),
+        ("malopolskie", "slaskie"),
+        ("malopolskie", "slaskie"),
+    ]
+    assert {call["now_ms"] for call in calls} == {NOW}

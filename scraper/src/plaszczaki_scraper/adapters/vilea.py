@@ -93,6 +93,18 @@ def _tree(html: str) -> lxml_html.HtmlElement:
         raise ParseError(f"Vilea page is not valid HTML: {exc}") from exc
 
 
+def _empty_results(tree: lxml_html.HtmlElement) -> bool:
+    """Whether the archive explicitly says it has no offers.
+
+    Vilea renders ``<div class="... empty-results"><h3>Brak ofert</h3>`` when a
+    localisation/category filter matches nothing.
+    """
+    if tree.xpath('//*[contains(@class, "empty-results")]'):
+        return True
+    heading = " ".join(tree.xpath("//h3//text()")).strip().lower()
+    return "brak ofert" in heading
+
+
 def _join_text(nodes: list[Any]) -> str | None:
     text = " ".join(" ".join(node.text_content().split()) for node in nodes)
     return text.strip() or None
@@ -182,6 +194,10 @@ class VileaAdapter:
         tree = _tree(html)
         cards = tree.xpath('//div[contains(@class, "section-offer-with-img__wrapper")]')
         if not cards:
+            if _empty_results(tree):
+                # A region/category with no offers renders an explicit empty
+                # state; that is a valid zero-result page, not a broken layout.
+                return SearchPage(items=[], current_page=query.page, total_pages=query.page)
             raise ParseError("Vilea page has no listing cards")
         items = [self._summary(card, query) for card in cards]
         return SearchPage(

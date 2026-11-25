@@ -128,9 +128,31 @@ class RegionsConfig:
     regions: dict[str, RegionConfig]
 
 
+_REPO_MARKERS = ("web/src/db/schema.ts", "scraper/pyproject.toml")
+
+
+def _is_repo_root(candidate: Path) -> bool:
+    return all((candidate / marker).is_file() for marker in _REPO_MARKERS)
+
+
 def repo_root() -> Path:
-    """Return the repository root (the parent of ``scraper/``)."""
-    return Path(__file__).resolve().parents[3]
+    """Return the repository root (the parent of ``scraper/``).
+
+    In an editable install that is simply the directory three levels above this
+    module. A non-editable install (the container image) puts the package under
+    ``.venv/lib/...``, where the module path no longer points at the checkout, so
+    fall back to walking up from the working directory. Explicit environment
+    overrides (``DATABASE_URL``, ``PLASZCZAKI_CACHE_DIR``) win over both.
+    """
+    module_root = Path(__file__).resolve().parents[3]
+    if _is_repo_root(module_root):
+        return module_root
+
+    cwd = Path.cwd().resolve()
+    for candidate in (cwd, *cwd.parents):
+        if _is_repo_root(candidate):
+            return candidate
+    return module_root
 
 
 def _config_dirs() -> list[Path]:

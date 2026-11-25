@@ -34,7 +34,7 @@ from plaszczaki_scraper.regions import RegionRegistry
 from plaszczaki_scraper.review import review_sources
 from plaszczaki_scraper.robots import default_cache_dir
 from plaszczaki_scraper.runner import Runner, RunOptions
-from plaszczaki_scraper.watch import run_watch_once, watch_loop
+from plaszczaki_scraper.watch import run_watch_lanes, run_watch_once, watch_loop
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +112,11 @@ def _parser() -> argparse.ArgumentParser:
     run_all.add_argument("--dry-run", action="store_true", help="print records, do not write")
     run_all.add_argument("--fail-fast", action="store_true", help="stop after the first failure")
     run_all.add_argument(
+        "--only-non-incremental",
+        action="store_true",
+        help="only run enabled adapters that the incremental watch never polls",
+    )
+    run_all.add_argument(
         "--newest",
         action="store_true",
         help="only read the newest pages and skip listings already in the database",
@@ -143,6 +148,33 @@ def _parser() -> argparse.ArgumentParser:
     watch.add_argument("--dry-run", action="store_true", help="print records, do not write")
     watch.add_argument("--limit", type=int, help="maximum new listings per source per pass")
     watch.add_argument(
+        "--geocode-limit",
+        type=int,
+        default=50,
+        help="street-address geocoding jobs to drain after the pass (0 disables)",
+    )
+
+    cycle = subparsers.add_parser(
+        "cycle",
+        help="run one pass over every polling lane (region x transaction, other, national)",
+    )
+    cycle.add_argument(
+        "--region",
+        help="comma-separated voivodeship ids (default: regions.json 'default')",
+    )
+    cycle.add_argument(
+        "--limit",
+        type=int,
+        default=200,
+        help="maximum new listings per source per lane (each lane has its own budget)",
+    )
+    cycle.add_argument("--force", action="store_true", help="ignore the refresh schedule")
+    cycle.add_argument("--dry-run", action="store_true", help="print records, do not write")
+    cycle.add_argument(
+        "--lock-file",
+        help="override the scraper lock path for every lane",
+    )
+    cycle.add_argument(
         "--geocode-limit",
         type=int,
         default=50,
@@ -223,6 +255,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     logging.getLogger("scrapling").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logger.info("database: %s", default_database_path())
 
     try:
         if args.command == "run":
@@ -231,6 +264,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_run_all(args)
         if args.command == "watch":
             return _cmd_watch(args)
+        if args.command == "cycle":
+            return _cmd_cycle(args)
         if args.command == "audit":
             return _cmd_audit(args)
         if args.command == "probe":
@@ -401,8 +436,13 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
     selected = [
         source
         for source in catalog.enabled_adapters()
-        if args.tier is None or source.tier == args.tier
+        if (args.tier is None or source.tier == args.tier)
+        and (not args.only_non_incremental or not source.incremental)
     ]
+    if args.only_non_incremental:
+        # The full lane must not let a giant aggregator starve the rest of the
+        # catalog when the nightly timeout lands: cheap sources run first.
+        selected.sort(key=lambda source: (_query_count(source, registry, regions), source.id))
     if not selected:
         raise ConfigError("no enabled adapters match the requested tier")
 
@@ -561,6 +601,51 @@ def _cmd_watch(args: argparse.Namespace) -> int:
     if any(result.get("status") == "failed" for result in results):
         return 1
     return 0
+
+
+def _cmd_cycle(args: argparse.Namespace) -> int:
+    """One pass over every independent polling lane."""
+    catalog = load_sources_config()
+    regions_config = load_regions_config()
+    registry = RegionRegistry(regions_config)
+    region_ids = _select_regions(regions_config, args.region) if args.region else None
+
+    db = Database(default_database_path())
+    store = GeocodeStore()
+
+    def hook(batch: Any) -> None:
+        for item in batch:
+            store.enqueue(item)
+
+    try:
+        db.verify_schema()
+        report: dict[str, Any] = run_watch_lanes(
+            db=db,
+            catalog=catalog,
+            regions=registry,
+            limit=args.limit,
+            force=args.force,
+            dry_run=args.dry_run,
+            lock_path=_lock_path(args.lock_file),
+            on_saved=hook,
+            region_ids=region_ids,
+        )
+        if args.geocode_limit > 0 and not args.dry_run:
+            report["geocode"] = GeocodeWorker(
+                db=db,
+                store=store,
+                regions=registry,
+                rps=1.0,
+            ).run(limit=args.geocode_limit)
+    finally:
+        store.close()
+        db.close()
+
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    failed = any(
+        result.get("status") == "failed" for lane in report["passes"] for result in lane["results"]
+    )
+    return 1 if failed else 0
 
 
 def _cmd_geocode(args: argparse.Namespace) -> int:
@@ -727,6 +812,18 @@ def _adapter_name(source: SourceConfig) -> str:
     if source.adapter is None:
         raise ConfigError(f"source '{source.id}' has no adapter in config/sources.json")
     return source.adapter
+
+
+def _query_count(
+    source: SourceConfig,
+    registry: RegionRegistry,
+    regions: tuple[str, ...],
+) -> int:
+    """Number of search queries a source will crawl; broken adapters run last."""
+    try:
+        return len(build_adapter(source, regions=registry).queries(regions))
+    except Exception:
+        return 10**6
 
 
 def _select_regions(config: RegionsConfig, value: str | None) -> tuple[str, ...]:

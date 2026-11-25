@@ -36,6 +36,11 @@ WATCH_MODE = "incremental"
 DEFAULT_INTERVAL_SECONDS = 60.0
 MINUTE_MS = 60_000
 
+# Transactions that get their own region lane. Everything else (auctions,
+# leases, mixed feeds) shares one lane so a rent/sale budget never hides it.
+PRIMARY_OFFER_TYPES: tuple[str, ...] = ("sale", "rent")
+SECONDARY_OFFER_TYPES: tuple[str, ...] = ("lease", "auction", "other")
+
 
 def watch_mode(
     offer_types: Sequence[str] = (),
@@ -261,6 +266,118 @@ def run_watch_once(
         results.append({"source_id": source.id, "mode": mode, **result})
 
     return {"sources": len(results), "results": results}
+
+
+def plan_watch_lanes(
+    catalog: SourcesConfig,
+    regions: RegionRegistry,
+    region_ids: Sequence[str] = (),
+) -> list[dict[str, Any]]:
+    """Partition the watchable sources into independent polling lanes.
+
+    Every region gets its own ``sale`` and ``rent`` lane, so a shared discovery
+    limit or a shared last-run timestamp can never starve the second
+    transaction or voivodeship. Sources whose queries are identical for every
+    region (national feeds such as Gdom or Poczta Polska) run once in a
+    ``national`` lane; sources with auction/lease/mixed queries run in an
+    ``other`` lane. Each lane is a separate :func:`run_watch_once` call with its
+    own ``watch_mode`` key.
+    """
+    selected = tuple(region_ids) if region_ids else regions.default_regions
+    primary: dict[str, set[str]] = {
+        f"{region}:{offer}": set() for offer in PRIMARY_OFFER_TYPES for region in selected
+    }
+    other: set[str] = set()
+    national: set[str] = set()
+
+    for source in _watchable(catalog):
+        try:
+            adapter = build_adapter(source, regions=regions)
+            by_region = {region: adapter.queries((region,)) for region in selected}
+        except Exception:
+            # Let the run report the broken adapter once instead of four times.
+            national.add(source.id)
+            continue
+
+        url_sets = [frozenset(query.url for query in by_region[region]) for region in selected]
+        non_empty = [urls for urls in url_sets if urls]
+        if non_empty and len(non_empty) == len(url_sets) and len(set(url_sets)) == 1:
+            national.add(source.id)
+            continue
+
+        for region in selected:
+            queries = by_region[region]
+            for offer in PRIMARY_OFFER_TYPES:
+                if any(query.offer_type == offer for query in queries):
+                    primary[f"{region}:{offer}"].add(source.id)
+            if any(query.offer_type in SECONDARY_OFFER_TYPES for query in queries):
+                other.add(source.id)
+
+    plan: list[dict[str, Any]] = [
+        {
+            "key": key,
+            "region_ids": (key.split(":", 1)[0],),
+            "offer_types": (key.split(":", 1)[1],),
+            "sources": sorted(ids),
+        }
+        for key, ids in primary.items()
+    ]
+    plan.append(
+        {
+            "key": "other",
+            "region_ids": selected,
+            "offer_types": SECONDARY_OFFER_TYPES,
+            "sources": sorted(other),
+        },
+    )
+    plan.append(
+        {
+            "key": "national",
+            "region_ids": selected,
+            "offer_types": (),
+            "sources": sorted(national),
+        },
+    )
+    return plan
+
+
+def run_watch_lanes(
+    *,
+    db: Database,
+    catalog: SourcesConfig,
+    regions: RegionRegistry,
+    limit: int | None = None,
+    force: bool = False,
+    dry_run: bool = False,
+    now_ms: int | None = None,
+    lock_path: Path | None = None,
+    on_saved: Callable[[Sequence[Listing]], None] | None = None,
+    region_ids: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    """Run one pass over every independent polling lane.
+
+    The same ``now_ms`` is used for every lane, so a slow first lane cannot make
+    later lanes look more due than they are. Returns one report per lane.
+    """
+    current_ms = now_ms if now_ms is not None else _now_ms()
+    passes: list[dict[str, Any]] = []
+    for lane in plan_watch_lanes(catalog, regions, region_ids or ()):
+        report = run_watch_once(
+            db=db,
+            catalog=catalog,
+            regions=regions,
+            sources=lane["sources"],
+            force=force,
+            dry_run=dry_run,
+            now_ms=current_ms,
+            lock_path=lock_path,
+            on_saved=on_saved,
+            limit=limit,
+            offer_types=lane["offer_types"],
+            region_ids=lane["region_ids"],
+        )
+        passes.append({"lane": lane["key"], **report})
+    return {"lanes": len(passes), "passes": passes}
 
 
 def watch_loop(
