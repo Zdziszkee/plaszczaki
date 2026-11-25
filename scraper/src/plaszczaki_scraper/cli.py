@@ -309,6 +309,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
         robots=None,
         ua=user_agent(),
         fetch_mode=source.fetch_mode,
+        browser_headless=source.browser_headless,
+        browser_solve_cloudflare=source.browser_solve_cloudflare,
         crawl_delay_mode=source.crawl_delay_mode,
     )
     options = RunOptions(
@@ -354,6 +356,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
                 on_saved=hook,
             ).run()
     finally:
+        client.close()
         store.close()
         db.close()
 
@@ -474,6 +477,7 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
 
             for source in selected:
                 logger.info("run-all source=%s", source.id)
+                client: HttpClient | None = None
                 try:
                     adapter = build_adapter(source, regions=registry)
                     client = HttpClient(
@@ -481,6 +485,8 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
                         robots=None,
                         ua=user_agent(),
                         fetch_mode=source.fetch_mode,
+                        browser_headless=source.browser_headless,
+                        browser_solve_cloudflare=source.browser_solve_cloudflare,
                         crawl_delay_mode=source.crawl_delay_mode,
                     )
                     options = RunOptions(
@@ -514,6 +520,9 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
                     if args.fail_fast:
                         results.append(result)
                         break
+                finally:
+                    if client is not None:
+                        client.close()
                 results.append(result)
                 if result["status"] == "failed":
                     failed = True

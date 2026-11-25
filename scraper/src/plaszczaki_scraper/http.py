@@ -8,12 +8,13 @@ import os
 import random
 import shutil
 import time
+from contextlib import suppress
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from scrapling.fetchers import Fetcher
+from scrapling.fetchers import Fetcher, StealthySession
 
 from plaszczaki_scraper.ratelimit import HostRateLimiter
 from plaszczaki_scraper.robots import RobotsCache, default_cache_dir
@@ -151,6 +152,8 @@ class HttpClient:
         ua: str | None = None,
         fetch_mode: Literal["http", "stealth"] = "http",
         browser_path: str | None = None,
+        browser_headless: bool = True,
+        browser_solve_cloudflare: bool = False,
         crawl_delay_mode: Literal["sleep", "defer"] = "sleep",
         delay_store: HostDelayStore | None = None,
     ) -> None:
@@ -160,11 +163,14 @@ class HttpClient:
         self.ua = ua or user_agent()
         self.robots = robots or RobotsCache(user_agent=self.ua)
         self.fetch_mode = fetch_mode
+        self.browser_headless = browser_headless
+        self.browser_solve_cloudflare = browser_solve_cloudflare
         self.crawl_delay_mode = crawl_delay_mode
         self.delay_store = delay_store or HostDelayStore()
         self.browser_path = (
             browser_path or os.environ.get("SCRAPER_CHROMIUM_PATH") or shutil.which("chromium")
         )
+        self._stealth: StealthySession | None = None
         self.headers = {
             "User-Agent": self.ua,
             "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
@@ -242,23 +248,36 @@ class HttpClient:
             stealthy_headers=False,
         )
 
-    def _stealth_fetch(self, url: str) -> Any:
-        """Fetch through a real browser (Playwright) for WAF-protected pages."""
-        from scrapling.fetchers import StealthyFetcher
+    def _stealth_session(self) -> StealthySession:
+        """Start the Patchright Chromium session once and reuse its cookies."""
+        if self._stealth is None:
+            kwargs: dict[str, Any] = {
+                "headless": self.browser_headless,
+                "timeout": int(self.timeout * 1000),
+                "network_idle": False,
+                "solve_cloudflare": self.browser_solve_cloudflare,
+                "extra_headers": dict(self.headers),
+            }
+            if self.browser_path:
+                kwargs["executable_path"] = self.browser_path
+            session = StealthySession(**kwargs)
+            session.start()
+            self._stealth = session
+        return self._stealth
 
-        kwargs: dict[str, Any] = {
-            "headless": True,
-            "timeout": int(self.timeout * 1000),
-            "network_idle": False,
-            "solve_cloudflare": False,
-            "extra_headers": dict(self.headers),
-        }
-        if self.browser_path:
-            kwargs["executable_path"] = self.browser_path
+    def _stealth_fetch(self, url: str) -> Any:
+        """Fetch through a real Patchright Chromium session for WAF-protected pages."""
         try:
-            return StealthyFetcher.fetch(url, **kwargs)
+            return self._stealth_session().fetch(url)
         except Exception as exc:  # missing browser, launch failure, transport
             raise FetchError(f"stealth fetch failed for {url}: {exc}") from exc
+
+    def close(self) -> None:
+        """Close the browser session, if one was started."""
+        if self._stealth is not None:
+            with suppress(Exception):
+                self._stealth.close()
+            self._stealth = None
 
     def _retry_delay(self, attempt: int) -> float:
         base = min(30.0, 1.5 * (2**attempt))

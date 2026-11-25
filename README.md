@@ -265,10 +265,11 @@ Images are fully qualified (`docker.io/...`); Quadlets are generated into
 `WantedBy=default.target`. The scraper is a one-shot job — starting it runs once
 and exits. Deploy enables three timers: `plaszczaki-scraper.timer` runs
 `cycle --limit 200` (independent małopolskie/śląskie × rent/sale lanes, plus
-other/national) every five minutes, `plaszczaki-full.timer` runs
+other/national/stealth) every five minutes, `plaszczaki-full.timer` runs
 `run-all --newest --only-non-incremental` nightly for the sources the
 incremental lanes never poll, and `plaszczaki-review.timer` runs the monthly
-parked-source review. There is no separate gdom unit.
+parked-source review. There is no separate gdom unit. The scraper image installs
+Patchright Chromium for the stealth lane.
 
 Refresh cadence lives in `scraper/config/sources.json` (`refresh_minutes`) and
 `cycle` reads it directly. `gdom` is not a separate service or quadlet: it runs

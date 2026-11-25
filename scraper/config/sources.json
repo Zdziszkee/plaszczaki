@@ -63,7 +63,7 @@
 			"urls": [
 				"https://allegro.pl/dzial/nieruchomosci"
 			],
-			"notes": "DataDome (x-datadome-cid, datadome cookie, captcha-delivery); not supported by Scrapling.",
+			"notes": "DataDome. Patchright Chromium stealth passes it (HTTP 200, 221 links, no challenge on 2026-11-26); no adapter has been written yet, so it stays parked.",
 			"blocker": "waf",
 			"last_verified": "2026-11-25"
 		},
@@ -77,17 +77,17 @@
 			"urls": [
 				"https://allegrolokalnie.pl/oferty/nieruchomosci"
 			],
-			"notes": "City paths only; street from structured Lokalizacja block; no coordinates, geocoder required. The 429 throttle cleared in November 2026 (HTTP 200).",
+			"notes": "City paths only; street from structured Lokalizacja block; no coordinates, geocoder required. The site serves a JS/429 challenge under HTTP bursts, so it runs on the stealth browser lane at a low rate.",
 			"last_verified": "2026-11-25",
 			"refresh_minutes": 60,
 			"adapter": "allegrolokalnie",
-			"rps": 0.2,
+			"rps": 0.1,
 			"incremental": true,
 			"incremental_pages": 1,
 			"newest_param": null,
 			"newest_value": null,
 			"hydrate_details": true,
-			"fetch_mode": "http",
+			"fetch_mode": "stealth",
 			"crawl_delay_mode": "sleep"
 		},
 		{
@@ -113,7 +113,7 @@
 			"urls": [
 				"https://bezposrednio.net.pl"
 			],
-			"notes": "Cloudflare managed challenge (cf-mitigated: challenge); bypass declined 2026-11-25.",
+			"notes": "Cloudflare managed challenge. Patchright Chromium stealth with solve_cloudflare still failed after 3 attempts (403) on 2026-11-26; needs a different access path.",
 			"blocker": "waf",
 			"last_verified": "2026-11-25"
 		},
@@ -1070,7 +1070,7 @@
 			"urls": [
 				"https://www.sothebysrealty.com/polandsir"
 			],
-			"notes": "AWS WAF challenge (202, x-amzn-waf-action) and CloudFront deny page; robots.txt is blocked too, so the politeness layer cannot clear it.",
+			"notes": "AWS WAF challenge (202, x-amzn-waf-action) and CloudFront deny page; Patchright Chromium stealth returned 405 'confirm you are human' on 2026-11-26. robots.txt itself is blocked, so the politeness layer cannot clear it.",
 			"blocker": "waf",
 			"last_verified": "2026-11-25"
 		},
@@ -1264,7 +1264,7 @@
 			"urls": [
 				"https://elicytacje.mf.gov.pl"
 			],
-			"notes": "Imperva JS challenge served as HTTP 200 (_Incapsula_Resource); hCaptcha was not evidenced.",
+			"notes": "Imperva JS challenge served as HTTP 200 (_Incapsula_Resource); Patchright Chromium stealth still hit the Imperva challenge on 2026-11-26.",
 			"blocker": "waf",
 			"last_verified": "2026-11-25"
 		},
@@ -1413,7 +1413,7 @@
 				"https://www.nieruchomoscikowr.gov.pl/nieruchomosci/oferty",
 				"https://www.gov.pl/web/kowr"
 			],
-			"notes": "Property search portal nieruchomoscikowr.gov.pl has permissive robots but sits behind Imperva (HTTP 200 challenge shell); gov.pl itself is a normal CMS page.",
+			"notes": "Property search portal nieruchomoscikowr.gov.pl has permissive robots but sits behind Imperva (HTTP 200 challenge shell); Patchright Chromium stealth still hit the Imperva challenge on 2026-11-26. gov.pl itself is a normal CMS page.",
 			"blocker": "waf",
 			"last_verified": "2026-11-25"
 		},

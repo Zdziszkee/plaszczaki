@@ -113,34 +113,45 @@ def probe_source(source: SourceConfig, *, rps: float = 1.0) -> ProbeResult:
         result.error = "robots.txt disallows the source URL"
         return result
 
-    client = HttpClient(rps=rps, robots=robots, ua=ua)
-    try:
-        response = client.get(url)
-    except RobotsDenied as exc:
-        result.error = f"robots: {exc}"
-        return result
-    except FetchError as exc:
-        result.error = str(exc)
-        return result
-
-    headers = getattr(response, "headers", {}) or {}
-    result.http_status = int(getattr(response, "status", 0) or 0)
-    result.content_type = str(headers.get("content-type", "")) or None
-    html = _response_html(response)
-    result.bytes = len(html.encode("utf-8", errors="replace"))
-    title_match = TITLE_RE.search(html)
-    if title_match:
-        result.title = " ".join(title_match.group(1).split())[:200] or None
-    result.has_next_data = bool(NEXT_DATA_RE.search(html))
-    result.has_ld_json = bool(LD_JSON_RE.search(html))
-    result.ld_types = _ld_types(html)
-    result.link_count = len(re.findall(r"<a\s", html, re.IGNORECASE))
-    lowered = html.lower()
-    title_lower = (result.title or "").lower()
-    result.challenge = any(marker in title_lower for marker in CHALLENGE_MARKERS) or (
-        result.bytes < 20_000 and any(marker in lowered for marker in CHALLENGE_MARKERS)
+    client = HttpClient(
+        rps=rps,
+        robots=robots,
+        ua=ua,
+        fetch_mode=source.fetch_mode,
+        browser_headless=source.browser_headless,
+        browser_solve_cloudflare=source.browser_solve_cloudflare,
+        crawl_delay_mode=source.crawl_delay_mode,
     )
-    return result
+    try:
+        try:
+            response = client.get(url)
+        except RobotsDenied as exc:
+            result.error = f"robots: {exc}"
+            return result
+        except FetchError as exc:
+            result.error = str(exc)
+            return result
+
+        headers = getattr(response, "headers", {}) or {}
+        result.http_status = int(getattr(response, "status", 0) or 0)
+        result.content_type = str(headers.get("content-type", "")) or None
+        html = _response_html(response)
+        result.bytes = len(html.encode("utf-8", errors="replace"))
+        title_match = TITLE_RE.search(html)
+        if title_match:
+            result.title = " ".join(title_match.group(1).split())[:200] or None
+        result.has_next_data = bool(NEXT_DATA_RE.search(html))
+        result.has_ld_json = bool(LD_JSON_RE.search(html))
+        result.ld_types = _ld_types(html)
+        result.link_count = len(re.findall(r"<a\s", html, re.IGNORECASE))
+        lowered = html.lower()
+        title_lower = (result.title or "").lower()
+        result.challenge = any(marker in title_lower for marker in CHALLENGE_MARKERS) or (
+            result.bytes < 20_000 and any(marker in lowered for marker in CHALLENGE_MARKERS)
+        )
+        return result
+    finally:
+        client.close()
 
 
 def probe_sources(

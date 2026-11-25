@@ -89,6 +89,9 @@ independent lanes and runs one pass over each:
 - `other` — auction/lease/mixed queries (`offer_type` not sale/rent).
 - `national` — sources whose search URLs are identical for both voivodeships
   (Gdom, Poczta Polska, AMW, Nieruchomościowi), so they run once, not twice.
+- `stealth` — sources with `fetch_mode: "stealth"`; they run through the
+  Patchright Chromium session and are kept out of the HTTP lanes so a browser
+  launch cannot delay the sale/rent passes.
 
 `--offer-type rent` / `--offer-type sale` and `--region slaskie` /
 `--region malopolskie` on `watch` remain available for one-off jobs; the mode key
@@ -158,8 +161,10 @@ query, and `--dry-run` prints records without writing.
   `refresh_minutes`; `implemented` entries add their adapter settings in the same
   object: `adapter`, `rps`, `incremental`, `incremental_pages`, `newest_param`,
   `newest_value`, `hydrate_details`, `fetch_mode` (`http`, or `stealth` for
-  Scrapling's browser engine) and `crawl_delay_mode` (`sleep`, or `defer` to stop
-  instead of sleeping). Parked sources keep only the catalog fields.
+  Scrapling's Patchright Chromium session), `browser_headless` (default `true`),
+  `browser_solve_cloudflare` (default `false`) and `crawl_delay_mode` (`sleep`,
+  or `defer` to stop instead of sleeping). Parked sources keep only the catalog
+  fields.
 - `config/regions.json` — Małopolskie/Śląskie, TERYT codes, bboxes and place lists.
 
 `PLASZCZAKI_CONFIG_DIR` overrides the config directory and
@@ -210,6 +215,10 @@ podman run --rm -v "$PWD/../data:/data" localhost/plaszczaki-scraper:0.1.0
 
 The container defaults to `cycle --limit 200`, which is what the five-minute
 timer runs. Override the command for a backfill or a dry run.
+
+The image installs Patchright Chromium at `/opt/patchright` for
+`fetch_mode: "stealth"` sources; the browser is read-only at runtime and uses
+`/tmp` for its profile. No Camoufox/Firefox layer is required.
 
 Scheduled runs are defined in `../deploy/quadlet/` and installed to:
 

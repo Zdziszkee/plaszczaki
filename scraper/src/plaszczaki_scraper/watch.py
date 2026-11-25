@@ -45,14 +45,17 @@ SECONDARY_OFFER_TYPES: tuple[str, ...] = ("lease", "auction", "other")
 def watch_mode(
     offer_types: Sequence[str] = (),
     region_ids: Sequence[str] = (),
+    lane: str = "",
 ) -> RunMode:
-    """A watch run mode, separate per transaction and region filter.
+    """A watch run mode, separate per lane, transaction and region filter.
 
     ``rent`` and ``sale`` jobs (and per-voivodeship jobs) must not share a
     last-run timestamp, otherwise the second job of the pair is skipped as
-    "not due".
+    "not due". Browser-backed sources get their own ``stealth`` lane as well.
     """
     parts: list[str] = []
+    if lane:
+        parts.append(lane)
     if offer_types:
         parts.append(",".join(sorted(set(offer_types))))
     if region_ids:
@@ -173,6 +176,7 @@ def run_watch_once(
     limit: int | None = None,
     offer_types: Sequence[str] = (),
     region_ids: Sequence[str] | None = None,
+    mode_lane: str = "",
 ) -> dict[str, Any]:
     """Run one watch pass over the due sources.
 
@@ -183,7 +187,7 @@ def run_watch_once(
     """
     current_ms = now_ms if now_ms is not None else _now_ms()
     lock = lock_path if lock_path is not None else default_lock_path()
-    mode = watch_mode(offer_types, region_ids or ())
+    mode = watch_mode(offer_types, region_ids or (), mode_lane)
     selected_regions = tuple(region_ids) if region_ids else regions.default_regions
     results: list[dict[str, Any]] = []
 
@@ -231,11 +235,14 @@ def run_watch_once(
                     enabled=source.enabled,
                 )
             logger.info("watch run source=%s", source.id)
+            client: HttpClient | None = None
             try:
                 adapter = build_adapter(source, regions=regions)
                 client = HttpClient(
                     rps=source.rps,
                     fetch_mode=source.fetch_mode,
+                    browser_headless=source.browser_headless,
+                    browser_solve_cloudflare=source.browser_solve_cloudflare,
                     crawl_delay_mode=source.crawl_delay_mode,
                 )
                 result = Runner(
@@ -262,6 +269,9 @@ def run_watch_once(
                     "status": "failed",
                     "error": f"{type(exc).__name__}: {exc}",
                 }
+            finally:
+                if client is not None:
+                    client.close()
 
         results.append({"source_id": source.id, "mode": mode, **result})
 
@@ -289,8 +299,14 @@ def plan_watch_lanes(
     }
     other: set[str] = set()
     national: set[str] = set()
+    stealth: set[str] = set()
 
     for source in _watchable(catalog):
+        if source.fetch_mode == "stealth":
+            # Browser-backed sources get their own lane: launching Chromium must
+            # not delay the normal HTTP sale/rent passes.
+            stealth.add(source.id)
+            continue
         try:
             adapter = build_adapter(source, regions=regions)
             by_region = {region: adapter.queries((region,)) for region in selected}
@@ -338,6 +354,16 @@ def plan_watch_lanes(
             "sources": sorted(national),
         },
     )
+    if stealth:
+        plan.append(
+            {
+                "key": "stealth",
+                "region_ids": selected,
+                "offer_types": (),
+                "sources": sorted(stealth),
+                "mode_lane": "stealth",
+            },
+        )
     return plan
 
 
@@ -375,6 +401,7 @@ def run_watch_lanes(
             limit=limit,
             offer_types=lane["offer_types"],
             region_ids=lane["region_ids"],
+            mode_lane=lane.get("mode_lane", ""),
         )
         passes.append({"lane": lane["key"], **report})
     return {"lanes": len(passes), "passes": passes}

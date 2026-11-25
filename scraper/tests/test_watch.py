@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 
@@ -47,6 +47,7 @@ def _source(
     enabled: bool = True,
     incremental: bool = True,
     refresh_minutes: int = 10,
+    fetch_mode: Literal["http", "stealth"] = "http",
 ) -> SourceConfig:
     return SourceConfig(
         id=source_id,
@@ -60,6 +61,7 @@ def _source(
         incremental=incremental,
         refresh_minutes=refresh_minutes,
         incremental_pages=2,
+        fetch_mode=fetch_mode,
     )
 
 
@@ -388,6 +390,7 @@ def _lane_catalog() -> SourcesConfig:
         _source("regional"),
         _source("national"),
         _source("auction"),
+        _source("stealth", fetch_mode="stealth"),
     )
 
 
@@ -429,6 +432,12 @@ def _patch_lane_build(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(watch, "build_adapter", fake_build)
 
 
+def test_watch_mode_separates_the_stealth_lane() -> None:
+    mode = watch.watch_mode((), ("malopolskie", "slaskie"), "stealth")
+    assert mode == "incremental:stealth:malopolskie,slaskie"
+    assert mode != watch.watch_mode((), ("malopolskie", "slaskie"))
+
+
 def test_plan_watch_lanes_splits_regions_types_and_national_feeds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -443,6 +452,7 @@ def test_plan_watch_lanes_splits_regions_types_and_national_feeds(
         "slaskie:rent",
         "other",
         "national",
+        "stealth",
     ]
     by_key = {lane["key"]: lane for lane in plan}
     assert by_key["malopolskie:sale"]["sources"] == ["regional"]
@@ -452,6 +462,9 @@ def test_plan_watch_lanes_splits_regions_types_and_national_feeds(
     assert by_key["other"]["offer_types"] == ("lease", "auction", "other")
     assert by_key["national"]["sources"] == ["national"]
     assert by_key["national"]["offer_types"] == ()
+    assert by_key["stealth"]["sources"] == ["stealth"]
+    assert by_key["stealth"]["offer_types"] == ()
+    assert by_key["stealth"]["mode_lane"] == "stealth"
 
 
 def test_run_watch_lanes_uses_one_pass_per_lane(
@@ -475,13 +488,14 @@ def test_run_watch_lanes_uses_one_pass_per_lane(
             now_ms=NOW,
         )
 
-    assert report["lanes"] == 6
+    assert report["lanes"] == 7
     assert [call["offer_types"] for call in calls] == [
         ("sale",),
         ("sale",),
         ("rent",),
         ("rent",),
         watch.SECONDARY_OFFER_TYPES,
+        (),
         (),
     ]
     assert [tuple(call["region_ids"] or ()) for call in calls] == [
@@ -491,5 +505,15 @@ def test_run_watch_lanes_uses_one_pass_per_lane(
         ("slaskie",),
         ("malopolskie", "slaskie"),
         ("malopolskie", "slaskie"),
+        ("malopolskie", "slaskie"),
+    ]
+    assert [call.get("mode_lane", "") for call in calls] == [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "stealth",
     ]
     assert {call["now_ms"] for call in calls} == {NOW}

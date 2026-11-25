@@ -24,11 +24,11 @@ ENV PATH="/app/.venv/bin:$PATH" \
     DATABASE_URL=/data/plaszczaki.db \
     PLASZCZAKI_CACHE_DIR=/data/cache
 
-# Stealth fetching (fetch_mode="stealth") needs a browser. No adapter enables it
-# yet, so the image stays lean. To use it, install Chromium at build time:
-#   RUN python -m playwright install --with-deps chromium
-# and set PLAYWRIGHT_BROWSERS_PATH=/ms-playwright (plus SCRAPER_CHROMIUM_PATH if
-# you use a system Chromium instead).
+# Scrapling's stealth fetcher is Patchright Chromium, not Playwright's Chromium.
+# Install the matching browser and its system libraries at build time; the
+# runtime is read-only and HOME=/tmp, so pin the browser cache explicitly.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/patchright
+RUN patchright install --with-deps chromium
 
 ENTRYPOINT ["python", "-m", "plaszczaki_scraper"]
 CMD ["watch", "--once", "--limit", "200"]

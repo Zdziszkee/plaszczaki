@@ -13,11 +13,12 @@ Environment=DATABASE_URL=/data/plaszczaki.db
 Environment=PLASZCZAKI_CACHE_DIR=/data/cache
 Exec=cycle --limit 200
 ReadOnly=true
-Tmpfs=/tmp:size=512m
+Tmpfs=/tmp:size=1g
+ShmSize=1g
 DropCapability=all
 NoNewPrivileges=true
-PidsLimit=256
-Memory=2g
+PidsLimit=512
+Memory=4g
 Network=default
 
 [Service]

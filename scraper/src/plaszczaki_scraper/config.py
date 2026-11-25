@@ -43,6 +43,8 @@ ADAPTER_FIELDS = {
     "newest_value",
     "hydrate_details",
     "fetch_mode",
+    "browser_headless",
+    "browser_solve_cloudflare",
     "crawl_delay_mode",
 }
 
@@ -76,8 +78,11 @@ class SourceConfig:
     # Some sources (e.g. gdom with a 20-minute crawl delay) are complete enough
     # on search cards, so fetching one detail page per listing is not worth it.
     hydrate_details: bool = True
-    # "stealth" runs the fetch through Scrapling's browser engine (Playwright).
+    # "stealth" runs the fetch through Scrapling's Patchright Chromium engine.
     fetch_mode: Literal["http", "stealth"] = "http"
+    # Scrapling stealth options; ignored for fetch_mode="http".
+    browser_headless: bool = True
+    browser_solve_cloudflare: bool = False
     # "defer" makes a run stop when robots.txt crawl delay has not elapsed
     # instead of sleeping inside the process (used by the gdom slow lane).
     crawl_delay_mode: Literal["sleep", "defer"] = "sleep"
@@ -339,6 +344,14 @@ def load_sources_config(path: Path | None = None) -> SourcesConfig:
             if fetch_mode not in {"http", "stealth"}:
                 raise ConfigError(f"{context}.fetch_mode must be 'http' or 'stealth'")
 
+            browser_headless = raw.get("browser_headless", True)
+            if not isinstance(browser_headless, bool):
+                raise ConfigError(f"{context}.browser_headless must be a boolean")
+
+            browser_solve_cloudflare = raw.get("browser_solve_cloudflare", False)
+            if not isinstance(browser_solve_cloudflare, bool):
+                raise ConfigError(f"{context}.browser_solve_cloudflare must be a boolean")
+
             crawl_delay_mode = raw.get("crawl_delay_mode", "sleep")
             if crawl_delay_mode not in {"sleep", "defer"}:
                 raise ConfigError(f"{context}.crawl_delay_mode must be 'sleep' or 'defer'")
@@ -356,6 +369,8 @@ def load_sources_config(path: Path | None = None) -> SourcesConfig:
             newest_value = None
             hydrate_details = True
             fetch_mode = "http"
+            browser_headless = True
+            browser_solve_cloudflare = False
             crawl_delay_mode = "sleep"
 
         refresh_minutes = raw.get("refresh_minutes")
@@ -410,6 +425,8 @@ def load_sources_config(path: Path | None = None) -> SourcesConfig:
             newest_value=newest_value,
             hydrate_details=hydrate_details,
             fetch_mode=fetch_mode,
+            browser_headless=browser_headless,
+            browser_solve_cloudflare=browser_solve_cloudflare,
             crawl_delay_mode=crawl_delay_mode,
         )
 

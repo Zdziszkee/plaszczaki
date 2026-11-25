@@ -61,7 +61,13 @@ def test_adapter_settings() -> None:
     assert otodom.incremental_pages == 2
     assert otodom.hydrate_details is True
     assert otodom.fetch_mode == "http"
+    assert otodom.browser_headless is True
+    assert otodom.browser_solve_cloudflare is False
     assert otodom.crawl_delay_mode == "sleep"
+
+    allegro = config.sources["allegrolokalnie"]
+    assert allegro.fetch_mode == "stealth"
+    assert allegro.rps == 0.1
 
     gdom = config.sources["gdom"]
     assert gdom.enabled is True
