@@ -18,7 +18,7 @@ import time
 from collections.abc import Callable, Generator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from plaszczaki_scraper.adapters.registry import build_adapter
 from plaszczaki_scraper.config import AdapterConfig, AdaptersConfig, ConfigError
@@ -27,7 +27,7 @@ from plaszczaki_scraper.http import HttpClient
 from plaszczaki_scraper.models import Listing
 from plaszczaki_scraper.regions import RegionRegistry
 from plaszczaki_scraper.robots import default_cache_dir
-from plaszczaki_scraper.runner import Runner, RunOptions
+from plaszczaki_scraper.runner import RunMode, Runner, RunOptions
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,26 @@ logger = logging.getLogger(__name__)
 WATCH_MODE = "incremental"
 DEFAULT_INTERVAL_SECONDS = 60.0
 MINUTE_MS = 60_000
+
+
+def watch_mode(
+    offer_types: Sequence[str] = (),
+    region_ids: Sequence[str] = (),
+) -> RunMode:
+    """A watch run mode, separate per transaction and region filter.
+
+    ``rent`` and ``sale`` jobs (and per-voivodeship jobs) must not share a
+    last-run timestamp, otherwise the second job of the pair is skipped as
+    "not due".
+    """
+    parts: list[str] = []
+    if offer_types:
+        parts.append(",".join(sorted(set(offer_types))))
+    if region_ids:
+        parts.append(",".join(sorted(set(region_ids))))
+    if not parts:
+        return "incremental"
+    return cast(RunMode, "incremental:" + ":".join(parts))
 
 
 def _now_ms() -> int:
@@ -129,6 +149,8 @@ def run_watch_once(
     lock_path: Path | None = None,
     on_saved: Callable[[Sequence[Listing]], None] | None = None,
     limit: int | None = None,
+    offer_types: Sequence[str] = (),
+    region_ids: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """Run one watch pass over the due sources.
 
@@ -139,16 +161,18 @@ def run_watch_once(
     """
     current_ms = now_ms if now_ms is not None else _now_ms()
     lock = lock_path if lock_path is not None else default_lock_path()
+    mode = watch_mode(offer_types, region_ids or ())
+    selected_regions = tuple(region_ids) if region_ids else regions.default_regions
     results: list[dict[str, Any]] = []
 
     for source in _select_sources(adapters, sources):
-        last_run = db.last_run_at(source.id, WATCH_MODE)
+        last_run = db.last_run_at(source.id, mode)
         if not force and not is_due(source, last_run, current_ms):
             logger.debug("watch skip %s: not due", source.id)
             results.append(
                 {
                     "source_id": source.id,
-                    "mode": WATCH_MODE,
+                    "mode": mode,
                     "status": "skipped",
                     "reason": "not due",
                     "last_run_at": last_run,
@@ -165,7 +189,7 @@ def run_watch_once(
                 results.append(
                     {
                         "source_id": source.id,
-                        "mode": WATCH_MODE,
+                        "mode": mode,
                         "status": "skipped",
                         "reason": "locked",
                     },
@@ -187,8 +211,9 @@ def run_watch_once(
                 result = Runner(
                     options=RunOptions(
                         source_id=source.id,
-                        mode=WATCH_MODE,
-                        regions=regions.default_regions,
+                        mode=mode,
+                        regions=selected_regions,
+                        offer_types=tuple(offer_types),
                         newest_only=True,
                         incremental_pages=source.incremental_pages,
                         dry_run=dry_run,
@@ -208,7 +233,7 @@ def run_watch_once(
                     "error": f"{type(exc).__name__}: {exc}",
                 }
 
-        results.append({"source_id": source.id, "mode": WATCH_MODE, **result})
+        results.append({"source_id": source.id, "mode": mode, **result})
 
     return {"sources": len(results), "results": results}
 
@@ -226,6 +251,8 @@ def watch_loop(
     lock_path: Path | None = None,
     on_saved: Callable[[Sequence[Listing]], None] | None = None,
     limit: int | None = None,
+    offer_types: Sequence[str] = (),
+    region_ids: Sequence[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Run watch passes until interrupted or ``max_cycles`` is reached.
 
@@ -250,6 +277,8 @@ def watch_loop(
                 lock_path=lock_path,
                 on_saved=on_saved,
                 limit=limit,
+                offer_types=offer_types,
+                region_ids=region_ids,
             )
             reports.append(report)
             logger.info(

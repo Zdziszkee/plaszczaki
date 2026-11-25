@@ -16,6 +16,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from plaszczaki_scraper.canonical import canonical_key
 from plaszczaki_scraper.config import repo_root
 from plaszczaki_scraper.models import Listing
 
@@ -61,6 +62,7 @@ LISTING_COLUMNS = (
     "extraction_method",
     "extraction_model",
     "extra",
+    "canonical_key",
 )
 
 TRACKED_COLUMNS = tuple(
@@ -162,6 +164,7 @@ def _listing_values(listing: Listing) -> dict[str, Any]:
     return {
         "source_id": listing.source_id,
         "external_id": listing.external_id,
+        "canonical_key": canonical_key(listing),
         "url": listing.url,
         "title": listing.title,
         "description": listing.description,
@@ -346,6 +349,50 @@ class Database:
             found.update(str(row["external_id"]) for row in rows)
         return found
 
+    def backfill_canonical_keys(self) -> int:
+        """Recompute ``canonical_key`` for every stored listing."""
+        rows = self.conn.execute("SELECT * FROM listing").fetchall()
+        updates: list[tuple[str, int]] = []
+        for row in rows:
+            key = canonical_key(_row_to_listing(row))
+            if row["canonical_key"] != key:
+                updates.append((key, int(row["id"])))
+        if updates:
+            with self.conn:
+                self.conn.executemany(
+                    "UPDATE listing SET canonical_key = ? WHERE id = ?",
+                    updates,
+                )
+        return len(updates)
+
+    def canonical_stats(self) -> dict[str, int]:
+        """Summarise cross-source duplicate clusters."""
+        total = int(self.conn.execute("SELECT count(*) FROM listing").fetchone()[0])
+        keyed = int(
+            self.conn.execute(
+                "SELECT count(*) FROM listing WHERE canonical_key IS NOT NULL",
+            ).fetchone()[0],
+        )
+        row = self.conn.execute(
+            """
+            SELECT count(*) AS clusters, coalesce(sum(item_count - 1), 0) AS duplicates
+            FROM (
+                SELECT count(*) AS item_count
+                FROM listing
+                WHERE canonical_key IS NOT NULL
+                  AND canonical_key NOT LIKE 'src:%'
+                GROUP BY canonical_key
+                HAVING count(*) > 1
+            )
+            """,
+        ).fetchone()
+        return {
+            "rows": total,
+            "keyed": keyed,
+            "clusters": int(row["clusters"]),
+            "duplicate_rows": int(row["duplicates"]),
+        }
+
     def last_run_at(self, source_id: str, mode: str = "incremental") -> int | None:
         row = self.conn.execute(
             """
@@ -444,6 +491,27 @@ class Database:
                 (source_id,),
             ).fetchone()
         return int(row["count"]) if row is not None else 0
+
+    def count_by_axes(
+        self,
+    ) -> dict[tuple[str, str | None, str, str], int]:
+        """Count stored listings by (source, voivodeship, offer, property)."""
+        rows = self.conn.execute(
+            """
+            SELECT source_id, voivodeship, offer_type, property_type, COUNT(*) AS count
+            FROM listing
+            GROUP BY source_id, voivodeship, offer_type, property_type
+            """,
+        ).fetchall()
+        return {
+            (
+                str(row["source_id"]),
+                None if row["voivodeship"] is None else str(row["voivodeship"]),
+                str(row["offer_type"]),
+                str(row["property_type"]),
+            ): int(row["count"])
+            for row in rows
+        }
 
     def start_run(self, *, source_id: str, mode: str) -> int:
         now = _now_ms()

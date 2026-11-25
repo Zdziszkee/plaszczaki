@@ -154,3 +154,34 @@ def test_iter_listings_missing_geo(tmp_path: Path) -> None:
 
         missing = list(db.iter_listings_missing_geo())
         assert [listing.external_id for listing in missing] == ["no-geo"]
+
+
+def test_canonical_keys_are_set_and_backfilled(tmp_path: Path) -> None:
+    with _database(tmp_path) as db:
+        for source_id in ("otodom", "gratka"):
+            db.upsert_source(
+                source_id=source_id,
+                label=source_id,
+                homepage_url=f"https://{source_id}.example",
+                adapter=source_id,
+            )
+        db.upsert_listing(_listing(external_id="1"))
+        duplicate = _listing(external_id="2")
+        duplicate.source_id = "gratka"
+        db.upsert_listing(duplicate)
+
+        keys = {
+            row["canonical_key"]
+            for row in db.conn.execute("SELECT canonical_key FROM listing").fetchall()
+        }
+        assert keys == {"geo:50.0600:19.9400:50:2:sale:flat"}
+
+        stats = db.canonical_stats()
+        assert stats["rows"] == 2
+        assert stats["keyed"] == 2
+        assert stats["clusters"] == 1
+        assert stats["duplicate_rows"] == 1
+
+        with db.conn:
+            db.conn.execute("UPDATE listing SET canonical_key = NULL")
+        assert db.backfill_canonical_keys() == 2

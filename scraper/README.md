@@ -6,14 +6,22 @@ the SQLite database also used by the web app. The schema is owned by Drizzle in
 `web/src/db/schema.ts`; the scraper only verifies and writes rows.
 
 The scope is **małopolskie + śląskie** by default. The catalog in
-`config/sources.json` lists every known portal (158 URLs across 153 sources) with
+`config/sources.json` lists every known portal (160 URLs across 154 sources) with
 its tier, kind and implementation status. Every source now has a decision:
 
 - `implemented` — adapter exists (see `list-sources`; `gdom` is implemented but
   disabled because its robots.txt asks for a 20-minute crawl delay).
-- `blocked` — no usable coordinates/descriptions, paywall/login, WAF/captcha,
-  out-of-scope geography, or non-property content. The reason is in `notes`.
-- `excluded` — short-term rentals and non-property pages, out of scope for now.
+- `planned` — a usable location signal exists (coordinates or a street address
+  for the geocoder) but the adapter is not written yet.
+- `blocked` — no usable location, paywall/login, WAF/captcha, out-of-scope
+  geography, or non-property content. `blocker` records the category and
+  `notes` the reason.
+- `excluded` — short-term rentals, non-property pages and sites whose inventory
+  is already covered by another source.
+
+Parked sources carry `last_verified` and `recheck_days`; `review-sources --due`
+refetches the ones past their window and reports challenge, inventory and
+location-signal changes.
 
 `list-sources` prints the whole catalog with status, tier and note. Adapters are
 added one portal at a time; `run-all` runs every enabled adapter.
@@ -52,10 +60,15 @@ uv run python -m plaszczaki_scraper run --source otodom --newest
 uv run python -m plaszczaki_scraper watch --once
 uv run python -m plaszczaki_scraper watch --interval 60
 uv run python -m plaszczaki_scraper geocode --limit 100
+uv run python -m plaszczaki_scraper coverage
+uv run python -m plaszczaki_scraper coverage --missing
+uv run python -m plaszczaki_scraper coverage --region slaskie --offer-type rent --cells
 uv run python -m plaszczaki_scraper list-sources
 uv run python -m plaszczaki_scraper probe --source otodom
 uv run python -m plaszczaki_scraper probe --tier 1
 uv run python -m plaszczaki_scraper audit
+uv run python -m plaszczaki_scraper review-sources --due
+uv run python -m plaszczaki_scraper dedupe --backfill
 uv run python -m plaszczaki_scraper llm models
 uv run python -m plaszczaki_scraper llm check
 uv run python -m plaszczaki_scraper verify-schema
@@ -65,6 +78,19 @@ uv run python -m plaszczaki_scraper verify-schema
 their `poll_minutes` cadence. Each cycle reads the newest pages
 (`incremental_pages`, default 2), skips listings already in the database, and
 hydrates only new detail pages. `watch --once` is suitable for a systemd timer.
+`--offer-type rent` / `--offer-type sale` and `--region slaskie` /
+`--region malopolskie` are independent jobs: the last-run timestamp includes
+the filters, so a rent pass never masks a sale pass and a śląskie pass never
+masks a małopolskie one.
+
+`coverage` compares `config/coverage.json` (the declared matrix), the queries an
+adapter actually emits and the rows stored in SQLite. The default view is one
+line per source and voivodeship with `declared cells / stored rows` per
+transaction; `!` marks a group with empty cells or a missing query, `+` marks
+cells the adapter emits without declaring. `--cells` expands to property types,
+`--missing` prints only the work queue, and `--strict` exits 2 when any reported
+cell needs work. Run it after a backfill to see which site/region/transaction
+combination is still empty.
 
 `geocode` drains the street-level geocoding queue in
 `data/cache/geocode.db` with Nominatim at 1 req/s. Only house/street results are
@@ -75,6 +101,19 @@ OpenStreetMap contributors.
 going when one source fails. `probe` fetches one page per source and reports HTTP
 status, JSON-LD/Next.js data, link count and challenge detection; its report is
 written to `data/out/source-probes.json`.
+
+`review-sources` refetches the catalogued URL of every `blocked`/`planned` source,
+fingerprints the response and diffs it against the previous report in
+`data/out/source-review.json`. It flags cleared/appeared challenges, new listing
+links, JSON-LD, coordinates and street addresses, so a source that starts
+publishing properties is noticed instead of staying parked forever. `--due` only
+checks sources past `last_verified + recheck_days`; the monthly
+`plaszczaki-review.timer` runs it in the container.
+
+`dedupe --backfill` recomputes `listing.canonical_key` for stored rows. The key is
+derived from the case number and auction date, coordinates, or the normalized
+street address; the map endpoints show one representative per key while every
+source keeps its own row.
 
 `--mode run` (the default) fetches each search page, hydrates that page's detail
 pages and upserts the parsed offers as a batch. `--mode backfill` is the same
@@ -88,6 +127,10 @@ query, and `--dry-run` prints records without writing.
   status, enabled flag and one or more inventory URLs.
 - `config/adapters.json` — implemented adapters, RPS, notes, incremental mode,
   newest-sort parameter, incremental page count and polling cadence.
+- `config/coverage.json` — the declared scrape matrix per source: regions and
+  offer types with their property types. `coverage` and the test suite fail when
+  an adapter emits a declared cell for one voivodeship but not the other, or
+  when an adapter is added without a coverage entry.
 - `config/regions.json` — Małopolskie/Śląskie, TERYT codes, bboxes and place lists.
 
 `PLASZCZAKI_CONFIG_DIR` overrides the config directory. `DATABASE_URL` points at
@@ -105,7 +148,11 @@ bun run db:migrate     # fresh DB / migration workflow
 ```
 
 Only fully parsed offers are stored in `listing`; there is no listing lifecycle
-status. The scraper checks the expected tables/columns at startup and fails with
+status. Every row also carries `canonical_key`: auction notices key on case number
++ date, geolocated offers on rounded coordinates + area, and address-only offers
+on the normalized street. The scraper never merges rows, so per-source provenance,
+snapshots and run stats stay intact; the map endpoints select one representative
+per key (complete data first, then newest). The scraper checks the expected tables/columns at startup and fails with
 a clear message if the migration has not been applied.
 
 ## LLM lane
@@ -139,6 +186,8 @@ Scheduled runs are defined outside the repository. The source units live in
 
 - `~/.config/containers/systemd/plaszczaki-scraper.container`
 - `~/.config/systemd/user/plaszczaki-scraper.timer`
+- `~/.config/containers/systemd/plaszczaki-review.container`
+- `~/.config/systemd/user/plaszczaki-review.timer`
 
 The timer is installed but disabled until the first production run is validated.
 The scraper binds `data/` read-write so it can write the database and robots cache.

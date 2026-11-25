@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 from plaszczaki_scraper.adapters.base import Adapter, ParseError, Query
 from plaszczaki_scraper.config import AdapterConfig
+from plaszczaki_scraper.coverage import filter_queries
 from plaszczaki_scraper.db import Database
 from plaszczaki_scraper.http import FetchError, HttpClient, RobotsDenied
 from plaszczaki_scraper.models import Listing
@@ -26,6 +27,7 @@ class RunOptions:
     source_id: str
     mode: RunMode = "run"
     regions: tuple[str, ...] = ("malopolskie", "slaskie")
+    offer_types: tuple[str, ...] = ()
     limit: int | None = None
     max_pages: int | None = None
     dry_run: bool = False
@@ -117,7 +119,17 @@ class Runner:
         return self.options.limit is not None and self._discovery_count >= self.options.limit
 
     def _discover(self) -> None:
-        for query in self.adapter.queries(self.options.regions):
+        queries = filter_queries(
+            self.adapter.queries(self.options.regions),
+            self.options.offer_types,
+        )
+        if self.options.offer_types and not queries:
+            logger.warning(
+                "source %s emits no queries for offer types %s",
+                self.options.source_id,
+                ",".join(self.options.offer_types),
+            )
+        for query in queries:
             if self._discovery_limit_reached():
                 break
             if self.options.newest_only:

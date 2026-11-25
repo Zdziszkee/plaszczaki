@@ -126,6 +126,17 @@
 			"incremental": false,
 			"incremental_pages": 2
 		},
+		"komornik": {
+			"adapter": "komornik",
+			"label": "Licytacje Komornik",
+			"homepage": "https://licytacje.komornik.pl",
+			"enabled": true,
+			"rps": 0.5,
+			"notes": "Search __NUXT_DATA__ decomposes street/buildingNo/flatNo/zipCode/province; lat/lon are 0,0 so street-level geocoding is required. Detail route is WAF-blocked and not used; pagination is offset-based (20 per page).",
+			"poll_minutes": 180,
+			"incremental": true,
+			"incremental_pages": 2
+		},
 		"luksusowemieszkania": {
 			"adapter": "luksusowemieszkania",
 			"label": "Luksusowe Mieszkania",
@@ -146,6 +157,17 @@
 			"notes": "Warehouse-park directory; JSON-LD Place.geo coordinates, floor size and full description on detail pages. Price on request.",
 			"poll_minutes": 60,
 			"incremental": false,
+			"incremental_pages": 2
+		},
+		"mapalicytacji": {
+			"adapter": "mapalicytacji",
+			"label": "Mapa Licytacji",
+			"homepage": "https://mapalicytacji.pl",
+			"enabled": true,
+			"rps": 0.5,
+			"notes": "JSON-LD about.address + per-offer about.geo. Listing paths are /wojewodztwo/<slug>; pagination uses ?strona=N. Street addresses omit the building number by design.",
+			"poll_minutes": 180,
+			"incremental": true,
 			"incremental_pages": 2
 		},
 		"morizon": {
@@ -329,6 +351,17 @@
 			"rps": 0.5,
 			"notes": "Server-rendered __INITIAL_STATE__; investment detail exposes geo_point, description and the cheapest unit price.",
 			"poll_minutes": 60,
+			"incremental": false,
+			"incremental_pages": 2
+		},
+		"srk": {
+			"adapter": "srk",
+			"label": "SRK — Spółka Restrukturyzacji Kopalń",
+			"homepage": "https://srk.com.pl",
+			"enabled": true,
+			"rps": 0.5,
+			"notes": "Śląskie-only tender tables and sale catalogue; street address in the row/title, no coordinates, geocoder required. ?strona=N pagination. Prices only on oferty-nieruchomosci cards.",
+			"poll_minutes": 180,
 			"incremental": false,
 			"incremental_pages": 2
 		},

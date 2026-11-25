@@ -40,6 +40,7 @@ _ADAPTERS: dict[str, tuple[str, str]] = {
         "plaszczaki_scraper.adapters.kupbezposrednio",
         "KupbezposrednioAdapter",
     ),
+    "komornik": ("plaszczaki_scraper.adapters.komornik", "KomornikAdapter"),
     "luksusowemieszkania": (
         "plaszczaki_scraper.adapters.luksusowemieszkania",
         "LuksusoweMieszkaniaAdapter",
@@ -47,6 +48,10 @@ _ADAPTERS: dict[str, tuple[str, str]] = {
     "magazyny-online": (
         "plaszczaki_scraper.adapters.magazyny_online",
         "MagazynyOnlineAdapter",
+    ),
+    "mapalicytacji": (
+        "plaszczaki_scraper.adapters.mapalicytacji",
+        "MapalicytacjiAdapter",
     ),
     "morizon": ("plaszczaki_scraper.adapters.morizon", "MorizonAdapter"),
     "nieruchomosci-online": (
@@ -94,6 +99,7 @@ _ADAPTERS: dict[str, tuple[str, str]] = {
         "RynekpierwotnyAdapter",
     ),
     "sprzedajemy": ("plaszczaki_scraper.adapters.sprzedajemy", "SprzedajemyAdapter"),
+    "srk": ("plaszczaki_scraper.adapters.srk", "SrkAdapter"),
     "sprzedambiznes": (
         "plaszczaki_scraper.adapters.sprzedambiznes",
         "SprzedambiznesAdapter",

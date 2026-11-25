@@ -10,7 +10,9 @@
 			"urls": [
 				"https://www.120portali.pl"
 			],
-			"notes": "Joomla directory; detail exposes cityid only, no street address."
+			"notes": "Joomla directory; detail exposes cityid only, no street address.",
+			"blocker": "no-location",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "abyhom",
@@ -22,7 +24,9 @@
 			"urls": [
 				"https://nieruchomosci.abyhom.pl"
 			],
-			"notes": "robots.txt disallows /*.html detail pages and ?page= pagination."
+			"notes": "robots.txt disallows /*.html detail pages and ?page= pagination.",
+			"blocker": "robots",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "adresowo",
@@ -45,7 +49,9 @@
 			"urls": [
 				"https://allegro.pl/dzial/nieruchomosci"
 			],
-			"notes": "DataDome bot challenge: HTTP 403 on every listing URL; bypass is out of scope."
+			"notes": "DataDome (x-datadome-cid, datadome cookie, captcha-delivery); not supported by Scrapling.",
+			"blocker": "waf",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "allegrolokalnie",
@@ -64,12 +70,13 @@
 			"label": "Allget",
 			"kind": "portal",
 			"tier": 1,
-			"status": "blocked",
+			"status": "planned",
 			"enabled": false,
 			"urls": [
 				"https://allget.pl"
 			],
-			"notes": "Voivodeship facet exists but detail pages expose city/district only, no street line."
+			"notes": "Voivodeship facet exists but detail pages expose city/district only, no street line.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "bezposrednio",
@@ -81,7 +88,9 @@
 			"urls": [
 				"https://bezposrednio.net.pl"
 			],
-			"notes": "Cloudflare managed challenge (HTTP 403 Just a moment) on /, sitemap and listing paths."
+			"notes": "Cloudflare managed challenge (cf-mitigated: challenge); bypass declined 2026-11-25.",
+			"blocker": "waf",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "dimdom",
@@ -93,7 +102,9 @@
 			"urls": [
 				"https://dimdom.pl"
 			],
-			"notes": "robots.txt is Disallow: / and the domain 301-redirects to domoleo.pl."
+			"notes": "robots.txt is Disallow: / and the domain 301-redirects to domoleo.pl.",
+			"blocker": "robots",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "domiporta",
@@ -128,7 +139,9 @@
 			"urls": [
 				"https://edilo.pl"
 			],
-			"notes": "Lublin-centric and no verified street address or małopolskie/śląskie coverage."
+			"notes": "Lublin-centric and no verified street address or małopolskie/śląskie coverage.",
+			"blocker": "geo-scope",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "flats",
@@ -193,24 +206,26 @@
 			"label": "Kawalerka.pl",
 			"kind": "rental",
 			"tier": 1,
-			"status": "blocked",
+			"status": "planned",
 			"enabled": false,
 			"urls": [
 				"https://www.kavalerka.pl"
 			],
-			"notes": "JSON-LD streetAddress is a district, not a street; no geo."
+			"notes": "JSON-LD streetAddress is a district, not a street; no geo.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "kazo",
 			"label": "Kazo",
 			"kind": "portal",
 			"tier": 1,
-			"status": "blocked",
+			"status": "planned",
 			"enabled": false,
 			"urls": [
 				"https://kazo.pl"
 			],
-			"notes": "No coordinates anywhere; detail pages only expose BreadcrumbList JSON-LD and no map/marker data."
+			"notes": "No coordinates anywhere; detail pages only expose BreadcrumbList JSON-LD and no map/marker data.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "kupbezposrednio",
@@ -233,7 +248,9 @@
 			"urls": [
 				"https://landomo.pl"
 			],
-			"notes": "Responds 307 to /slow-down?retry=86400 (Cloudflare backoff); no usable pages."
+			"notes": "Listing pages are reachable, but detail pages 307 to /slow-down and the sanctioned /listings-feed.json only carries city/region geo; notices are syndicated from morizon (already implemented).",
+			"blocker": "duplicate",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "lifespot",
@@ -245,7 +262,9 @@
 			"urls": [
 				"https://lifespot.pl"
 			],
-			"notes": "Operator/building marketing site with apartment-type pages, not individual listings with coordinates."
+			"notes": "Building-marketing pages with PostalAddress + GeoCoordinates, but no individual units or listings.",
+			"blocker": "no-inventory",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "morizon",
@@ -268,7 +287,9 @@
 			"urls": [
 				"https://www.nieruchomosci.pl"
 			],
-			"notes": "robots.txt Crawl-delay 900 (15 min/request); 15 in-scope listings would take about 4 hours per run."
+			"notes": "robots.txt Crawl-delay 900 (15 min/request); 15 in-scope listings would take about 4 hours per run.",
+			"blocker": "robots",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "nieruchomosci-online",
@@ -286,12 +307,13 @@
 			"label": "Nieruchomosci-pl.pl",
 			"kind": "portal",
 			"tier": 1,
-			"status": "blocked",
+			"status": "planned",
 			"enabled": false,
 			"urls": [
 				"https://nieruchomosci-pl.pl"
 			],
-			"notes": "Vite/React SPA; no SSR or JSON-LD; data only in an undocumented Supabase backend."
+			"notes": "Vite/React SPA; no SSR or JSON-LD; data only in an undocumented Supabase backend.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "nieruchomosciowi",
@@ -358,7 +380,9 @@
 			"urls": [
 				"https://opolskie-nieruchomosci.pl"
 			],
-			"notes": "Only Opole/Namysłów listings; zero małopolskie/śląskie inventory."
+			"notes": "Only Opole/Namysłów listings; zero małopolskie/śląskie inventory.",
+			"blocker": "geo-scope",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "otodom",
@@ -404,7 +428,9 @@
 			"urls": [
 				"https://sprawnynajem.pl"
 			],
-			"notes": "City page is a JS shell; listings come from /api/listings, which robots.txt disallows."
+			"notes": "City page is a JS shell; listings come from /api/listings, which robots.txt disallows.",
+			"blocker": "robots",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "sprzedajemy",
@@ -438,7 +464,9 @@
 			"urls": [
 				"https://ogloszenia.trojmiasto.pl"
 			],
-			"notes": "Pomerania-only portal with no małopolskie/śląskie listings; detail pages have no coordinates."
+			"notes": "Pomerania-only portal with no małopolskie/śląskie listings; detail pages have no coordinates.",
+			"blocker": "geo-scope",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "txo",
@@ -461,7 +489,9 @@
 			"urls": [
 				"https://wynajem24.pl"
 			],
-			"notes": "No regional search URL; nationwide list only, real search is a PHP-session POST form; robots.txt Crawl-delay 20."
+			"notes": "No regional search URL; nationwide list only, real search is a PHP-session POST form; robots.txt Crawl-delay 20.",
+			"blocker": "robots",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "infoinwest",
@@ -473,7 +503,9 @@
 			"urls": [
 				"https://www.infoinwest.pl"
 			],
-			"notes": "B2B construction-project database; no listing coordinates or sale prices; full data behind baza.infoinwest.pl login."
+			"notes": "B2B construction-project database; no listing coordinates or sale prices; full data behind baza.infoinwest.pl login.",
+			"blocker": "no-location",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "noweinwestycje",
@@ -496,7 +528,9 @@
 			"urls": [
 				"https://phnsa.gratka.pl"
 			],
-			"notes": "robots.txt allows only the homepage (Allow: /$ plus Disallow: /); single-agency Gratka microsite."
+			"notes": "robots.txt allows only the homepage (Allow: /$ plus Disallow: /); single-agency Gratka microsite.",
+			"blocker": "robots",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "rynekpierwotny",
@@ -514,12 +548,13 @@
 			"label": "Szukam Nieruchomości",
 			"kind": "commercial",
 			"tier": 2,
-			"status": "blocked",
+			"status": "planned",
 			"enabled": false,
 			"urls": [
 				"https://www.szukam-nieruchomosci.com"
 			],
-			"notes": "Commercial classifieds only; main listings have no coordinates; /oferty/mieszkania and /oferty/domy return 404."
+			"notes": "Commercial classifieds only; main listings have no coordinates; /oferty/mieszkania and /oferty/domy return 404.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "tabelaofert",
@@ -553,19 +588,22 @@
 			"urls": [
 				"https://www.agroprzetargi.pl"
 			],
-			"notes": "Descriptions and prices are paywalled; no coordinates."
+			"notes": "Descriptions and prices are paywalled; no coordinates.",
+			"blocker": "paywall",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "ahk",
 			"label": "AHK Polska",
 			"kind": "commercial",
 			"tier": 3,
-			"status": "blocked",
+			"status": "planned",
 			"enabled": false,
 			"urls": [
 				"https://www.ahk.pl/pl/doradztwo-rynkowe/nieruchomosci-w-polsce-polsko-niemiecki-portal-ogloszen"
 			],
-			"notes": "Location is city-only; exact location is an external Google Maps shortlink."
+			"notes": "Location is city-only; exact location is an external Google Maps shortlink.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "axiimmo",
@@ -588,7 +626,9 @@
 			"urls": [
 				"https://www.biznesoferty.pl/nieruchomosci-komercyjne"
 			],
-			"notes": "Detail publishes only voivodeship and city; Ulica belongs to the advertiser."
+			"notes": "Detail publishes only voivodeship and city; Ulica belongs to the advertiser.",
+			"blocker": "no-location",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "dzialki",
@@ -600,19 +640,22 @@
 			"urls": [
 				"https://dzialki.pl"
 			],
-			"notes": "TLS certificate hostname mismatch (CN=*.home.pl)."
+			"notes": "TLS certificate hostname mismatch (CN=*.home.pl).",
+			"blocker": "tls",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "dzialkinasprzedaz",
 			"label": "Działki na Sprzedaż",
 			"kind": "commercial",
 			"tier": 3,
-			"status": "blocked",
+			"status": "planned",
 			"enabled": false,
 			"urls": [
 				"https://dzialkinasprzedaz.pl"
 			],
-			"notes": "City paths only; detail street address not verified."
+			"notes": "City paths only; detail street address not verified.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "lasy-panstwowe",
@@ -624,7 +667,9 @@
 			"urls": [
 				"https://www.bdl.lasy.gov.pl/portal/sprzedaz-i-zakup-dzialek-lesnych"
 			],
-			"notes": "Configured BDL page is informational; real classifieds are a Blazor Server app with no API/sitemap."
+			"notes": "Configured BDL page is informational; real classifieds are a Blazor Server app with no API/sitemap.",
+			"blocker": "pdf",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "luksusowemieszkania",
@@ -642,12 +687,13 @@
 			"label": "LuxuryEstate",
 			"kind": "luxury",
 			"tier": 3,
-			"status": "blocked",
+			"status": "planned",
 			"enabled": false,
 			"urls": [
 				"https://www.luxuryestate.com/pl/poland"
 			],
-			"notes": "WAF captcha blocks the listing pages."
+			"notes": "AWS WAF script is loaded but not enforced; listing HTML embeds JSON with prices and lat/lng for 82 offers.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "magazyny-online",
@@ -681,7 +727,9 @@
 			"urls": [
 				"https://www.sothebysrealty.com/polandsir"
 			],
-			"notes": "WAF blocks the listing pages."
+			"notes": "AWS WAF challenge (202, x-amzn-waf-action) and CloudFront deny page; robots.txt is blocked too, so the politeness layer cannot clear it.",
+			"blocker": "waf",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "sprzedambiznes",
@@ -737,19 +785,23 @@
 			"urls": [
 				"https://www.adradar.pl"
 			],
-			"notes": "Paid/login portal; public summaries expose no coordinates and full details require an account."
+			"notes": "Paid/login portal; public summaries expose no coordinates and full details require an account.",
+			"blocker": "paywall",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "aktywa-panstwowe",
 			"label": "Aktywa Państwowe",
 			"kind": "government",
 			"tier": 4,
-			"status": "blocked",
+			"status": "excluded",
 			"enabled": false,
 			"urls": [
 				"https://www.gov.pl/web/aktywa-panstwowe/sprzedaz-aktywow-trwalych"
 			],
-			"notes": "Announcement directory, not a listing source with coordinates."
+			"notes": "Announcement directory, not a listing source with coordinates.",
+			"blocker": "duplicate",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "amw-nieruchomosci",
@@ -772,7 +824,9 @@
 			"urls": [
 				"https://arp.bip.gov.pl"
 			],
-			"notes": "Empty article lists; no usable listings."
+			"notes": "Empty article lists; no usable listings.",
+			"blocker": "geo-scope",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "bankbps",
@@ -784,7 +838,9 @@
 			"urls": [
 				"https://www.bankbps.pl/nieruchomosci-na-sprzedaz"
 			],
-			"notes": "Bailiff auctions without coordinates."
+			"notes": "Four offers total, none in scope; addresses are street-level without coordinates.",
+			"blocker": "no-inventory",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "egospodarka",
@@ -796,7 +852,9 @@
 			"urls": [
 				"https://www.przetargi.egospodarka.pl"
 			],
-			"notes": "Public-procurement notices, not property auctions."
+			"notes": "Public-procurement notices, not property auctions.",
+			"blocker": "non-property",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "elicytacje-mf",
@@ -808,7 +866,9 @@
 			"urls": [
 				"https://elicytacje.mf.gov.pl"
 			],
-			"notes": "Incapsula + hCaptcha challenge blocks automated access."
+			"notes": "Imperva JS challenge served as HTTP 200 (_Incapsula_Resource); hCaptcha was not evidenced.",
+			"blocker": "waf",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "enea",
@@ -820,7 +880,9 @@
 			"urls": [
 				"https://www.enea.pl"
 			],
-			"notes": "Announcements on operator.enea.pl; no coordinates."
+			"notes": "Announcements on operator.enea.pl; no coordinates.",
+			"blocker": "dead",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "gctrader",
@@ -832,7 +894,9 @@
 			"urls": [
 				"https://przetargi-gctrader.pl"
 			],
-			"notes": "Shares Otoprzetargi data; region URL and street-address coverage not verified."
+			"notes": "Syndicated tender notices; coordinates are city centroids and inventory is outside malopolskie/slaskie.",
+			"blocker": "geo-scope",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "gddkia",
@@ -844,7 +908,9 @@
 			"urls": [
 				"https://www.archiwum.gddkia.gov.pl/pl/64/sprzedaz-i-dzierzawa"
 			],
-			"notes": "Archive host times out."
+			"notes": "Archive host times out.",
+			"blocker": "dead",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "i-przetargi",
@@ -856,7 +922,9 @@
 			"urls": [
 				"https://i-przetargi.com.pl"
 			],
-			"notes": "Public-procurement notices, not property auctions."
+			"notes": "Public-procurement notices, not property auctions.",
+			"blocker": "non-property",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "imsig",
@@ -868,7 +936,9 @@
 			"urls": [
 				"https://www.imsig.pl"
 			],
-			"notes": "Subscription-only access."
+			"notes": "Subscription-only access.",
+			"blocker": "paywall",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "jsw",
@@ -880,7 +950,9 @@
 			"urls": [
 				"https://www.jsw.pl/dla-kontrahentow/przetargi/170"
 			],
-			"notes": "PDF tender documents only."
+			"notes": "PDF tender documents only.",
+			"blocker": "pdf",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "kbsbank",
@@ -892,31 +964,35 @@
 			"urls": [
 				"https://www.kbsbank.com.pl/nasz-bank/nieruchomosci-i-wierzytelnosci-na-sprzedaz"
 			],
-			"notes": "Prose plus PDF attachments; no coordinates."
+			"notes": "Prose plus PDF attachments; no coordinates.",
+			"blocker": "pdf",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "komornik",
 			"label": "Licytacje Komornik",
 			"kind": "auction",
 			"tier": 4,
-			"status": "blocked",
-			"enabled": false,
+			"status": "implemented",
+			"enabled": true,
 			"urls": [
 				"https://licytacje.komornik.pl"
 			],
-			"notes": "Search __NUXT_DATA__ exposes street/building/city/province, but source coordinates are 0,0 and the detail item API is WAF-blocked; needs a search-only adapter."
+			"notes": "Search __NUXT_DATA__ decomposes street/buildingNo/flatNo/zipCode/province; lat/lon are 0,0, geocoder required. Detail item API is WAF-blocked.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "komunikaty",
 			"label": "Komunikaty",
 			"kind": "auction",
 			"tier": 4,
-			"status": "blocked",
+			"status": "planned",
 			"enabled": false,
 			"urls": [
 				"https://www.komunikaty.pl"
 			],
-			"notes": "No coordinates on detail pages."
+			"notes": "No coordinates on detail pages.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "kowr",
@@ -926,9 +1002,12 @@
 			"status": "blocked",
 			"enabled": false,
 			"urls": [
+				"https://www.nieruchomoscikowr.gov.pl/nieruchomosci/oferty",
 				"https://www.gov.pl/web/kowr"
 			],
-			"notes": "Real portal is behind Incapsula; gov.pl pages are PDFs without coordinates."
+			"notes": "Property search portal nieruchomoscikowr.gov.pl has permissive robots but sits behind Imperva (HTTP 200 challenge shell); gov.pl itself is a normal CMS page.",
+			"blocker": "waf",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "kzn",
@@ -940,19 +1019,22 @@
 			"urls": [
 				"https://kzn.bip.gov.pl"
 			],
-			"notes": "PDF attachments only; no coordinates."
+			"notes": "PDF attachments only; no coordinates.",
+			"blocker": "pdf",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "licytacjesyndyka",
 			"label": "Licytacje Syndyka",
 			"kind": "auction",
 			"tier": 4,
-			"status": "blocked",
+			"status": "planned",
 			"enabled": false,
 			"urls": [
 				"https://licytacjesyndyka.pl"
 			],
-			"notes": "Regional /ogloszenia/{region}/ paths exist; street address and auction fields not yet implemented."
+			"notes": "Regional /ogloszenia/{region}/ paths exist; street address and auction fields not yet implemented.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "licytor",
@@ -964,7 +1046,9 @@
 			"urls": [
 				"https://licytor.pl"
 			],
-			"notes": "Prices, descriptions and case numbers are paywalled (isAccessibleForFree false); no coordinates."
+			"notes": "Prices, descriptions and case numbers are paywalled (isAccessibleForFree false); no coordinates.",
+			"blocker": "paywall",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "listaprzetargow",
@@ -976,19 +1060,22 @@
 			"urls": [
 				"https://listaprzetargow.pl"
 			],
-			"notes": "Coordinates exist in a map iframe, but description and exact address are paywalled."
+			"notes": "Coordinates exist in a map iframe, but description and exact address are paywalled.",
+			"blocker": "paywall",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "mapalicytacji",
 			"label": "Mapa Licytacji",
 			"kind": "auction",
 			"tier": 4,
-			"status": "blocked",
-			"enabled": false,
+			"status": "implemented",
+			"enabled": true,
 			"urls": [
 				"https://mapalicytacji.pl"
 			],
-			"notes": "No coordinates on detail pages."
+			"notes": "JSON-LD about.address + per-offer about.geo; /wojewodztwo/<slug> paths with ?strona=N pagination. Street addresses omit building numbers by design; /malopolskie/ currently 404s.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "mapaofert",
@@ -1000,7 +1087,9 @@
 			"urls": [
 				"https://mapaofert.pl"
 			],
-			"notes": "No coordinates on detail pages."
+			"notes": "No coordinates on detail pages.",
+			"blocker": "dead",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "monitor-nieruchomosci",
@@ -1012,7 +1101,9 @@
 			"urls": [
 				"https://monitor-nieruchomosci.pl"
 			],
-			"notes": "Detail URLs are redirect shells to the source; no description or coordinates."
+			"notes": "data-map-markers are per-city centroids with voivodeship-capital fallback, not property coordinates.",
+			"blocker": "no-location",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "msig",
@@ -1024,7 +1115,9 @@
 			"urls": [
 				"https://wyszukiwarka-msig.ms.gov.pl"
 			],
-			"notes": "No coordinates on detail pages."
+			"notes": "No coordinates on detail pages.",
+			"blocker": "dead",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "muir",
@@ -1036,7 +1129,9 @@
 			"urls": [
 				"https://www.muir.pl"
 			],
-			"notes": "Insolvency registry, not a property-auction listing source."
+			"notes": "Insolvency registry, not a property-auction listing source.",
+			"blocker": "non-property",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "ogloszeniasyndyka",
@@ -1059,7 +1154,9 @@
 			"urls": [
 				"https://www.orlen.pl/pl/dla-biznesu/przetargi-i-dostawy/przetargi/zbycie-nieruchomosci"
 			],
-			"notes": "PDF/ZIP rows; no coordinates."
+			"notes": "PDF/ZIP rows; no coordinates.",
+			"blocker": "pdf",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "otoprzetargi",
@@ -1082,7 +1179,9 @@
 			"urls": [
 				"https://bip.pgg.pl/37-przetargi-na-nieruchomosci.html"
 			],
-			"notes": "Single PDF tender only."
+			"notes": "Single PDF tender only.",
+			"blocker": "pdf",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "pkobp-nieruchomosci",
@@ -1100,12 +1199,14 @@
 			"label": "PKO BP Przetargi",
 			"kind": "government",
 			"tier": 4,
-			"status": "blocked",
+			"status": "excluded",
 			"enabled": false,
 			"urls": [
 				"https://www.pkobp.pl/aktualnosci/przetargi-licytacje-ogloszenia"
 			],
-			"notes": "Corporate news feed, not a property listing source."
+			"notes": "Corporate news feed, not a property listing source.",
+			"blocker": "duplicate",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "pkp",
@@ -1123,12 +1224,13 @@
 			"label": "PKP Cargo",
 			"kind": "government",
 			"tier": 4,
-			"status": "blocked",
+			"status": "planned",
 			"enabled": false,
 			"urls": [
 				"https://www.pkpcargo.com"
 			],
-			"notes": "Detail prose only; no coordinates."
+			"notes": "Detail prose only; no coordinates.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "poczta-polska",
@@ -1151,7 +1253,9 @@
 			"urls": [
 				"https://www.polish-airports.com"
 			],
-			"notes": "Corporate site; WAF Request Rejected; no property inventory."
+			"notes": "F5 BIG-IP ASM (\"Request Rejected\" + support ID) on subpages; corporate site with no property inventory.",
+			"blocker": "no-inventory",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "port-gdynia",
@@ -1163,7 +1267,9 @@
 			"urls": [
 				"https://www.port.gdynia.pl"
 			],
-			"notes": "TLS chain incomplete; out of scope (pomorskie)."
+			"notes": "TLS chain incomplete; out of scope (pomorskie).",
+			"blocker": "geo-scope",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "port-szczecin",
@@ -1175,19 +1281,22 @@
 			"urls": [
 				"https://bip.port.szczecin.pl/przetargi-nieruchomosci/47"
 			],
-			"notes": "Szczecin/Świnoujście/Międzywodzie; out of scope (zachodniopomorskie) and no coordinates."
+			"notes": "Szczecin/Świnoujście/Międzywodzie; out of scope (zachodniopomorskie) and no coordinates.",
+			"blocker": "geo-scope",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "portalurzedowy",
 			"label": "Portal Urzędowy",
 			"kind": "auction",
 			"tier": 4,
-			"status": "blocked",
+			"status": "planned",
 			"enabled": false,
 			"urls": [
 				"https://portalurzedowy.pl"
 			],
-			"notes": "Nationwide category page only, no voivodeship filter; detail street address unverified."
+			"notes": "Nationwide category page only, no voivodeship filter; detail street address unverified.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "portgdansk",
@@ -1199,7 +1308,9 @@
 			"urls": [
 				"https://przetargi.portgdansk.pl"
 			],
-			"notes": "ZMP Gdańsk lease auctions; out of scope (pomorskie) and no coordinates."
+			"notes": "ZMP Gdańsk lease auctions; out of scope (pomorskie) and no coordinates.",
+			"blocker": "geo-scope",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "ppl",
@@ -1211,7 +1322,9 @@
 			"urls": [
 				"https://ppl.bip.gov.pl"
 			],
-			"notes": "BIP has procurement only; airports are in mazowieckie."
+			"notes": "BIP has procurement only; airports are in mazowieckie.",
+			"blocker": "geo-scope",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "przetargi-adradar",
@@ -1223,7 +1336,9 @@
 			"urls": [
 				"https://przetargi.adradar.pl"
 			],
-			"notes": "Paid/login notice monitor; detail pages expose no coordinates and full data requires an account."
+			"notes": "Paid/login notice monitor; detail pages expose no coordinates and full data requires an account.",
+			"blocker": "paywall",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "pzu",
@@ -1235,7 +1350,9 @@
 			"urls": [
 				"https://nieruchomosci.pzu.pl"
 			],
-			"notes": "Map feed has 8 offers, none in scope; detail is client-rendered without coordinates."
+			"notes": "Only 16 offers nationwide, none in malopolskie/slaskie; listing is a session-authenticated CMS XHR but the notices carry street addresses.",
+			"blocker": "no-inventory",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "radarnieruchomosci",
@@ -1247,19 +1364,22 @@
 			"urls": [
 				"https://radarnieruchomosci.com"
 			],
-			"notes": "No coordinates; full access requires the paid Inwestor plan."
+			"notes": "No coordinates; full access requires the paid Inwestor plan.",
+			"blocker": "paywall",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "smlokum",
 			"label": "SMLOKUM",
 			"kind": "government",
 			"tier": 4,
-			"status": "blocked",
+			"status": "planned",
 			"enabled": false,
 			"urls": [
 				"https://www.smlokum.pl"
 			],
-			"notes": "Sosnowiec listings have descriptions but no coordinates."
+			"notes": "Sosnowiec listings have descriptions but no coordinates.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "srodmiescie-lodz",
@@ -1271,7 +1391,23 @@
 			"urls": [
 				"https://www.srodmiescie.lodz.pl"
 			],
-			"notes": "Łódź cooperative; out of scope (łódzkie)."
+			"notes": "Łódź cooperative; out of scope (łódzkie).",
+			"blocker": "geo-scope",
+			"last_verified": "2026-11-25"
+		},
+		{
+			"id": "srk",
+			"label": "SRK — Spółka Restrukturyzacji Kopalń",
+			"kind": "government",
+			"tier": 4,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://srk.com.pl/oferta/przetargi-nieruchomosci",
+				"https://srk.com.pl/oferta/przetargi-mieszkania"
+			],
+			"notes": "Śląskie-only tender tables and sale catalogue; street address in the row/title, no coordinates, geocoder required. ?strona=N pagination, prices only on oferty-nieruchomosci cards.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "stbs",
@@ -1283,19 +1419,22 @@
 			"urls": [
 				"https://www.stbs.pl"
 			],
-			"notes": "Szczecińskie TBS; out of scope (zachodniopomorskie)."
+			"notes": "Szczecińskie TBS; out of scope (zachodniopomorskie).",
+			"blocker": "geo-scope",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "syndyk-licytacje",
 			"label": "Syndyk Licytacje",
 			"kind": "auction",
 			"tier": 4,
-			"status": "blocked",
+			"status": "planned",
 			"enabled": false,
 			"urls": [
 				"https://syndyk-licytacje.pl"
 			],
-			"notes": "No coordinates on detail pages."
+			"notes": "No coordinates on detail pages.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "syndyk-org",
@@ -1307,7 +1446,9 @@
 			"urls": [
 				"https://syndyk.org/sprzedaz"
 			],
-			"notes": "No coordinates on detail pages."
+			"notes": "No coordinates on detail pages.",
+			"blocker": "dead",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "syndykaukcje",
@@ -1325,24 +1466,26 @@
 			"label": "Syndyk Sprzeda",
 			"kind": "auction",
 			"tier": 4,
-			"status": "blocked",
+			"status": "planned",
 			"enabled": false,
 			"urls": [
 				"https://www.syndyksprzeda.com"
 			],
-			"notes": "No coordinates on detail pages."
+			"notes": "No coordinates on detail pages.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "syndyksprzedaje",
 			"label": "Syndyk Sprzedaje",
 			"kind": "auction",
 			"tier": 4,
-			"status": "blocked",
+			"status": "planned",
 			"enabled": false,
 			"urls": [
 				"https://syndyksprzedaje.pl"
 			],
-			"notes": "No coordinates on detail pages."
+			"notes": "No coordinates on detail pages.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "tauron",
@@ -1365,19 +1508,22 @@
 			"urls": [
 				"https://www.totalizator.pl/wspolpraca/postepowania-przetargowe"
 			],
-			"notes": "Invalid TLS chain."
+			"notes": "Invalid TLS chain.",
+			"blocker": "tls",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "tu-zamieszkam",
 			"label": "Tu Zamieszkam",
 			"kind": "auction",
 			"tier": 4,
-			"status": "blocked",
+			"status": "planned",
 			"enabled": false,
 			"urls": [
 				"https://tu-zamieszkam.pl/przetargi"
 			],
-			"notes": "No coordinates on detail pages."
+			"notes": "No coordinates on detail pages.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "zgm-gliwice",
@@ -1389,7 +1535,9 @@
 			"urls": [
 				"https://zgm-gliwice.pl/wykaz-lokali-przeznaczonych-do-sprzedazy-w-przetargu"
 			],
-			"notes": "Official wykaz records are PDF-only; HTML pages lack coordinates."
+			"notes": "Official wykaz records are PDF-only; HTML pages lack coordinates.",
+			"blocker": "pdf",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "alertyprzetargowe",
@@ -1412,7 +1560,8 @@
 			"urls": [
 				"https://amw.com.pl/pl/amw/nasze-sklepy"
 			],
-			"notes": "Retail shops; outside the property scope."
+			"notes": "Retail shops; outside the property scope.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "amw-uzbrojenie",
@@ -1426,7 +1575,8 @@
 				"https://amw.com.pl/pl/uzbrojenie-i-sprzet-wojskowy/sprzet-wojskowy-i-wyposazenie/sprzedaz-przetargowa-1",
 				"https://amw.com.pl/pl/uzbrojenie-i-sprzet-wojskowy/sprzet-wojskowy-i-wyposazenie/sprzedaz-bezprzetargowa"
 			],
-			"notes": "Military equipment sales; outside the property scope."
+			"notes": "Military equipment sales; outside the property scope.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "atlasprzetargow",
@@ -1438,7 +1588,9 @@
 			"urls": [
 				"https://atlasprzetargow.pl"
 			],
-			"notes": "BZP/TED only; /nieruchomosci returns 404; no property records."
+			"notes": "BZP/TED only; /nieruchomosci returns 404; no property records.",
+			"blocker": "non-property",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "monitorurzedowy",
@@ -1450,7 +1602,9 @@
 			"urls": [
 				"https://monitorurzedowy.pl"
 			],
-			"notes": "Subscription portal; anonymous search POST returns HTTP 500."
+			"notes": "Subscription portal; anonymous search POST returns HTTP 500.",
+			"blocker": "paywall",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "przetargpro",
@@ -1462,7 +1616,9 @@
 			"urls": [
 				"https://przetargpro.pl"
 			],
-			"notes": "BZP/TED SaaS behind login/paid plans."
+			"notes": "BZP/TED SaaS behind login/paid plans.",
+			"blocker": "paywall",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "tenderiq",
@@ -1474,7 +1630,9 @@
 			"urls": [
 				"https://tenderiq.pl"
 			],
-			"notes": "Paid plans; some notices lack descriptions and coordinates."
+			"notes": "Paid plans; some notices lack descriptions and coordinates.",
+			"blocker": "paywall",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "airbnb",
@@ -1486,7 +1644,8 @@
 			"urls": [
 				"https://www.airbnb.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "alohacamp",
@@ -1498,7 +1657,8 @@
 			"urls": [
 				"https://alohacamp.com/pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "booking",
@@ -1510,7 +1670,8 @@
 			"urls": [
 				"https://www.booking.com"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "bookinghost",
@@ -1522,7 +1683,8 @@
 			"urls": [
 				"https://www.bookinghost.com/pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "cypryda",
@@ -1534,7 +1696,8 @@
 			"urls": [
 				"https://cypryda.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "e-turysta",
@@ -1546,7 +1709,8 @@
 			"urls": [
 				"https://e-turysta.pl/domki-letniskowe"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "fairyflats",
@@ -1558,7 +1722,8 @@
 			"urls": [
 				"https://fairyflats.com"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "hometogo",
@@ -1570,7 +1735,8 @@
 			"urls": [
 				"https://www.hometogo.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "i-noclegi",
@@ -1582,7 +1748,8 @@
 			"urls": [
 				"https://www.i-noclegi.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "jumpinhere",
@@ -1594,7 +1761,8 @@
 			"urls": [
 				"https://jumpinhere.com.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "mamapartament",
@@ -1606,7 +1774,8 @@
 			"urls": [
 				"https://mamapartament.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "millionhotels",
@@ -1618,7 +1787,8 @@
 			"urls": [
 				"https://millionhotels.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "noclegi",
@@ -1630,7 +1800,8 @@
 			"urls": [
 				"https://www.noclegi.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "noclegi-com",
@@ -1642,7 +1813,8 @@
 			"urls": [
 				"https://www.noclegi.com/polska/domki"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "noclegi-online",
@@ -1654,7 +1826,8 @@
 			"urls": [
 				"https://www.noclegi-online.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "noclegowo",
@@ -1666,7 +1839,8 @@
 			"urls": [
 				"https://www.noclegowo.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "nocowanie",
@@ -1678,7 +1852,8 @@
 			"urls": [
 				"https://www.nocowanie.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "nocujmy",
@@ -1690,7 +1865,8 @@
 			"urls": [
 				"https://www.nocujmy.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "otonoclegi",
@@ -1702,7 +1878,8 @@
 			"urls": [
 				"https://otonoclegi.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "polskiewczasy",
@@ -1714,7 +1891,8 @@
 			"urls": [
 				"https://polskiewczasy.com.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "renters",
@@ -1726,7 +1904,8 @@
 			"urls": [
 				"https://renters.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "rentplanet",
@@ -1738,7 +1917,8 @@
 			"urls": [
 				"https://www.rentplanet.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "rentujemy",
@@ -1750,7 +1930,8 @@
 			"urls": [
 				"https://rentujemy.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "restful",
@@ -1762,7 +1943,8 @@
 			"urls": [
 				"https://restful.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "slowhop",
@@ -1774,7 +1956,8 @@
 			"urls": [
 				"https://slowhop.com"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "sunandsnow",
@@ -1786,7 +1969,8 @@
 			"urls": [
 				"https://sunandsnow.pl"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		},
 		{
 			"id": "vrbo",
@@ -1798,7 +1982,8 @@
 			"urls": [
 				"https://www.vrbo.com"
 			],
-			"notes": "Short-term rentals excluded for now."
+			"notes": "Short-term rentals excluded for now.",
+			"last_verified": "2026-11-25"
 		}
 	]
 }

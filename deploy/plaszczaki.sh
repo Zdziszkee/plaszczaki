@@ -1,15 +1,8 @@
 #!/usr/bin/env bash
-# One-command deploy for plaszczaki: build images, install Quadlets, start web.
+# Single deploy command: stop the running plaszczaki containers, rebuild both
+# images and start web + scraper again.
 #
-#   deploy/plaszczaki.sh up            # build (cached), install Quadlets, start web + scraper
-#   deploy/plaszczaki.sh up --no-build # start without rebuilding
-#   deploy/plaszczaki.sh down          # stop both services
-#   deploy/plaszczaki.sh status        # systemd + container state
-#   deploy/plaszczaki.sh restart       # restart web only
-#   deploy/plaszczaki.sh restart-all   # restart web and start a fresh scraper run
-#   deploy/plaszczaki.sh logs [web|scraper|all]  # follow logs (default web)
-#   deploy/plaszczaki.sh build         # rebuild images only
-#   deploy/plaszczaki.sh uninstall     # stop, remove Quadlets from ~/.config/containers/systemd
+#   bun run deploy        # or: ./deploy/plaszczaki.sh
 set -euo pipefail
 
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
@@ -25,11 +18,6 @@ SCRAPER_TIMER=plaszczaki-scraper.timer
 log() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarn:\033[0m %s\n' "$*" >&2; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
-
-usage() {
-	sed -n '2,12s/^# \{0,1\}//p' "${BASH_SOURCE[0]}"
-	exit "${1:-0}"
-}
 
 # Read a value from web/.env.local without exporting anything.
 env_local_value() {
@@ -81,6 +69,11 @@ EOF
 	mkdir -p "$DATA_DIR/out" "$DATA_DIR/cache"
 }
 
+stop_services() {
+	log "stopping $WEB_UNIT and $SCRAPER_UNIT"
+	systemctl --user stop "$WEB_UNIT" "$SCRAPER_UNIT" "$SCRAPER_TIMER" 2>/dev/null || true
+}
+
 build() {
 	local token
 	token=$(env_local_value VITE_MAPBOX_TOKEN)
@@ -108,56 +101,16 @@ install_quadlets() {
 	systemctl --user daemon-reload
 }
 
-cmd_up() {
-	local do_build=1
-	case "${1:-}" in
-	--no-build) do_build=0 ;;
-	"") ;;
-	*) usage 2 ;;
-	esac
-
-	ensure_env
-	[ "$do_build" -eq 1 ] && build
-	install_quadlets
-
+start_services() {
 	log "starting $WEB_UNIT"
 	systemctl --user start "$WEB_UNIT"
+
 	log "starting $SCRAPER_UNIT and enabling $SCRAPER_TIMER"
 	systemctl --user start "$SCRAPER_UNIT"
 	systemctl --user enable --now "$SCRAPER_TIMER"
-
-	cmd_status
 }
 
-cmd_down() {
-	log "stopping plaszczaki services"
-	systemctl --user stop "$WEB_UNIT" "$SCRAPER_UNIT" "$SCRAPER_TIMER" 2>/dev/null || true
-	cmd_status
-}
-
-cmd_restart() {
-	ensure_env
-	systemctl --user daemon-reload
-	systemctl --user restart "$WEB_UNIT"
-	cmd_status
-}
-
-cmd_restart_all() {
-	ensure_env
-	install_quadlets
-
-	log "restarting $WEB_UNIT"
-	systemctl --user restart "$WEB_UNIT"
-
-	log "restarting $SCRAPER_UNIT (one-shot; starts a fresh run)"
-	systemctl --user reset-failed "$SCRAPER_UNIT" 2>/dev/null || true
-	systemctl --user restart --no-block "$SCRAPER_UNIT"
-	systemctl --user enable --now "$SCRAPER_TIMER"
-
-	cmd_status
-}
-
-cmd_status() {
+print_status() {
 	echo
 	systemctl --user show "$WEB_UNIT" -p ActiveState -p SubState --value 2>/dev/null |
 		paste -sd' ' - |
@@ -175,41 +128,9 @@ cmd_status() {
 	echo
 }
 
-cmd_logs() {
-	local target="${1:-web}"
-	case "$target" in
-	web)
-		journalctl --user -u "$WEB_UNIT" -f
-		;;
-	scraper)
-		journalctl --user -u "$SCRAPER_UNIT" -f
-		;;
-	all)
-		journalctl --user -u "$WEB_UNIT" -u "$SCRAPER_UNIT" -f
-		;;
-	*)
-		die "unknown log target '$target' (use web, scraper or all)"
-		;;
-	esac
-}
-
-cmd_uninstall() {
-	cmd_down >/dev/null || true
-	log "removing Quadlets from $QUADLET_DIR"
-	rm -f "$QUADLET_DIR"/plaszczaki-*.container "$QUADLET_DIR"/plaszczaki-*.timer
-	systemctl --user daemon-reload
-	log "done (images and $ENV_DIR kept)"
-}
-
-case "${1:-}" in
-up) shift; cmd_up "$@" ;;
-down) cmd_down ;;
-restart) cmd_restart ;;
-restart-all) cmd_restart_all ;;
-status) cmd_status ;;
-logs) shift; cmd_logs "$@" ;;
-build) build ;;
-uninstall) cmd_uninstall ;;
--h | --help | help) usage 0 ;;
-*) usage 2 ;;
-esac
+ensure_env
+stop_services
+build
+install_quadlets
+start_services
+print_status

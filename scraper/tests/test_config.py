@@ -11,14 +11,14 @@ from plaszczaki_scraper.config import (
 
 def test_source_inventory() -> None:
     urls = load_source_urls()
-    assert len(urls) == 158
+    assert len(urls) == 161
     assert "https://www.otodom.pl" in urls
 
 
 def test_sources_catalog() -> None:
     catalog = load_sources_config()
-    assert len(catalog.sources) == 153
-    assert len(catalog.urls()) == 158
+    assert len(catalog.sources) == 154
+    assert len(catalog.urls()) == 161
 
     otodom = catalog.sources["otodom"]
     assert otodom.status == "implemented"
@@ -74,3 +74,15 @@ def test_regions_config() -> None:
 def test_normalize_url() -> None:
     assert normalize_url("https://www.Otodom.pl/foo/") == "https://otodom.pl/foo"
     assert normalize_url("https://example.com/a?b=1") == "https://example.com/a?b=1"
+
+
+def test_parked_sources_record_a_blocker_and_review_date() -> None:
+    catalog = load_sources_config()
+
+    for source in catalog.sources.values():
+        if source.status == "blocked":
+            assert source.blocker, f"{source.id} has no blocker category"
+            assert source.last_verified, f"{source.id} has no last_verified date"
+        if source.status == "planned":
+            assert source.last_verified, f"{source.id} has no last_verified date"
+        assert source.recheck_days > 0

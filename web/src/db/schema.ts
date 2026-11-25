@@ -175,12 +175,15 @@ export const listing = sqliteTable(
 		extra: text("extra", { mode: "json" })
 			.$type<Record<string, unknown>>()
 			.notNull(),
+
+		canonicalKey: text("canonical_key"),
 	},
 	(table) => [
 		uniqueIndex("listing_source_external_idx").on(
 			table.sourceId,
 			table.externalId,
 		),
+		index("listing_canonical_idx").on(table.canonicalKey),
 		index("listing_region_idx").on(
 			table.voivodeship,
 			table.propertyType,

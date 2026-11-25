@@ -9,6 +9,7 @@ import logging
 import sys
 from collections.abc import Generator
 from contextlib import contextmanager
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -24,8 +25,17 @@ from plaszczaki_scraper.config import (
     SourceConfig,
     SourcesConfig,
     load_adapters_config,
+    load_coverage_config,
     load_regions_config,
     load_sources_config,
+)
+from plaszczaki_scraper.coverage import (
+    OFFER_FILTERS,
+    collect_cells,
+    missing_cells,
+    render_cells,
+    render_matrix,
+    summarize,
 )
 from plaszczaki_scraper.db import Database, SchemaError, default_database_path
 from plaszczaki_scraper.geocode import GeocodeStore, GeocodeWorker
@@ -33,6 +43,7 @@ from plaszczaki_scraper.http import FetchError, HttpClient, user_agent
 from plaszczaki_scraper.llm import LLMConfigError, check_models, models_report
 from plaszczaki_scraper.probe import probe_sources
 from plaszczaki_scraper.regions import RegionRegistry
+from plaszczaki_scraper.review import review_sources
 from plaszczaki_scraper.robots import default_cache_dir
 from plaszczaki_scraper.runner import Runner, RunOptions
 from plaszczaki_scraper.watch import run_watch_once, watch_loop
@@ -59,6 +70,12 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--region",
         help="comma-separated voivodeship ids (default: regions.json 'default')",
+    )
+    run.add_argument(
+        "--offer-type",
+        type=_offer_type_filter,
+        default=(),
+        help="comma-separated transactions to scrape: sale,rent,lease,auction",
     )
     run.add_argument("--limit", type=int, help="maximum items/details for this run")
     run.add_argument("--max-pages", type=int, help="maximum search pages per query")
@@ -89,6 +106,12 @@ def _parser() -> argparse.ArgumentParser:
         "--region",
         help="comma-separated voivodeship ids (default: regions.json 'default')",
     )
+    run_all.add_argument(
+        "--offer-type",
+        type=_offer_type_filter,
+        default=(),
+        help="comma-separated transactions to scrape: sale,rent,lease,auction",
+    )
     run_all.add_argument("--limit", type=int, help="maximum items/details per source")
     run_all.add_argument("--max-pages", type=int, help="maximum search pages per query")
     run_all.add_argument("--dry-run", action="store_true", help="print records, do not write")
@@ -107,7 +130,17 @@ def _parser() -> argparse.ArgumentParser:
     watch.add_argument("--interval", type=float, default=60.0, help="seconds between passes")
     watch.add_argument("--max-cycles", type=int, help="stop after this many passes")
     watch.add_argument("--source", help="comma-separated source ids")
+    watch.add_argument(
+        "--region",
+        help="comma-separated voivodeship ids (default: regions.json 'default')",
+    )
     watch.add_argument("--force", action="store_true", help="ignore poll_minutes")
+    watch.add_argument(
+        "--offer-type",
+        type=_offer_type_filter,
+        default=(),
+        help="comma-separated transactions to poll: sale,rent,lease,auction",
+    )
     watch.add_argument("--dry-run", action="store_true", help="print records, do not write")
     watch.add_argument("--limit", type=int, help="maximum new listings per source per pass")
     watch.add_argument(
@@ -143,6 +176,67 @@ def _parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("verify-schema", help="check the SQLite schema")
     subparsers.add_parser("list-sources", help="show configured adapters and inventory")
+
+    review = subparsers.add_parser(
+        "review-sources",
+        help="re-check blocked/planned sources for changes",
+    )
+    review.add_argument("--source", help="comma-separated source ids")
+    review.add_argument("--limit", type=int)
+    review.add_argument("--rps", type=float, default=0.2)
+    review.add_argument(
+        "--due",
+        action="store_true",
+        help="only sources past their recheck_days window",
+    )
+    review.add_argument("--force", action="store_true", help="ignore the due window")
+
+    dedupe = subparsers.add_parser(
+        "dedupe",
+        help="recompute canonical listing keys for cross-source deduplication",
+    )
+    dedupe.add_argument(
+        "--backfill",
+        action="store_true",
+        help="recompute keys for every stored listing",
+    )
+
+    coverage = subparsers.add_parser(
+        "coverage",
+        help="declared-vs-actual scrape coverage per source, region and transaction",
+    )
+    coverage.add_argument("--source", help="comma-separated source ids")
+    coverage.add_argument(
+        "--region",
+        help="comma-separated voivodeship ids (default: regions.json 'default')",
+    )
+    coverage.add_argument(
+        "--offer-type",
+        type=_offer_type_filter,
+        default=(),
+        help="comma-separated transactions to report: sale,rent,lease,auction",
+    )
+    coverage.add_argument(
+        "--cells",
+        action="store_true",
+        help="one line per property type instead of the per-transaction matrix",
+    )
+    coverage.add_argument(
+        "--missing",
+        action="store_true",
+        help="only cells with no query, no stored rows or undeclared drift",
+    )
+    coverage.add_argument(
+        "--all",
+        action="store_true",
+        help="include disabled adapters",
+    )
+    coverage.add_argument("--json", action="store_true", help="machine-readable output")
+    coverage.add_argument(
+        "--strict",
+        action="store_true",
+        help="exit 2 when any reported cell needs work",
+    )
 
     llm = subparsers.add_parser("llm", help="inspect and test the OpenCode inference lane")
     llm_sub = llm.add_subparsers(dest="llm_command", required=True)
@@ -180,6 +274,12 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_verify_schema()
         if args.command == "list-sources":
             return _cmd_list_sources()
+        if args.command == "review-sources":
+            return _cmd_review_sources(args)
+        if args.command == "dedupe":
+            return _cmd_dedupe(args)
+        if args.command == "coverage":
+            return _cmd_coverage(args)
         if args.command == "llm":
             return _cmd_llm(args)
     except ConfigError as exc:
@@ -199,6 +299,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
     regions_config = load_regions_config()
     source = _select_source(adapters, args.source)
     regions = _select_regions(regions_config, args.region)
+    _warn_limit_without_region(args.limit, regions)
     registry = RegionRegistry(regions_config)
     adapter = build_adapter(source, regions=registry)
 
@@ -208,6 +309,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         source_id=source.id,
         mode=args.mode,
         regions=regions,
+        offer_types=args.offer_type,
         limit=args.limit,
         max_pages=args.max_pages,
         dry_run=args.dry_run,
@@ -323,6 +425,7 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
     catalog = load_sources_config()
     regions_config = load_regions_config()
     regions = _select_regions(regions_config, args.region)
+    _warn_limit_without_region(args.limit, regions)
     registry = RegionRegistry(regions_config)
 
     selected = [
@@ -369,6 +472,7 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
                         source_id=source.id,
                         mode=args.mode,
                         regions=regions,
+                        offer_types=args.offer_type,
                         limit=args.limit,
                         max_pages=args.max_pages,
                         dry_run=args.dry_run,
@@ -416,6 +520,8 @@ def _cmd_watch(args: argparse.Namespace) -> int:
     adapters = load_adapters_config()
     regions_config = load_regions_config()
     registry = RegionRegistry(regions_config)
+    regions = _select_regions(regions_config, args.region) if args.region else None
+    _warn_limit_without_region(args.limit, regions or regions_config.default)
     sources = (
         [item.strip() for item in args.source.split(",") if item.strip()] if args.source else None
     )
@@ -440,6 +546,8 @@ def _cmd_watch(args: argparse.Namespace) -> int:
                 dry_run=args.dry_run,
                 on_saved=hook,
                 limit=args.limit,
+                offer_types=args.offer_type,
+                region_ids=regions,
             )
         else:
             report = {
@@ -454,6 +562,8 @@ def _cmd_watch(args: argparse.Namespace) -> int:
                     dry_run=args.dry_run,
                     on_saved=hook,
                     limit=args.limit,
+                    offer_types=args.offer_type,
+                    region_ids=regions,
                 ),
             }
         if args.geocode_limit > 0 and not args.dry_run:
@@ -511,6 +621,113 @@ def _cmd_audit(args: argparse.Namespace) -> int:
         "output": report["output"],
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _cmd_review_sources(args: argparse.Namespace) -> int:
+    ids = [item.strip() for item in args.source.split(",")] if args.source else None
+    report = review_sources(
+        source_ids=ids,
+        limit=args.limit,
+        rps=args.rps,
+        due_only=args.due,
+        force=args.force,
+    )
+    changed = [
+        entry
+        for entry in report["sources"].values()
+        if entry["changes"] not in ([], ["first observation"])
+    ]
+    for entry in changed:
+        print(f"{entry['source_id']}: {'; '.join(entry['changes'])}")
+    for entry in report["sources"].values():
+        if entry["error"]:
+            print(f"{entry['source_id']}: {entry['error']}")
+    print(
+        json.dumps(
+            {
+                "total": report["total"],
+                "changed": report["changed"],
+                "output": report["output"],
+            },
+            ensure_ascii=False,
+        ),
+    )
+    return 0
+
+
+def _cmd_dedupe(args: argparse.Namespace) -> int:
+    if not args.backfill:
+        raise ConfigError("dedupe requires --backfill")
+    db = Database(default_database_path())
+    try:
+        db.verify_schema()
+        updated = db.backfill_canonical_keys()
+        stats = db.canonical_stats()
+    finally:
+        db.close()
+    print(json.dumps({"updated": updated, **stats}, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _cmd_coverage(args: argparse.Namespace) -> int:
+    adapters = load_adapters_config()
+    regions_config = load_regions_config()
+    coverage = load_coverage_config()
+    regions = _select_regions(regions_config, args.region)
+
+    if args.source:
+        wanted = [item.strip() for item in args.source.split(",") if item.strip()]
+        unknown = [source_id for source_id in wanted if source_id not in adapters.sources]
+        if unknown:
+            raise ConfigError(f"unknown sources: {unknown}")
+        adapters = AdaptersConfig(
+            defaults_rps=adapters.defaults_rps,
+            sources={source_id: adapters.sources[source_id] for source_id in wanted},
+        )
+
+    db = Database(default_database_path())
+    try:
+        db.verify_schema()
+        stored = db.count_by_axes()
+    finally:
+        db.close()
+
+    rows = collect_cells(
+        coverage=coverage,
+        adapters=adapters,
+        regions=regions,
+        stored=stored,
+        include_disabled=args.all,
+    )
+    if args.offer_type:
+        wanted_offers = set(args.offer_type)
+        rows = [cell for cell in rows if cell.offer_type in wanted_offers]
+    if args.missing:
+        rows = missing_cells(rows)
+
+    summary = summarize(rows)
+    if args.json:
+        print(
+            json.dumps(
+                {"summary": summary, "cells": [asdict(cell) for cell in rows]},
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
+    else:
+        if args.cells or args.missing:
+            print(render_cells(rows))
+        else:
+            print(render_matrix(rows, regions=regions))
+        print(
+            f"summary: cells={summary['cells']} ok={summary['ok']} "
+            f"empty={summary['empty']} missing_query={summary['missing_query']} "
+            f"undeclared={summary['undeclared']} stored={summary['stored']}",
+        )
+
+    if args.strict and any(not cell.ok for cell in rows):
+        return 2
     return 0
 
 
@@ -597,6 +814,28 @@ def _select_regions(config: RegionsConfig, value: str | None) -> tuple[str, ...]
     if unknown:
         raise ConfigError(f"unknown regions: {unknown}")
     return regions
+
+
+def _offer_type_filter(value: str) -> tuple[str, ...]:
+    items = tuple(item.strip() for item in value.split(",") if item.strip())
+    if not items:
+        raise argparse.ArgumentTypeError("expected at least one transaction")
+    unknown = [item for item in items if item not in OFFER_FILTERS]
+    if unknown:
+        raise argparse.ArgumentTypeError(
+            f"unknown transactions {unknown}; expected {list(OFFER_FILTERS)}",
+        )
+    return items
+
+
+def _warn_limit_without_region(limit: int | None, region_ids: tuple[str, ...]) -> None:
+    """A global limit starves the second voivodeship; queries run in scope order."""
+    if limit is not None and len(region_ids) > 1:
+        logger.warning(
+            "--limit applies across %s in this order; run each --region as its own job "
+            "to avoid leaving later voivodeships unscraped",
+            ",".join(region_ids),
+        )
 
 
 @contextmanager

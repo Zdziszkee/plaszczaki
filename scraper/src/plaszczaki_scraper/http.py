@@ -35,6 +35,41 @@ def user_agent() -> str:
     return os.environ.get("SCRAPER_USER_AGENT", DEFAULT_USER_AGENT)
 
 
+_CHALLENGE_BODY_MARKERS: tuple[tuple[bytes, str], ...] = (
+    (b"_Incapsula_Resource", "Imperva"),
+    (b"incident_id", "Imperva"),
+    (b"geo.captcha-delivery.com", "DataDome"),
+    (b"captcha-delivery.com", "DataDome"),
+    (b"Request Rejected", "F5 ASM"),
+    (b"challenges.cloudflare.com", "Cloudflare"),
+)
+
+
+def challenge_vendor(response: Any) -> str | None:
+    """Return the WAF vendor when a response is a challenge shell, not content.
+
+    Imperva, AWS WAF and DataDome serve their challenge with HTTP 200 and an
+    empty/iframe body, so status-code checks alone are not enough.
+    """
+    headers = {
+        str(name).lower(): str(value).lower()
+        for name, value in dict(getattr(response, "headers", None) or {}).items()
+    }
+
+    if headers.get("cf-mitigated") == "challenge":
+        return "Cloudflare"
+    if headers.get("x-amzn-waf-action") in {"challenge", "captcha"}:
+        return "AWS WAF"
+    if "x-datadome-cid" in headers:
+        return "DataDome"
+
+    body = bytes(getattr(response, "body", b"") or b"")[:8192].lower()
+    for marker, vendor in _CHALLENGE_BODY_MARKERS:
+        if marker.lower() in body:
+            return vendor
+    return None
+
+
 def _retry_after_seconds(value: str | None) -> float | None:
     if not value:
         return None
@@ -105,6 +140,11 @@ class HttpClient:
                 continue
 
             status = int(getattr(response, "status", 0) or 0)
+
+            vendor = challenge_vendor(response)
+            if vendor is not None:
+                raise HttpBlocked(f"{vendor} challenge for {url}")
+
             if 200 <= status < 300:
                 return response
 

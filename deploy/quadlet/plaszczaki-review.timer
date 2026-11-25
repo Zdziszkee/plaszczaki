@@ -1,0 +1,12 @@
+[Unit]
+Description=plaszczaki parked-source review (monthly)
+
+[Timer]
+OnCalendar=*-*-01 04:30
+AccuracySec=10m
+RandomizedDelaySec=30m
+Persistent=true
+Unit=plaszczaki-review.service
+
+[Install]
+WantedBy=timers.target

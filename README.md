@@ -13,7 +13,7 @@ data/       Runtime only: SQLite DB + scraper output (gitignored)
 ```
 
 `scraper/config/sources.json` is the single source of truth for the portal list. It
-is a catalog of 153 sources (158 URLs), each with an id, label, kind, tier,
+is a catalog of 154 sources (160 URLs), each with an id, label, kind, tier,
 implementation status and one or more URLs:
 
 ```json
@@ -152,6 +152,9 @@ uv run --directory scraper python -m plaszczaki_scraper run --source otodom --mo
 uv run --directory scraper python -m plaszczaki_scraper run --source otodom --mode backfill
 uv run --directory scraper python -m plaszczaki_scraper watch --once
 uv run --directory scraper python -m plaszczaki_scraper geocode --limit 100 --enqueue-existing
+uv run --directory scraper python -m plaszczaki_scraper coverage
+uv run --directory scraper python -m plaszczaki_scraper coverage --missing
+uv run --directory scraper python -m plaszczaki_scraper coverage --region slaskie --offer-type rent --cells
 uv run --directory scraper python -m plaszczaki_scraper audit
 uv run --directory scraper python -m plaszczaki_scraper llm models
 uv run --directory scraper python -m plaszczaki_scraper llm check
@@ -163,9 +166,21 @@ bun run py:check
 ```
 
 The source config lives at `scraper/config/sources.json`; adapter settings are in
-`scraper/config/adapters.json`, and the Małopolskie/Śląskie scope is in
-`scraper/config/regions.json`. `load_source_urls()` validates the inventory
-(https only, no unknown keys, no normalized duplicates).
+`scraper/config/adapters.json`, the declared per-source scrape matrix (voivodeship
+× sale/rent × property type) is in `scraper/config/coverage.json`, and the
+Małopolskie/Śląskie scope is in `scraper/config/regions.json`. `load_source_urls()`
+validates the inventory (https only, no unknown keys, no normalized duplicates).
+
+`run` accepts `--region` and `--offer-type`, so each voivodeship and each
+transaction is its own job with its own limit and checkpoint. Do not backfill
+both regions with one `--limit`: queries run małopolskie first and the limit
+cuts śląskie entirely. For example:
+
+```bash
+uv run --directory scraper python -m plaszczaki_scraper run --source otodom \
+  --region slaskie --offer-type rent --mode backfill
+uv run --directory scraper python -m plaszczaki_scraper coverage --missing --region slaskie
+```
 
 The scraper writes directly to `data/plaszczaki.db`. The listing schema is owned
 by Drizzle in `web/src/db/schema.ts`; apply it with `bun run db:push` (or
@@ -179,24 +194,21 @@ systemd timer only runs the incremental job.
 
 ## Deploy (Podman + Quadlet)
 
-One command builds both images, creates the env files if missing, installs the
-Quadlets and starts `plaszczaki-web`. The scraper is a separate one-shot unit and
-is not run by `deploy:up`; start it explicitly (or enable the timer after the pilot):
+One command stops the running containers, rebuilds both images, installs the
+Quadlets and starts `plaszczaki-web` + `plaszczaki-scraper` again:
 
 ```bash
-bun run deploy:up            # or: ./deploy/plaszczaki.sh up
-systemctl --user start plaszczaki-scraper
-bun run deploy:status
-bun run deploy:restart-all   # restart web + start a fresh scraper run
-bun run deploy:logs          # follow web logs
-bun run deploy:scraper-logs  # follow scraper logs
-bun run deploy:down
+bun run deploy            # or: ./deploy/plaszczaki.sh
 ```
 
-`deploy:up` rebuilds first; add `--no-build` (`./deploy/plaszczaki.sh up --no-build`)
-to skip rebuilding. `deploy:build` rebuilds images only, `deploy:restart` restarts
-web without rebuilding, and `./deploy/plaszczaki.sh uninstall` stops the services
-and removes the Quadlets.
+It is also the only deploy command: there is no separate build, down, restart or
+logs script. The systemd units are still there for inspection:
+
+```bash
+systemctl --user status plaszczaki-web
+journalctl --user -u plaszczaki-web -f
+journalctl --user -u plaszczaki-scraper -f
+```
 
 The script is a thin wrapper over the manual steps, which are:
 
@@ -206,11 +218,11 @@ podman build -f deploy/containers/scraper.Containerfile -t localhost/plaszczaki-
 
 cp deploy/quadlet/*.container deploy/quadlet/*.timer ~/.config/containers/systemd/
 systemctl --user daemon-reload
-systemctl --user start plaszczaki-web
+systemctl --user start plaszczaki-web plaszczaki-scraper
 ```
 
-Environment files expected by the quadlets live outside the repo (created by
-`deploy:up` on first run, mode 0600):
+Environment files expected by the quadlets live outside the repo (created on the
+first `bun run deploy`, mode 0600):
 
 - `~/.config/plaszczaki/web.env` — `DATABASE_URL=/data/plaszczaki.db`,
   `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`

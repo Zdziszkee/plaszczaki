@@ -19,6 +19,10 @@ CONFIG_DIR_ENV_VAR = "PLASZCZAKI_CONFIG_DIR"
 CONFIG_RELATIVE_PATH = Path("config") / "sources.json"
 ADAPTERS_RELATIVE_PATH = Path("config") / "adapters.json"
 REGIONS_RELATIVE_PATH = Path("config") / "regions.json"
+COVERAGE_RELATIVE_PATH = Path("config") / "coverage.json"
+
+OFFER_TYPES = {"sale", "rent", "lease", "auction", "other"}
+PROPERTY_TYPES = {"flat", "house", "plot", "commercial", "garage", "room", "other"}
 
 SOURCE_KINDS = {
     "portal",
@@ -51,6 +55,9 @@ class SourceConfig:
     enabled: bool
     urls: tuple[str, ...]
     notes: str = ""
+    blocker: str | None = None
+    last_verified: str | None = None
+    recheck_days: int = 90
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +124,36 @@ class RegionsConfig:
 
     default: tuple[str, ...]
     regions: dict[str, RegionConfig]
+
+
+@dataclass(frozen=True, slots=True)
+class SourceCoverage:
+    """The (region, offer type, property type) matrix a source promises to cover."""
+
+    id: str
+    regions: tuple[str, ...]
+    offers: dict[str, tuple[str, ...]]
+    note: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class CoverageConfig:
+    """Declared scrape coverage per implemented source."""
+
+    defaults_regions: tuple[str, ...]
+    sources: dict[str, SourceCoverage]
+
+    def cells(self, source_id: str) -> list[tuple[str, str, str]]:
+        """Expand one source into (region, offer_type, property_type) cells."""
+        coverage = self.sources.get(source_id)
+        if coverage is None:
+            return []
+        return [
+            (region, offer_type, property_type)
+            for region in coverage.regions
+            for offer_type, property_types in coverage.offers.items()
+            for property_type in property_types
+        ]
 
 
 def repo_root() -> Path:
@@ -209,6 +246,9 @@ def load_sources_config(path: Path | None = None) -> SourcesConfig:
             "enabled",
             "urls",
             "notes",
+            "blocker",
+            "last_verified",
+            "recheck_days",
         }
         if unknown:
             raise ConfigError(f"Unknown keys in {context}: {sorted(unknown)}")
@@ -239,6 +279,20 @@ def load_sources_config(path: Path | None = None) -> SourcesConfig:
         notes = raw.get("notes", "")
         if not isinstance(notes, str):
             raise ConfigError(f"{context}.notes must be a string")
+
+        blocker = raw.get("blocker")
+        if blocker is not None and not isinstance(blocker, str):
+            raise ConfigError(f"{context}.blocker must be a string")
+
+        last_verified = raw.get("last_verified")
+        if last_verified is not None and not isinstance(last_verified, str):
+            raise ConfigError(f"{context}.last_verified must be an ISO date string")
+
+        recheck_days = raw.get("recheck_days", 90)
+        if not isinstance(recheck_days, int) or isinstance(recheck_days, bool):
+            raise ConfigError(f"{context}.recheck_days must be an integer")
+        if recheck_days < 1:
+            raise ConfigError(f"{context}.recheck_days must be positive")
 
         urls = raw.get("urls")
         if not isinstance(urls, list) or not urls:
@@ -272,6 +326,9 @@ def load_sources_config(path: Path | None = None) -> SourcesConfig:
             enabled=enabled,
             urls=tuple(source_urls),
             notes=notes,
+            blocker=blocker,
+            last_verified=last_verified,
+            recheck_days=recheck_days,
         )
 
     return SourcesConfig(sources=sources)
@@ -454,3 +511,85 @@ def load_regions_config(path: Path | None = None) -> RegionsConfig:
         raise ConfigError(f"'default' references unknown regions: {missing}")
 
     return RegionsConfig(default=tuple(default), regions=regions)
+
+
+def load_coverage_config(path: Path | None = None) -> CoverageConfig:
+    """Load the declared per-source coverage matrix."""
+    config_path = path or find_config_path(COVERAGE_RELATIVE_PATH)
+    payload = _read_json(config_path)
+
+    unknown = set(payload) - {"defaults", "sources"}
+    if unknown:
+        raise ConfigError(f"Unknown keys in coverage config: {sorted(unknown)}")
+
+    defaults = payload.get("defaults", {})
+    if not isinstance(defaults, dict):
+        raise ConfigError("'defaults' must be an object")
+    unknown = set(defaults) - {"regions"}
+    if unknown:
+        raise ConfigError(f"Unknown keys in defaults: {sorted(unknown)}")
+
+    default_regions = defaults.get("regions", [])
+    if not isinstance(default_regions, list) or not all(
+        isinstance(item, str) and item for item in default_regions
+    ):
+        raise ConfigError("defaults.regions must be an array of strings")
+
+    sources_payload = payload.get("sources")
+    if not isinstance(sources_payload, dict) or not sources_payload:
+        raise ConfigError("'sources' must be a non-empty object")
+
+    sources: dict[str, SourceCoverage] = {}
+    for source_id, raw in sources_payload.items():
+        if not isinstance(raw, dict):
+            raise ConfigError(f"sources.{source_id} must be an object")
+
+        context = f"sources.{source_id}"
+        unknown = set(raw) - {"regions", "offers", "note"}
+        if unknown:
+            raise ConfigError(f"Unknown keys in {context}: {sorted(unknown)}")
+
+        regions = raw.get("regions", default_regions)
+        if not isinstance(regions, list) or not all(
+            isinstance(item, str) and item for item in regions
+        ):
+            raise ConfigError(f"{context}.regions must be an array of strings")
+        if not regions:
+            raise ConfigError(f"{context}.regions must not be empty")
+
+        offers = raw.get("offers")
+        if not isinstance(offers, dict) or not offers:
+            raise ConfigError(f"{context}.offers must be a non-empty object")
+
+        normalized_offers: dict[str, tuple[str, ...]] = {}
+        for offer_type, property_types in offers.items():
+            if offer_type not in OFFER_TYPES:
+                raise ConfigError(
+                    f"{context}.offers.{offer_type} must be one of {sorted(OFFER_TYPES)}",
+                )
+            if not isinstance(property_types, list) or not property_types:
+                raise ConfigError(
+                    f"{context}.offers.{offer_type} must be a non-empty array",
+                )
+            for property_type in property_types:
+                if property_type not in PROPERTY_TYPES:
+                    raise ConfigError(
+                        f"{context}.offers.{offer_type} has unknown property type "
+                        f"'{property_type}' (expected {sorted(PROPERTY_TYPES)})",
+                    )
+            if len(set(property_types)) != len(property_types):
+                raise ConfigError(f"{context}.offers.{offer_type} has duplicate entries")
+            normalized_offers[offer_type] = tuple(property_types)
+
+        note = raw.get("note", "")
+        if not isinstance(note, str):
+            raise ConfigError(f"{context}.note must be a string")
+
+        sources[source_id] = SourceCoverage(
+            id=source_id,
+            regions=tuple(regions),
+            offers=normalized_offers,
+            note=note,
+        )
+
+    return CoverageConfig(defaults_regions=tuple(default_regions), sources=sources)

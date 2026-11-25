@@ -1,0 +1,28 @@
+[Unit]
+Description=plaszczaki parked-source review
+
+[Container]
+Image=localhost/plaszczaki-scraper:0.1.0
+ContainerName=plaszczaki-review
+Volume=%h/Projects/plaszczaki/data:/data
+EnvironmentFile=%h/.config/plaszczaki/scraper.env
+Environment=HOME=/tmp
+Environment=TZ=Europe/Warsaw
+Environment=PYTHONUNBUFFERED=1
+Environment=DATABASE_URL=/data/plaszczaki.db
+Environment=PLASZCZAKI_CACHE_DIR=/data/cache
+Exec=review-sources --due
+ReadOnly=true
+Tmpfs=/tmp:size=256m
+DropCapability=all
+NoNewPrivileges=true
+PidsLimit=128
+Memory=1g
+Network=default
+
+[Service]
+TimeoutStartSec=3600
+Restart=no
+
+[Install]
+WantedBy=default.target
