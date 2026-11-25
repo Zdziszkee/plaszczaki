@@ -23,7 +23,8 @@ from plaszczaki_scraper.config import (
 )
 
 OFFER_ORDER = ("sale", "rent", "lease", "auction", "other")
-OFFER_FILTERS = ("sale", "rent", "lease", "auction")
+OFFER_FILTERS = ("sale", "rent", "lease", "auction", "other")
+_OFFER_INDEX = {offer: index for index, offer in enumerate(OFFER_ORDER)}
 
 StoredCounts = dict[tuple[str, str | None, str, str], int]
 CellKey = tuple[str, str, str]  # (region, offer type, property type)
@@ -85,10 +86,15 @@ def _stored_for(
     offer_type: str,
     property_type: str,
 ) -> int:
-    """Stored rows for a cell, widening aggregate ``other`` axes."""
-    exact = stored.get((source_id, region, offer_type, property_type))
-    if exact:
-        return exact
+    """Stored rows for a cell.
+
+    An ``other`` axis is a wildcard and always widens, even when a literal
+    ``other`` row exists; taking the exact row first would make the value flip
+    as soon as one aggregate listing is stored.
+    """
+    if offer_type != "other" and property_type != "other":
+        return stored.get((source_id, region, offer_type, property_type), 0)
+
     total = 0
     for (row_source, row_region, row_offer, row_property), count in stored.items():
         if row_source != source_id or row_region != region:
@@ -99,6 +105,31 @@ def _stored_for(
             continue
         total += count
     return total
+
+
+def _offer_group_stored(cells: Sequence[Cell]) -> int:
+    """Rows for one (source, region, offer), without double-counting wildcards."""
+    concrete = sum(cell.stored for cell in cells if cell.property_type != "other")
+    wildcards = [cell.stored for cell in cells if cell.property_type == "other"]
+    if not wildcards:
+        return concrete
+    # The wildcard covers the whole offer; concrete cells are a subset of it.
+    return max(concrete, *wildcards)
+
+
+def _source_region_stored(cells: Sequence[Cell]) -> int:
+    """Rows for one (source, region), collapsing aggregate ``other`` offers."""
+    wildcards = [
+        cell.stored
+        for cell in cells
+        if cell.offer_type == "other" and cell.property_type == "other"
+    ]
+    if wildcards:
+        return max(wildcards)
+    grouped: dict[str, list[Cell]] = defaultdict(list)
+    for cell in cells:
+        grouped[cell.offer_type].append(cell)
+    return sum(_offer_group_stored(group) for group in grouped.values())
 
 
 def collect_cells(
@@ -170,7 +201,7 @@ def matrix(rows: Sequence[Cell]) -> list[dict[str, Any]]:
                 "cells": len(subset),
                 "declared": sum(1 for cell in subset if cell.declared),
                 "queries": sum(cell.queries for cell in subset),
-                "stored": sum(cell.stored for cell in subset),
+                "stored": _offer_group_stored(subset),
                 "empty": sum(1 for cell in subset if cell.state == "empty"),
                 "missing_query": sum(1 for cell in subset if cell.state == "missing-query"),
                 "undeclared": sum(1 for cell in subset if cell.state == "undeclared"),
@@ -190,7 +221,7 @@ def _offer_label(stats: dict[str, int]) -> str:
     return value
 
 
-def render_matrix(rows: Sequence[Cell], *, regions: Sequence[str]) -> str:
+def render_matrix(rows: Sequence[Cell]) -> str:
     """Render the per-source, per-region, per-transaction matrix."""
     data = matrix(rows)
     if not data:
@@ -222,7 +253,7 @@ def render_cells(rows: Sequence[Cell]) -> str:
         key=lambda item: (
             item.source_id,
             item.region,
-            OFFER_ORDER.index(item.offer_type),
+            _OFFER_INDEX.get(item.offer_type, len(OFFER_ORDER)),
             item.property_type,
         ),
     ):
@@ -239,16 +270,21 @@ def missing_cells(rows: Sequence[Cell]) -> list[Cell]:
 
 
 def summarize(rows: Sequence[Cell]) -> dict[str, int]:
+    grouped: dict[tuple[str, str], list[Cell]] = defaultdict(list)
+    for cell in rows:
+        grouped[(cell.source_id, cell.region)].append(cell)
+
     summary = {
         "cells": len(rows),
         "ok": 0,
         "empty": 0,
         "missing_query": 0,
         "undeclared": 0,
-        "stored": sum(cell.stored for cell in rows),
+        "stored": sum(_source_region_stored(group) for group in grouped.values()),
     }
     for cell in rows:
-        summary[cell.state] = summary.get(cell.state, 0) + 1
+        key = cell.state.replace("-", "_")
+        summary[key] = summary.get(key, 0) + 1
     return summary
 
 
@@ -263,7 +299,7 @@ def validate_coverage(
 
     for source_id in adapters.sources:
         if source_id not in coverage.sources:
-            problems.append(f"{source_id}: enabled adapter has no coverage entry")
+            problems.append(f"{source_id}: adapter has no coverage entry")
 
     for source_id, declared in coverage.sources.items():
         adapter = adapters.sources.get(source_id)

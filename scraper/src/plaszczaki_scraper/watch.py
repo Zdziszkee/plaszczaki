@@ -105,12 +105,24 @@ def _watchable(adapters: AdaptersConfig) -> list[AdapterConfig]:
     )
 
 
-def due_sources(adapters: AdaptersConfig, db: Database, now_ms: int) -> list[AdapterConfig]:
-    """Watchable sources whose poll interval has elapsed, sorted by id."""
+def due_sources(
+    adapters: AdaptersConfig,
+    db: Database,
+    now_ms: int,
+    *,
+    offer_types: Sequence[str] = (),
+    region_ids: Sequence[str] | None = None,
+) -> list[AdapterConfig]:
+    """Watchable sources whose poll interval has elapsed, sorted by id.
+
+    The run mode matches :func:`run_watch_once`, so a rent/śląskie job is due
+    independently of a sale/małopolskie one.
+    """
+    mode = watch_mode(offer_types, region_ids or ())
     return [
         source
         for source in _watchable(adapters)
-        if is_due(source, db.last_run_at(source.id, WATCH_MODE), now_ms)
+        if is_due(source, db.last_run_at(source.id, mode), now_ms)
     ]
 
 

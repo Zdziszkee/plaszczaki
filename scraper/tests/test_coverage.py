@@ -10,6 +10,7 @@ import pytest
 from plaszczaki_scraper.adapters.base import Adapter, Query, SearchPage
 from plaszczaki_scraper.adapters.registry import build_adapter
 from plaszczaki_scraper.config import (
+    AdapterConfig,
     AdaptersConfig,
     ConfigError,
     CoverageConfig,
@@ -33,9 +34,15 @@ from plaszczaki_scraper.coverage import (
 )
 from plaszczaki_scraper.db import Database
 from plaszczaki_scraper.http import HttpClient
+from plaszczaki_scraper.models import Listing
 from plaszczaki_scraper.regions import RegionRegistry
 from plaszczaki_scraper.runner import Runner, RunOptions
-from plaszczaki_scraper.watch import WATCH_MODE, watch_mode
+from plaszczaki_scraper.watch import (
+    MINUTE_MS,
+    WATCH_MODE,
+    due_sources,
+    watch_mode,
+)
 
 
 def test_every_adapter_has_coverage() -> None:
@@ -115,7 +122,7 @@ def test_matrix_and_missing_cells() -> None:
     assert data[1]["offers"]["rent"]["empty"] == 1
     assert data[1]["offers"]["sale"]["undeclared"] == 1
 
-    text = render_matrix(rows, regions=["malopolskie", "slaskie"])
+    text = render_matrix(rows)
     assert "otodom" in text
     assert "!" in text
     assert "+" in text
@@ -132,7 +139,21 @@ def test_matrix_and_missing_cells() -> None:
     summary = summarize(rows)
     assert summary["cells"] == 4
     assert summary["ok"] == 1
+    assert summary["missing_query"] == 1
+    assert "missing-query" not in summary
     assert summary["stored"] == 13
+
+
+def test_wildcard_does_not_double_count_concrete_cells() -> None:
+    rows = [
+        Cell("domiporta", "malopolskie", "sale", "flat", True, 1, 3),
+        Cell("domiporta", "malopolskie", "sale", "house", True, 1, 2),
+        Cell("domiporta", "malopolskie", "sale", "other", True, 1, 6),
+    ]
+
+    data = matrix(rows)
+    assert data[0]["offers"]["sale"]["stored"] == 6
+    assert summarize(rows)["stored"] == 6
 
 
 def test_collect_cells_marks_rows_without_queries() -> None:
@@ -284,7 +305,7 @@ class _TwoTransactionAdapter:
 
 
 def _database(tmp_path: Path) -> Database:
-    migrations = sorted((repo_root() / "web" / "drizzle").glob("000[1-9]_*.sql"))
+    migrations = sorted((repo_root() / "web" / "drizzle").glob("0*_*.sql"))
     sql = "\n".join(migration.read_text(encoding="utf-8") for migration in migrations)
     path = tmp_path / "test.db"
     connection = sqlite3.connect(path)
@@ -312,3 +333,88 @@ def test_runner_only_fetches_selected_transactions(tmp_path: Path) -> None:
 
     assert result["status"] == "ok"
     assert [url.split("?")[0] for url in client.urls] == ["https://example.test/rent"]
+
+
+def test_count_by_axes_groups_stored_rows(tmp_path: Path) -> None:
+    with _database(tmp_path) as db:
+        db.upsert_source(
+            source_id="fake",
+            label="Fake",
+            homepage_url="https://example.test",
+            adapter="fake",
+        )
+        for external_id, region, offer_type, property_type in (
+            ("1", "malopolskie", "sale", "flat"),
+            ("2", "malopolskie", "sale", "flat"),
+            ("3", "slaskie", "rent", "flat"),
+        ):
+            db.upsert_listing(
+                Listing(
+                    source_id="fake",
+                    external_id=external_id,
+                    url=f"https://example.test/{external_id}",
+                    offer_type=offer_type,
+                    property_type=property_type,
+                    voivodeship=region,
+                    lat=50.0,
+                    lng=19.9,
+                ),
+            )
+
+        counts = db.count_by_axes()
+
+    assert counts[("fake", "malopolskie", "sale", "flat")] == 2
+    assert counts[("fake", "slaskie", "rent", "flat")] == 1
+
+
+class _StubRuns:
+    def __init__(self, runs: dict[tuple[str, str], int]) -> None:
+        self.runs = runs
+
+    def last_run_at(self, source_id: str, mode: str = "incremental") -> int | None:
+        return self.runs.get((source_id, mode))
+
+
+def test_due_sources_uses_the_filtered_mode() -> None:
+    source = AdapterConfig(
+        id="fake",
+        adapter="fake",
+        label="Fake",
+        homepage="https://example.test",
+        incremental=True,
+        poll_minutes=10,
+    )
+    adapters = AdaptersConfig(defaults_rps=1.0, sources={"fake": source})
+    now = 2000 + 9 * MINUTE_MS
+    db = cast(Database, _StubRuns({("fake", "incremental:rent:slaskie"): 2000}))
+
+    assert due_sources(adapters, db, now, offer_types=("rent",), region_ids=("slaskie",)) == []
+    assert due_sources(adapters, db, now, offer_types=("sale",), region_ids=("slaskie",)) == [
+        source,
+    ]
+    assert due_sources(adapters, db, now) == [source]
+
+
+def test_validate_coverage_flags_unknown_region() -> None:
+    adapters = AdaptersConfig(
+        defaults_rps=1.0,
+        sources={"otodom": load_adapters_config().sources["otodom"]},
+    )
+    coverage = CoverageConfig(
+        defaults_regions=("slask",),
+        sources={
+            "otodom": SourceCoverage(
+                id="otodom",
+                regions=("slask",),
+                offers={"sale": ("flat",)},
+            ),
+        },
+    )
+
+    problems = validate_coverage(
+        coverage=coverage,
+        adapters=adapters,
+        regions=load_regions_config(),
+    )
+
+    assert any("unknown region" in problem for problem in problems)

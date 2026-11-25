@@ -36,6 +36,7 @@ from plaszczaki_scraper.coverage import (
     render_cells,
     render_matrix,
     summarize,
+    validate_coverage,
 )
 from plaszczaki_scraper.db import Database, SchemaError, default_database_path
 from plaszczaki_scraper.geocode import GeocodeStore, GeocodeWorker
@@ -75,7 +76,7 @@ def _parser() -> argparse.ArgumentParser:
         "--offer-type",
         type=_offer_type_filter,
         default=(),
-        help="comma-separated transactions to scrape: sale,rent,lease,auction",
+        help="comma-separated transactions to scrape: sale,rent,lease,auction,other",
     )
     run.add_argument("--limit", type=int, help="maximum items/details for this run")
     run.add_argument("--max-pages", type=int, help="maximum search pages per query")
@@ -110,7 +111,7 @@ def _parser() -> argparse.ArgumentParser:
         "--offer-type",
         type=_offer_type_filter,
         default=(),
-        help="comma-separated transactions to scrape: sale,rent,lease,auction",
+        help="comma-separated transactions to scrape: sale,rent,lease,auction,other",
     )
     run_all.add_argument("--limit", type=int, help="maximum items/details per source")
     run_all.add_argument("--max-pages", type=int, help="maximum search pages per query")
@@ -139,7 +140,7 @@ def _parser() -> argparse.ArgumentParser:
         "--offer-type",
         type=_offer_type_filter,
         default=(),
-        help="comma-separated transactions to poll: sale,rent,lease,auction",
+        help="comma-separated transactions to poll: sale,rent,lease,auction,other",
     )
     watch.add_argument("--dry-run", action="store_true", help="print records, do not write")
     watch.add_argument("--limit", type=int, help="maximum new listings per source per pass")
@@ -214,7 +215,7 @@ def _parser() -> argparse.ArgumentParser:
         "--offer-type",
         type=_offer_type_filter,
         default=(),
-        help="comma-separated transactions to report: sale,rent,lease,auction",
+        help="comma-separated transactions to report: sale,rent,lease,auction,other",
     )
     coverage.add_argument(
         "--cells",
@@ -676,6 +677,14 @@ def _cmd_coverage(args: argparse.Namespace) -> int:
     coverage = load_coverage_config()
     regions = _select_regions(regions_config, args.region)
 
+    problems = validate_coverage(
+        coverage=coverage,
+        adapters=adapters,
+        regions=regions_config,
+    )
+    if problems:
+        raise ConfigError("coverage config is inconsistent: " + "; ".join(problems))
+
     if args.source:
         wanted = [item.strip() for item in args.source.split(",") if item.strip()]
         unknown = [source_id for source_id in wanted if source_id not in adapters.sources]
@@ -710,7 +719,12 @@ def _cmd_coverage(args: argparse.Namespace) -> int:
     if args.json:
         print(
             json.dumps(
-                {"summary": summary, "cells": [asdict(cell) for cell in rows]},
+                {
+                    "summary": summary,
+                    "cells": [
+                        {**asdict(cell), "state": cell.state, "ok": cell.ok} for cell in rows
+                    ],
+                },
                 ensure_ascii=False,
                 indent=2,
             ),
@@ -719,7 +733,7 @@ def _cmd_coverage(args: argparse.Namespace) -> int:
         if args.cells or args.missing:
             print(render_cells(rows))
         else:
-            print(render_matrix(rows, regions=regions))
+            print(render_matrix(rows))
         print(
             f"summary: cells={summary['cells']} ok={summary['ok']} "
             f"empty={summary['empty']} missing_query={summary['missing_query']} "
