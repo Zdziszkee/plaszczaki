@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+    <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.bunny.net">
+<link href="https://fonts.bunny.net/css?family=figtree:400,600&display=swap" rel="stylesheet" />
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<link href="https://otoprzetargi.pl/favicon.ico" type="image/x-icon" rel="icon">
+<title>Otoprzetargi</title>
+<meta name="description" content="">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="index, follow">
+<link rel="stylesheet" href="https://alertyprzetargowe.pl/vendor/nouislider/nouislider.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Playfair+Display:400,400i,700">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Poppins:300,400,400i,700">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Swiper/4.4.1/css/swiper.min.css">
+<link rel="stylesheet" href="https://alertyprzetargowe.pl/vendor/magnific-popup/magnific-popup.css">
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.1/css/all.css"
+    integrity="sha384-50oBUHEmvpQ+1lW4y57PTFmhCaXp0ML5d60M1M7uH2+nqUivzIebhndOJK28anvf" crossorigin="anonymous">
+<link rel="preload" as="style" href="https://alertyprzetargowe.pl/build/assets/app-C0tHodZg.css" /><link rel="preload" as="style" href="https://alertyprzetargowe.pl/build/assets/_core-6Gn0oM4g.css" /><link rel="modulepreload" href="https://alertyprzetargowe.pl/build/assets/app-BmpvLLh0.js" /><link rel="stylesheet" href="https://alertyprzetargowe.pl/build/assets/app-C0tHodZg.css" data-navigate-track="reload" /><link rel="stylesheet" href="https://alertyprzetargowe.pl/build/assets/_core-6Gn0oM4g.css" data-navigate-track="reload" /><script type="module" src="https://alertyprzetargowe.pl/build/assets/app-BmpvLLh0.js" data-navigate-track="reload"></script><link rel="stylesheet" href="https://alertyprzetargowe.pl/vendor/my/style.default.css">
+<style>
+@media print { 
+  * {
+	  font-family: "Arial", "Helvetica", sans-serif !important;
+  }
+  
+  span {
+	  font-family: "Arial", "Helvetica", sans-serif !important;
+  }
+  }
+</style></head>
+<style>
+    .menu-links {
+        display: flex;
+        gap: 10px;
+    }
+
+    @media (max-width: 767.98px) {
+        .menu-links {
+            display: none;
+            flex-direction: column;
+        }
+
+        .menu-links.show {
+            display: flex;
+        }
+    }
+</style>
+<header class="header">
+        <p class="text-center pt-2">
+        Wydanie nr <strong>25/11/2026</strong> z dnia 25 listopada 2026 roku, ISSN
+        2392-215X
+    </p>
+    <nav class="navbar navbar-expand-md navbar-white bg-white" aria-label="Fourth navbar example">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <h1>Otoprzetargi</h1>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarsExample04"
+                aria-controls="navbarsExample04" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="navbar-collapse" id="navbarsExample04">
+                <div class="menu-links">
+                    <a class="navbar-brand text-dark" href="/">Home</a>
+                    <a class="navbar-brand" href="/news">Informacje z rynku</a>
+                    <a class="navbar-brand" href="#">Regulamin</a>
+                    <a class="navbar-brand" href="#">Kontakt</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+</header>
+
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA1hgAu3WeCxripwpE4AaFMXaeFi8KSm6Q&libraries=places">
+    </script>
+
+    <style>
+        .ru-button {
+            display: none;
+        }
+
+        .nier-button {
+            display: none;
+        }
+
+
+
+        @media(max-width:576px) {
+            .search-bar-nav-tabs {
+                display: block;
+
+            }
+
+            .search-bar-nav-tabs li {
+                text-align: center;
+                border-bottom: 1px solid black;
+                padding-bottom: 10px;
+                background: white;
+            }
+
+            .nier-trans {
+                display: none;
+            }
+
+            .nier-sub {
+                display: none;
+            }
+
+            .nier-cen-od {
+                display: none;
+            }
+
+            .nier-cen-do {
+                display: none;
+            }
+
+            .nier-od {
+                display: none;
+            }
+
+            .nier-do {
+                display: none;
+            }
+
+            .ru-sub {
+                display: none;
+            }
+
+            .ru-od {
+                display: none;
+            }
+
+            .ru-do {
+                display: none;
+            }
+
+            .ru-button {
+                display: block;
+            }
+
+            .nier-button {
+                display: block;
+            }
+        }
+    </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            function saveFormData(excludedElementIds) {
+                const formElements = document.querySelectorAll('form input, form select');
+
+                formElements.forEach(element => {
+                    if (!excludedElementIds.includes(element.id)) { // Check if ID is in the exclusion list
+                        element.addEventListener('change', function() {
+                            localStorage.setItem(element.name, element.value);
+                        });
+                    }
+                });
+            }
+
+            function loadFormData(excludedElementIds) {
+                const formElements = document.querySelectorAll('form input, form select');
+
+                formElements.forEach(element => {
+                    if (!excludedElementIds.includes(element.id)) { // Check if ID is in the exclusion list
+                        const value = localStorage.getItem(element.name);
+                        if (value) {
+                            element.value = value;
+                        }
+                    }
+                });
+            }
+            const button = document.querySelector('.nier-button');
+            const elementsToToggle = [
+                '.nier-trans',
+                '.nier-sub',
+                '.nier-cen-od',
+                '.nier-cen-do',
+                '.nier-od',
+                '.nier-do'
+            ];
+
+            button.addEventListener('click', function() {
+                elementsToToggle.forEach(selector => {
+                    const element = document.querySelector(selector);
+                    if (element.style.display === 'none') {
+                        element.style.display = 'flex';
+                    } else {
+                        element.style.display = 'none';
+                    }
+                });
+
+                if (button.textContent === 'Filtry Zaawansowane') {
+                    button.textContent = 'Ukryj Filtry';
+                } else {
+                    button.textContent = 'Filtry Zaawansowane';
+                }
+            });
+
+            const button2 = document.querySelector('.ru-button');
+            const elementsToToggle2 = [
+                '.ru-sub',
+                '.ru-od',
+                '.ru-do'
+            ];
+
+            button2.addEventListener('click', function() {
+                elementsToToggle2.forEach(selector => {
+                    const element = document.querySelector(selector);
+                    if (element.style.display === 'none') {
+                        element.style.display = 'flex';
+                    } else {
+                        element.style.display = 'none';
+                    }
+                });
+
+                if (button2.textContent === 'Filtry Zaawansowane') {
+                    button2.textContent = 'Ukryj Filtry';
+                } else {
+                    button2.textContent = 'Filtry Zaawansowane';
+                }
+            });
+
+            const excludedIds = ['address-input-buy', 'address-input-rent', 'address-input-sell',
+                'address-input-wierz'
+            ];
+
+            saveFormData(excludedIds);
+            loadFormData(excludedIds);
+            initAutocomplete();
+        });
+
+        function initAutocomplete() {
+            const inputIds = ['address-input-buy', 'address-input-rent', 'address-input-sell', 'address-input-wierz'];
+            const autocompleteObjects = {};
+
+            inputIds.forEach(id => {
+                const input = document.getElementById(id);
+                const localStorageKey = `address-${id.split('-')[2]}`; // Create a specific key for each input
+
+                // Check localStorage for a previously saved address
+                const storedAddress = localStorage.getItem(localStorageKey);
+                if (storedAddress) {
+                    input.value = storedAddress; // Pre-populate the input field
+                }
+
+                const autocomplete = new google.maps.places.Autocomplete(input, {
+                    componentRestrictions: {
+                        country: 'pl'
+                    }
+                });
+                autocompleteObjects[id] = autocomplete;
+
+                autocomplete.addListener('place_changed', function() {
+                    const place = autocomplete.getPlace();
+                    if (place.geometry) {
+                        const latitude = place.geometry.location.lat();
+                        const longitude = place.geometry.location.lng();
+                        document.getElementById(`latitude-${id.split('-')[2]}`).value = latitude;
+                        document.getElementById(`longitude-${id.split('-')[2]}`).value = longitude;
+
+                        const geocoder = new google.maps.Geocoder();
+                        geocoder.geocode({
+                            'location': {
+                                lat: latitude,
+                                lng: longitude
+                            }
+                        }, function(results, status) {
+                            if (status === 'OK' && results[0]) {
+                                const addressComponents = results[0].address_components;
+                                let city;
+
+                                for (let i = 0; i < addressComponents.length; i++) {
+                                    const types = addressComponents[i].types;
+
+                                    if (types.includes('locality')) {
+                                        city = addressComponents[i].long_name;
+                                        break; // If city is found, no need to check further
+                                    } else if (types.includes('administrative_area_level_3')) {
+                                        city = addressComponents[i].long_name;
+                                        break; // If a locality is not found, check for a level 3 administrative area
+                                    } else if (types.includes('administrative_area_level_2')) {
+                                        city = addressComponents[i].long_name;
+                                        break; // If a level 3 administrative area is not found, check for a level 2 administrative area
+                                    } else if (types.includes('administrative_area_level_1')) {
+                                        city = addressComponents[i].long_name;
+                                        break; // If a level 2 administrative area is not found, check for a level 1 administrative area
+                                    }
+                                }
+
+                                document.getElementById(`city-${id.split('-')[2]}`).value = city ||
+                                    '';
+                            }
+                        });
+                    }
+                    localStorage.setItem(localStorageKey, input.value);
+
+                });
+            });
+        }
+        google.maps.event.addDomListener(window, 'load', initAutocomplete);
+    </script>
+        <section class="d-flex align-items-center dark-overlay bg-cover"
+        style="background-image: url(https://alertyprzetargowe.pl/img/hero.jpg);">
+        <div class="container py-6 py-lg-7 text-white overlay-content">
+            <div class="row">
+                <div class="col-xl-8">
+                    <h1 class="display-3 fw-bold text-shadow d-none d-sm-block">Otoprzetargi</h1>
+                    <p class="text-lg text-shadow mb-6 d-none d-sm-block">GC Trader z siedzibą w Warszawie.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+    <div class="container position-relative mt-n6 z-index-20 " style="margin-top: -56px">
+
+        <ul class="nav nav-tabs search-bar-nav-tabs" role="tablist">
+            <li class="nav-item me-2">
+                <a class="nav-link active"
+                    href="#buy" data-bs-toggle="tab" role="tab">Nieruchomości</a>
+            </li>
+            <li class="nav-item me-2">
+                <a class="nav-link " href="#rent" data-bs-toggle="tab"
+                    role="tab">Ruchomości</a>
+            </li>
+            <li class="nav-item me-2">
+                <a class="nav-link " href="#sell" data-bs-toggle="tab"
+                    role="tab">Komunikaty</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link " href="#wierz"
+                    data-bs-toggle="tab" role="tab">Wierzytelności</a>
+            </li>
+        </ul>
+
+        <div class="search-bar search-bar-with-tabs p-3 p-lg-4">
+            <div class="tab-content">
+                <div class="tab-pane fade show active"
+                    id="buy" role="tabpanel">
+                    <form action="https://alertyprzetargowe.pl/nieruchomosci" method="GET">
+                        <div class="row">
+
+                            <div class="col-md-3 col-lg-3 align-items-center form-group no-divider pb-2">
+                                <select name="transaction_type" class="form-control nier-trans">
+                                    <option value="">Typ transakcji</option>
+                                    <option value="10">Sprzedaż</option>
+                                    <option value="11">Kupno</option>
+                                    <option value="13">Wynajem</option>
+                                    <option value="12">Dzierżawa</option>
+                                    <option value="5">Inne</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 col-lg-3 align-items-center form-group no-divider pb-2 nier-sub">
+                                <select name="subject" class="form-control ">
+                                    <option value="">Przedmiot ogłoszenia</option>
+                                    <option value="22">Biuro/Obiekt biurowy</option>
+                                    <option value="23">Dom</option>
+                                    <option value="25">Dworek/Pałac</option>
+                                    <option value="26">Działka</option>
+                                    <option value="27">Hotel/Pensjonat</option>
+                                    <option value="28">Lokal użytkowy</option>
+                                    <option value="29">Magazyn</option>
+                                    <option value="30">Mieszkanie</option>
+                                    <option value="31">Obiekt użytkowy</option>
+                                </select>
+                            </div>
+
+                            <div class="col-lg-4 d-flex align-items-center form-group no-divider pb-2">
+                                <input id="address-input-buy" class="form-control" name="address" type="text"
+                                    value="" placeholder="Wprowadź adres" autocomplete="on">
+                            </div>
+
+                            <div class="col-md-2 col-lg-2 d-flex align-items-center form-group no-divider pb-2">
+                                <select name="radius" class="form-control">
+                                    <option value="25">+25 km</option>
+                                    <option value="0">0 km</option>
+                                    <option value="15">+15 km</option>
+                                    <option value="50">+50 km</option>
+                                    <option value="75">+75 km</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6 col-lg-2  align-items-center form-group no-divider pb-2 nier-od">
+                                <input type="number" name="powierzchnia_od" class="form-control"
+                                    placeholder="Powierzchnia od">
+                            </div>
+                            <div class="col-md-6 col-lg-2  align-items-center form-group no-divider pb-2 nier-do">
+                                <input type="number" name="powierzchnia_do" class="form-control"
+                                    placeholder="Powierzchnia do">
+                            </div>
+                            <div class="col-md-6 col-lg-2  align-items-center form-group no-divider pb-2 nier-cen-od">
+                                <input type="number" name="cena_od" class="form-control" placeholder="Cena od">
+                            </div>
+                            <div class="col-md-6 col-lg-2 align-items-center form-group no-divider pb-2 nier-cen-do">
+                                <input type="number" name="cena_do" class="form-control" placeholder="Cena do">
+                            </div>
+
+                            <input type="hidden" id="city-buy" name="city">
+                            <input type="hidden" id="latitude-buy" name="latitude">
+                            <input type="hidden" id="longitude-buy" name="longitude">
+                            <button class="btn btn-primary mb-4 nier-button" type="button">Filtry
+                                zaawansowane</button>
+
+                            <div class="col-lg-4 d-grid form-group mb-0">
+                                <button class="btn btn-primary h-100" type="submit">Szukaj</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="tab-pane fade " id="rent"
+                    role="tabpanel">
+                    <form action="https://alertyprzetargowe.pl/ruchomosci" method="GET">
+                        <div class="row">
+                            <div class="col-lg-4 d-flex align-items-center form-group no-divider pb-2">
+                                <input id="address-input-rent" class="form-control" name="address" type="text"
+                                    value="" placeholder="Wprowadź adres"
+                                    autocomplete="off">
+                            </div>
+                            <div class="col-md-6 col-lg-2 d-flex align-items-center form-group no- pb-2">
+                                <select name="radius" class="form-control">
+                                    <option value="25">+25 km</option>
+                                    <option value="0">0 km</option>
+                                    <option value="15">+15 km</option>
+                                    <option value="50">+50 km</option>
+                                    <option value="75">+75 km</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 col-lg-6 align-items-center form-group no-divider pb-2 ru-sub">
+                                <select name="subject" class="form-control">
+                                    <option value="">Przedmiot ogłoszenia</option>
+                                    <option value="32">samochody osobowe</option>
+                                    <option value="33">samochody ciężarowe</option>
+                                    <option value="34">pojazdy specjalistyczne</option>
+                                    <option value="35">maszyny, urządzenia</option>
+                                    <option value="47">łodzie</option>
+                                    <option value="48">maszyny przemysłowe</option>
+                                    <option value="49">maszyny rolnicze</option>
+                                    <option value="50">przyczepy/naczepy</option>
+                                    <option value="51">motocykle/skutery</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 col-lg-4 align-items-center form-group no-divider ru-od">
+                                <input type="number" name="cena_od" class="form-control" placeholder="Cena od">
+                            </div>
+                            <div class="col-md-6 col-lg-4 align-items-center form-group no-divide ru-do">
+                                <input type="number" name="cena_do" class="form-control" placeholder="Cena do">
+                            </div>
+                            <input type="hidden" id="city-rent" name="city">
+                            <input type="hidden" id="latitude-rent" name="latitude">
+                            <input type="hidden" id="longitude-rent" name="longitude">
+
+                            <button class="btn btn-primary mb-4 ru-button" type="button">Filtry zaawansowane</button>
+
+                            <div class="col-lg-4 d-grid form-group mb-0">
+                                <button class="btn btn-primary h-100" type="submit">Szukaj</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="tab-pane fade " id="sell"
+                    role="tabpanel">
+                    <form action="https://alertyprzetargowe.pl/komunikaty" method="GET">
+                        <div class="row">
+                            <div class="col-lg-6 d-flex align-items-center form-group no-divider">
+                                <input id="address-input-sell" class="form-control" name="address" type="text"
+                                    value="" placeholder="Wprowadź adres"
+                                    autocomplete="off">
+                            </div>
+                            <div class="col-md-4 col-lg-4 d-flex align-items-center form-group no-divider">
+                                <select name="radius" class="form-control">
+                                    <option value="25">+25 km</option>
+                                    <option value="0">0 km</option>
+
+                                    <option value="15">+15 km</option>
+                                    <option value="50">+50 km</option>
+                                    <option value="75">+75 km</option>
+                                </select>
+                            </div>
+                            <input type="hidden" id="city-sell" name="city">
+                            <input type="hidden" id="latitude-sell" name="latitude">
+                            <input type="hidden" id="longitude-sell" name="longitude">
+                            <div class="col-lg-2 d-grid form-group mb-0">
+                                <button class="btn btn-primary h-100" type="submit">Szukaj</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="tab-pane fade " id="wierz"
+                    role="tabpanel">
+                    <form action="https://alertyprzetargowe.pl/wierzytelnosci" method="GET">
+                        <div class="row">
+                            <div class="col-lg-6 d-flex align-items-center form-group no-divider">
+                                <input id="address-input-wierz" class="form-control" name="address" type="text"
+                                    value="" placeholder="Wprowadź adres"
+                                    autocomplete="off">
+                            </div>
+                            <div class="col-md-4 col-lg-4 d-flex align-items-center form-group no-divider">
+                                <select name="radius" class="form-control">
+                                    <option value="25">+25 km</option>
+                                    <option value="0">0 km</option>
+                                    <option value="15">+15 km</option>
+                                    <option value="50">+50 km</option>
+                                    <option value="75">+75 km</option>
+                                </select>
+                            </div>
+                            <input type="hidden" id="city-wierz" name="city">
+                            <input type="hidden" id="latitude-wierz" name="latitude">
+                            <input type="hidden" id="longitude-wierz" name="longitude">
+                            <div class="col-lg-2 d-grid form-group mb-0">
+                                <button class="btn btn-primary h-100" type="submit">Szukaj</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        function initAutocomplete() {
+            const inputIds = ['address-input-buy', 'address-input-rent', 'address-input-sell', 'address-input-wierz'];
+            const autocompleteObjects = {};
+
+            inputIds.forEach(id => {
+                const input = document.getElementById(id);
+                const autocomplete = new google.maps.places.Autocomplete(input, {
+                    componentRestrictions: {
+                        country: 'pl'
+                    } // Restrict to Poland
+                });
+                autocompleteObjects[id] = autocomplete;
+
+                autocomplete.addListener('place_changed', function() {
+                    const place = autocomplete.getPlace();
+                    if (place.geometry) {
+                        const latitude = place.geometry.location.lat();
+                        const longitude = place.geometry.location.lng();
+                        document.getElementById(`latitude-${id.split('-')[2]}`).value = latitude;
+                        document.getElementById(`longitude-${id.split('-')[2]}`).value = longitude;
+
+                        const geocoder = new google.maps.Geocoder();
+                        geocoder.geocode({
+                            'location': {
+                                lat: latitude,
+                                lng: longitude
+                            }
+                        }, function(results, status) {
+                            if (status === 'OK' && results[0]) {
+                                const addressComponents = results[0].address_components;
+                                let city;
+
+                                for (let i = 0; i < addressComponents.length; i++) {
+                                    const types = addressComponents[i].types;
+
+                                    if (types.includes('locality')) {
+                                        city = addressComponents[i].long_name;
+                                        break; // If city is found, no need to check further
+                                    } else if (types.includes('administrative_area_level_3')) {
+                                        city = addressComponents[i].long_name;
+                                        break; // If a locality is not found, check for a level 3 administrative area
+                                    } else if (types.includes('administrative_area_level_2')) {
+                                        city = addressComponents[i].long_name;
+                                        break; // If a level 3 administrative area is not found, check for a level 2 administrative area
+                                    } else if (types.includes('administrative_area_level_1')) {
+                                        city = addressComponents[i].long_name;
+                                        break; // If a level 2 administrative area is not found, check for a level 1 administrative area
+                                    }
+                                }
+
+                                document.getElementById(`city-${id.split('-')[2]}`).value = city ||
+                                    '';
+                            }
+                        });
+                    }
+                });
+            });
+        }
+        google.maps.event.addDomListener(window, 'load', initAutocomplete);
+    </script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Funkcja do przewijania do określonej sekcji
+        function scrollToSection() {
+            const targetSection = document.querySelector('.container-fluid.py-5.px-lg-5');
+            if (targetSection) {
+                targetSection.scrollIntoView({
+                    behavior: 'smooth'
+                });
+            }
+        }
+
+        // Sprawdź, czy URL zawiera parametr 'page'
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('page')) {
+            scrollToSection();
+        }
+    });
+</script>
+
+<body>
+
+
+    <div class="container-fluid py-5 px-lg-5">
+        <div class="row border-bottom mb-4">
+            <div class="col-12">
+                <h1 class="display-4 fw-bold text-serif mb-4 text-lg-xxl text-md">Nieruchomości</h1>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-lg-3 pt-3 d-none d-lg-block">
+                <form class="pe-xl-3" action="https://alertyprzetargowe.pl/nieruchomosci" method="GET">
+
+                    <div class="mb-4">
+                        <label class="form-label" for="address-input">Adres</label>
+                        <input id="address-input" class="form-control" name="address" type="text"
+                            placeholder="Wprowadź adres" autocomplete="off">
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label" for="transaction_type">Typ transakcji</label>
+                        <select name="transaction_type" class="form-control">
+                            <option value="">Typ transakcji</option>
+                            <option value="10">Sprzedaż</option>
+                            <option value="11">Kupno</option>
+                            <option value="12">Wynajem</option>
+                            <option value="13">Dzierżawa</option>
+                            <option value="5">Inne</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label" for="subject">Przedmiot ogłoszenia</label>
+                        <select name="subject" class="form-control">
+                            <option value="">Przedmiot ogłoszenia</option>
+                            <option value="22">Biuro/Obiekt biurowy</option>
+                            <option value="23">Dom</option>
+                            <option value="25">Dworek/Pałac</option>
+                            <option value="26">Działka</option>
+                            <option value="27">Hotel/Pensjonat</option>
+                            <option value="28">Lokal użytkowy</option>
+                            <option value="29">Magazyn</option>
+                            <option value="30">Mieszkanie</option>
+                            <option value="31">Obiekt użytkowy</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label" for="radius">Radius</label>
+                        <select name="radius" class="form-control">
+                            <option value="25">+25 km</option>
+                            <option value="15">+15 km</option>
+                            <option value="0">0 km</option>
+                            <option value="50">+50 km</option>
+                            <option value="75">+75 km</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label" for="powierzchnia_od">Powierzchnia od</label>
+                        <input type="number" name="powierzchnia_od" class="form-control" placeholder="Powierzchnia od">
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label" for="powierzchnia_do">Powierzchnia do</label>
+                        <input type="number" name="powierzchnia_do" class="form-control" placeholder="Powierzchnia do">
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label" for="cena_od">Cena od</label>
+                        <input type="number" name="cena_od" class="form-control" placeholder="Cena od">
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label" for="cena_do">Cena do</label>
+                        <input type="number" name="cena_do" class="form-control" placeholder="Cena do">
+                    </div>
+                    <input type="hidden" id="city" name="city">
+                    <input type="hidden" id="latitude" name="latitude">
+                    <input type="hidden" id="longitude" name="longitude">
+                    <div class="mb-4">
+                        <button class="btn btn-primary" type="submit"><i class="fas fa-filter me-1"></i>Szukaj</button>
+                    </div>
+                </form>
+            </div>
+
+            <script>
+                function initAutocomplete() {
+                    var input = document.getElementById('address-input');
+                    var autocomplete = new google.maps.places.Autocomplete(input);
+
+                    autocomplete.addListener('place_changed', function() {
+                        var place = autocomplete.getPlace();
+                        if (place.geometry) {
+                            var latitude = place.geometry.location.lat();
+                            var longitude = place.geometry.location.lng();
+
+                            document.getElementById('latitude').value = latitude;
+                            document.getElementById('longitude').value = longitude;
+
+                            // Geocode the latitude and longitude to get the city name
+                            var geocoder = new google.maps.Geocoder();
+                            geocoder.geocode({
+                                'location': {
+                                    lat: latitude,
+                                    lng: longitude
+                                }
+                            }, function(results, status) {
+                                if (status === 'OK' && results[0]) {
+                                    var addressComponents = results[0].address_components;
+                                    for (var i = 0; i < addressComponents.length; i++) {
+                                        if (addressComponents[i].types.includes('locality')) {
+                                            var city = addressComponents[i].long_name;
+                                            document.getElementById('city').value = city;
+                                            break;
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    });
+                }
+                google.maps.event.addDomListener(window, 'load', initAutocomplete);
+            </script>
+            <div class="col-lg-9">
+                <div class="d-flex justify-content-between align-items-center flex-column flex-md-row mb-4">
+                    <div class="me-3">
+                        <p class="mb-3 mb-md-0">Znaleziono <strong>197</strong> rekordów</p>
+                    </div>
+                </div>
+                <div class="row">
+                                            <div class="col-sm-6 col-xl-4 mb-5">
+                            <a href="https://alertyprzetargowe.pl/nieruchomosci/przetarg-sprzedaz-nieruchomosci-niezabudowanej-7">
+
+                                <div class="card h-100 border-0 shadow">
+                                    <div class="card-img-top overflow-hidden  bg-cover"
+                                        style="background-image: url('https://alertyprzetargowe.pl/storage/97696/01M4XG542EJJ41EP59JSA73PSE.webp'); min-height: 200px;background-repeat: no-repeat;background-size: contain;background-position: center;">
+
+
+
+                                    </div>
+                                    <div class="card-body">
+                                        <h2 class="text-sm text-muted mb-3">PRZETARG - SPRZEDAŻ NIERUCHOMOŚCI NIEZABUDOWANEJ
+                                        </h2>
+                                                                                    <p class="text-sm text-muted text-uppercase mb-1">Powierzchnia:
+                                                2700.00 </p>
+                                                                                                                            <p class="text-sm text-muted text-uppercase mb-1">Cena:
+                                                819.000,00
+                                            </p>
+                                                                                <p class="text-sm text-muted text-uppercase mb-1">Data:
+                                            14.10.2026 </p>
+                                                                                                                            <div class="pt-2">
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Sprzedaż</div>
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Działka</div>
+                                            </div>
+                                                                                                                            <div class="pt-4">
+                                                <p>
+                                                    Garlica Murowana, malopolskie
+                                                <p>
+                                            </div>
+                                                                            </div>
+                                </div>
+                            </a>
+
+                        </div>
+                                            <div class="col-sm-6 col-xl-4 mb-5">
+                            <a href="https://alertyprzetargowe.pl/nieruchomosci/przetarg-sprzedaz-nieruchomosci-niezabudowanej-5">
+
+                                <div class="card h-100 border-0 shadow">
+                                    <div class="card-img-top overflow-hidden  bg-cover"
+                                        style="background-image: url('https://alertyprzetargowe.pl/storage/97685/01M4X43XZWHT9PKXRJQ0R1FTF5.webp'); min-height: 200px;background-repeat: no-repeat;background-size: contain;background-position: center;">
+
+
+
+                                    </div>
+                                    <div class="card-body">
+                                        <h2 class="text-sm text-muted mb-3">PRZETARG - SPRZEDAŻ NIERUCHOMOŚCI NIEZABUDOWANEJ
+                                        </h2>
+                                                                                    <p class="text-sm text-muted text-uppercase mb-1">Powierzchnia:
+                                                12600.00 </p>
+                                                                                                                            <p class="text-sm text-muted text-uppercase mb-1">Cena:
+                                                1.926.000,00
+                                            </p>
+                                                                                <p class="text-sm text-muted text-uppercase mb-1">Data:
+                                            14.10.2026 </p>
+                                                                                                                            <div class="pt-2">
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Sprzedaż</div>
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Działka</div>
+                                            </div>
+                                                                                                                            <div class="pt-4">
+                                                <p>
+                                                    Sułków, malopolskie
+                                                <p>
+                                            </div>
+                                                                            </div>
+                                </div>
+                            </a>
+
+                        </div>
+                                            <div class="col-sm-6 col-xl-4 mb-5">
+                            <a href="https://alertyprzetargowe.pl/nieruchomosci/ogloszenie-o-pisemnym-konkursie-ofert-1">
+
+                                <div class="card h-100 border-0 shadow">
+                                    <div class="card-img-top overflow-hidden  bg-cover"
+                                        style="background-image: url('https://alertyprzetargowe.pl/storage/97705/01M4XH6GS0G7926RDM67P0KB1K.png'); min-height: 200px;background-repeat: no-repeat;background-size: contain;background-position: center;">
+
+
+
+                                    </div>
+                                    <div class="card-body">
+                                        <h2 class="text-sm text-muted mb-3">OGŁOSZENIE O PISEMNYM KONKURSIE OFERT
+                                        </h2>
+                                                                                                                        <p class="text-sm text-muted text-uppercase mb-1">Data:
+                                            22.09.2026 </p>
+                                                                                                                            <div class="pt-2">
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Sprzedaż</div>
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    garaż</div>
+                                            </div>
+                                                                                                                            <div class="pt-4">
+                                                <p>
+                                                    Kraków, malopolskie
+                                                <p>
+                                            </div>
+                                                                            </div>
+                                </div>
+                            </a>
+
+                        </div>
+                                            <div class="col-sm-6 col-xl-4 mb-5">
+                            <a href="https://alertyprzetargowe.pl/nieruchomosci/ogloszenie-o-pisemnym-konkursie-ofert">
+
+                                <div class="card h-100 border-0 shadow">
+                                    <div class="card-img-top overflow-hidden  bg-cover"
+                                        style="background-image: url('https://alertyprzetargowe.pl/storage/97211/01M32GH41HEV9244NSTGSAAG38.png'); min-height: 200px;background-repeat: no-repeat;background-size: contain;background-position: center;">
+
+
+
+                                    </div>
+                                    <div class="card-body">
+                                        <h2 class="text-sm text-muted mb-3">OGŁOSZENIE O PISEMNYM KONKURSIE OFERT
+                                        </h2>
+                                                                                    <p class="text-sm text-muted text-uppercase mb-1">Powierzchnia:
+                                                2373.00 </p>
+                                                                                                                            <p class="text-sm text-muted text-uppercase mb-1">Cena:
+                                                404.000,00
+                                            </p>
+                                                                                <p class="text-sm text-muted text-uppercase mb-1">Data:
+                                            21.09.2026 </p>
+                                                                                                                            <div class="pt-2">
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Sprzedaż</div>
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Działka</div>
+                                            </div>
+                                                                                                                            <div class="pt-4">
+                                                <p>
+                                                    Michałowice, malopolskie
+                                                <p>
+                                            </div>
+                                                                            </div>
+                                </div>
+                            </a>
+
+                        </div>
+                                            <div class="col-sm-6 col-xl-4 mb-5">
+                            <a href="https://alertyprzetargowe.pl/nieruchomosci/przetarg-sprzedaz-nieruchomosci-niezabudowanej-3">
+
+                                <div class="card h-100 border-0 shadow">
+                                    <div class="card-img-top overflow-hidden  bg-cover"
+                                        style="background-image: url('https://alertyprzetargowe.pl/storage/95695/01KWWFVQKX9DD63X0DX86RHTDB.png'); min-height: 200px;background-repeat: no-repeat;background-size: contain;background-position: center;">
+
+
+
+                                    </div>
+                                    <div class="card-body">
+                                        <h2 class="text-sm text-muted mb-3">PRZETARG - SPRZEDAŻ NIERUCHOMOŚCI NIEZABUDOWANEJ
+                                        </h2>
+                                                                                    <p class="text-sm text-muted text-uppercase mb-1">Powierzchnia:
+                                                12600.00 </p>
+                                                                                                                            <p class="text-sm text-muted text-uppercase mb-1">Cena:
+                                                2.140.000,00
+                                            </p>
+                                                                                <p class="text-sm text-muted text-uppercase mb-1">Data:
+                                            03.07.2026 </p>
+                                                                                                                            <div class="pt-2">
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Sprzedaż</div>
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Działka</div>
+                                            </div>
+                                                                                                                            <div class="pt-4">
+                                                <p>
+                                                    Sułków, malopolskie
+                                                <p>
+                                            </div>
+                                                                            </div>
+                                </div>
+                            </a>
+
+                        </div>
+                                            <div class="col-sm-6 col-xl-4 mb-5">
+                            <a href="https://alertyprzetargowe.pl/nieruchomosci/przetarg-sprzedaz-nieruchomosci-niezabudowanej">
+
+                                <div class="card h-100 border-0 shadow">
+                                    <div class="card-img-top overflow-hidden  bg-cover"
+                                        style="background-image: url('https://alertyprzetargowe.pl/storage/95683/01KWW4J4T33TA2RSSPAJX37GHY.png'); min-height: 200px;background-repeat: no-repeat;background-size: contain;background-position: center;">
+
+
+
+                                    </div>
+                                    <div class="card-body">
+                                        <h2 class="text-sm text-muted mb-3">PRZETARG - SPRZEDAŻ NIERUCHOMOŚCI NIEZABUDOWANEJ
+                                        </h2>
+                                                                                    <p class="text-sm text-muted text-uppercase mb-1">Powierzchnia:
+                                                2700.00 </p>
+                                                                                                                            <p class="text-sm text-muted text-uppercase mb-1">Cena:
+                                                910.000,00
+                                            </p>
+                                                                                <p class="text-sm text-muted text-uppercase mb-1">Data:
+                                            03.07.2026 </p>
+                                                                                                                            <div class="pt-2">
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Sprzedaż</div>
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Działka</div>
+                                            </div>
+                                                                                                                            <div class="pt-4">
+                                                <p>
+                                                    Garlica Murowana, malopolskie
+                                                <p>
+                                            </div>
+                                                                            </div>
+                                </div>
+                            </a>
+
+                        </div>
+                                            <div class="col-sm-6 col-xl-4 mb-5">
+                            <a href="https://alertyprzetargowe.pl/nieruchomosci/konkurs-ofert-na-sprzedaz-z-wolnej-reki-udzialu-wynoszacego-1-3-w-prawie-wlasnosci-nieruchomosci">
+
+                                <div class="card h-100 border-0 shadow">
+                                    <div class="card-img-top overflow-hidden  bg-cover"
+                                        style="background-image: url('https://alertyprzetargowe.pl/storage/91710/01KFN9HRED9B4D31EFN6R14Z77.jpg'); min-height: 200px;background-repeat: no-repeat;background-size: contain;background-position: center;">
+
+
+
+                                    </div>
+                                    <div class="card-body">
+                                        <h2 class="text-sm text-muted mb-3">konkurs ofert na sprzedaż z wolnej ręki  udziału w...
+                                        </h2>
+                                                                                                                        <p class="text-sm text-muted text-uppercase mb-1">Data:
+                                            14.01.2026 </p>
+                                                                                                                            <div class="pt-2">
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Sprzedaż</div>
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Dom</div>
+                                            </div>
+                                                                                                                            <div class="pt-4">
+                                                <p>
+                                                    Świątniki Górne, malopolskie
+                                                <p>
+                                            </div>
+                                                                            </div>
+                                </div>
+                            </a>
+
+                        </div>
+                                            <div class="col-sm-6 col-xl-4 mb-5">
+                            <a href="https://alertyprzetargowe.pl/nieruchomosci/udzial-13-w-nieruchomosci-zabudowanej-swiatniki-gorne">
+
+                                <div class="card h-100 border-0 shadow">
+                                    <div class="card-img-top overflow-hidden  bg-cover"
+                                        style="background-image: url('https://alertyprzetargowe.pl/storage/90105/01KAEH9XPD6R79QRPX8N5DDBEF.jpg'); min-height: 200px;background-repeat: no-repeat;background-size: contain;background-position: center;">
+
+
+
+                                    </div>
+                                    <div class="card-body">
+                                        <h2 class="text-sm text-muted mb-3">Udział 1/3 w nieruchomości zabudowanej - Świątniki...
+                                        </h2>
+                                                                                                                        <p class="text-sm text-muted text-uppercase mb-1">Data:
+                                            19.11.2025 </p>
+                                                                                                                            <div class="pt-2">
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Sprzedaż</div>
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Działka</div>
+                                            </div>
+                                                                                                                            <div class="pt-4">
+                                                <p>
+                                                    Świątniki Górne, malopolskie
+                                                <p>
+                                            </div>
+                                                                            </div>
+                                </div>
+                            </a>
+
+                        </div>
+                                            <div class="col-sm-6 col-xl-4 mb-5">
+                            <a href="https://alertyprzetargowe.pl/nieruchomosci/udzial-13-w-prawie-wlasnosci-nieruchomosci-stanowiacej-dzialke-ewid-nr-21-zabudowana-budynkiem-mieszkalnym-jednorodzinnym-polozona-w-swiatnikach-gornych">
+
+                                <div class="card h-100 border-0 shadow">
+                                    <div class="card-img-top overflow-hidden  bg-cover"
+                                        style="background-image: url('https://alertyprzetargowe.pl/storage/89413/01K7Q81BVQ6DZXSDHMADVEXY9E.jpg'); min-height: 200px;background-repeat: no-repeat;background-size: contain;background-position: center;">
+
+
+
+                                    </div>
+                                    <div class="card-body">
+                                        <h2 class="text-sm text-muted mb-3">Udział  1/3 w prawie własności nieruchomości stano...
+                                        </h2>
+                                                                                    <p class="text-sm text-muted text-uppercase mb-1">Powierzchnia:
+                                                109.80 </p>
+                                                                                                                            <p class="text-sm text-muted text-uppercase mb-1">Cena:
+                                                221.004,00
+                                            </p>
+                                                                                <p class="text-sm text-muted text-uppercase mb-1">Data:
+                                            15.10.2025 </p>
+                                                                                                                            <div class="pt-2">
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Sprzedaż</div>
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Dom</div>
+                                            </div>
+                                                                                                                            <div class="pt-4">
+                                                <p>
+                                                    Świątniki Górne, malopolskie
+                                                <p>
+                                            </div>
+                                                                            </div>
+                                </div>
+                            </a>
+
+                        </div>
+                                            <div class="col-sm-6 col-xl-4 mb-5">
+                            <a href="https://alertyprzetargowe.pl/nieruchomosci/syndyk-sprzeda-udzial-w-lokalu-mieszkalnym-2">
+
+                                <div class="card h-100 border-0 shadow">
+                                    <div class="card-img-top overflow-hidden  bg-cover"
+                                        style="background-image: url('https://alertyprzetargowe.pl/storage/86816/01K116N38XS29F90HS2887P932.jpg'); min-height: 200px;background-repeat: no-repeat;background-size: contain;background-position: center;">
+
+
+
+                                    </div>
+                                    <div class="card-body">
+                                        <h2 class="text-sm text-muted mb-3">Syndyk sprzeda udział w lokalu mieszkalnym
+                                        </h2>
+                                                                                    <p class="text-sm text-muted text-uppercase mb-1">Powierzchnia:
+                                                46.00 </p>
+                                                                                                                            <p class="text-sm text-muted text-uppercase mb-1">Cena:
+                                                175.000,00
+                                            </p>
+                                                                                <p class="text-sm text-muted text-uppercase mb-1">Data:
+                                            25.07.2025 </p>
+                                                                                                                            <div class="pt-2">
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Sprzedaż</div>
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Mieszkanie</div>
+                                            </div>
+                                                                                                                            <div class="pt-4">
+                                                <p>
+                                                    Skawina, malopolskie
+                                                <p>
+                                            </div>
+                                                                            </div>
+                                </div>
+                            </a>
+
+                        </div>
+                                            <div class="col-sm-6 col-xl-4 mb-5">
+                            <a href="https://alertyprzetargowe.pl/nieruchomosci/syndyk-sprzeda-lokal-mieszkalny-2">
+
+                                <div class="card h-100 border-0 shadow">
+                                    <div class="card-img-top overflow-hidden  bg-cover"
+                                        style="background-image: url('https://alertyprzetargowe.pl/storage/86802/01K10ZEN01YNGEZ0MMXGDAHVY9.jpg'); min-height: 200px;background-repeat: no-repeat;background-size: contain;background-position: center;">
+
+
+
+                                    </div>
+                                    <div class="card-body">
+                                        <h2 class="text-sm text-muted mb-3">Syndyk sprzeda lokal mieszkalny
+                                        </h2>
+                                                                                                                        <p class="text-sm text-muted text-uppercase mb-1">Data:
+                                            25.07.2025 </p>
+                                                                                                                            <div class="pt-2">
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Sprzedaż</div>
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Mieszkanie</div>
+                                            </div>
+                                                                                                                            <div class="pt-4">
+                                                <p>
+                                                    Kraków, malopolskie
+                                                <p>
+                                            </div>
+                                                                            </div>
+                                </div>
+                            </a>
+
+                        </div>
+                                            <div class="col-sm-6 col-xl-4 mb-5">
+                            <a href="https://alertyprzetargowe.pl/nieruchomosci/syndyk-masy-upadlosci-oglasza-sprzedaz-z-wolnej-reki-lokalu-mieszkalnego">
+
+                                <div class="card h-100 border-0 shadow">
+                                    <div class="card-img-top overflow-hidden  bg-cover"
+                                        style="background-image: url('https://alertyprzetargowe.pl/storage/85128/01JWZYRZYXK6YS6XFZ9FJHV38G.jpg'); min-height: 200px;background-repeat: no-repeat;background-size: contain;background-position: center;">
+
+
+
+                                    </div>
+                                    <div class="card-body">
+                                        <h2 class="text-sm text-muted mb-3">Syndyk Masy Upadłości ogłasza sprzedaż z wolnej rę...
+                                        </h2>
+                                                                                    <p class="text-sm text-muted text-uppercase mb-1">Powierzchnia:
+                                                45.60 </p>
+                                                                                                                            <p class="text-sm text-muted text-uppercase mb-1">Cena:
+                                                561.000,00
+                                            </p>
+                                                                                <p class="text-sm text-muted text-uppercase mb-1">Data:
+                                            02.06.2025 </p>
+                                                                                                                            <div class="pt-2">
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Sprzedaż</div>
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Mieszkanie</div>
+                                            </div>
+                                                                                                                            <div class="pt-4">
+                                                <p>
+                                                    Kraków, malopolskie
+                                                <p>
+                                            </div>
+                                                                            </div>
+                                </div>
+                            </a>
+
+                        </div>
+                                            <div class="col-sm-6 col-xl-4 mb-5">
+                            <a href="https://alertyprzetargowe.pl/nieruchomosci/informacja-burmistrza-blonia-w-sprawie-ogloszenia-wykazu-nieruchomosci-lokalowych-przeznczonych-do-sprzedazy-w-drodze-bezprzetargowej-na-rzecz-najemcow-1">
+
+                                <div class="card h-100 border-0 shadow">
+                                    <div class="card-img-top overflow-hidden  bg-cover"
+                                        style="background-image: url('https://alertyprzetargowe.pl/storage/83217/01JS49K9B6NBY6WN2GFBMRGJQE.png'); min-height: 200px;background-repeat: no-repeat;background-size: contain;background-position: center;">
+
+
+
+                                    </div>
+                                    <div class="card-body">
+                                        <h2 class="text-sm text-muted mb-3">Informacja Burmistrza Błonia w sprawie ogłoszenia...
+                                        </h2>
+                                                                                                                        <p class="text-sm text-muted text-uppercase mb-1">Data:
+                                            18.04.2025 </p>
+                                                                                                                            <div class="pt-2">
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Sprzedaż</div>
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Mieszkanie</div>
+                                            </div>
+                                                                                                                            <div class="pt-4">
+                                                <p>
+                                                    Błonia, malopolskie
+                                                <p>
+                                            </div>
+                                                                            </div>
+                                </div>
+                            </a>
+
+                        </div>
+                                            <div class="col-sm-6 col-xl-4 mb-5">
+                            <a href="https://alertyprzetargowe.pl/nieruchomosci/wykaz-nieruchomosci-przeznaczonych-do-oddania-w-dzierzawe-9">
+
+                                <div class="card h-100 border-0 shadow">
+                                    <div class="card-img-top overflow-hidden  bg-cover"
+                                        style="background-image: url('https://alertyprzetargowe.pl/storage/83048/01JS1YWGPSTBTKW518TQ3SW2AE.png'); min-height: 200px;background-repeat: no-repeat;background-size: contain;background-position: center;">
+
+
+
+                                    </div>
+                                    <div class="card-body">
+                                        <h2 class="text-sm text-muted mb-3">WYKAZ NIERUCHOMOŚCI PRZEZNACZONYCH...
+                                        </h2>
+                                                                                                                        <p class="text-sm text-muted text-uppercase mb-1">Data:
+                                            17.04.2025 </p>
+                                                                                                                            <div class="pt-2">
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Dzierżawa</div>
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Działka</div>
+                                            </div>
+                                                                                                                            <div class="pt-4">
+                                                <p>
+                                                    Grabie, malopolskie
+                                                <p>
+                                            </div>
+                                                                            </div>
+                                </div>
+                            </a>
+
+                        </div>
+                                            <div class="col-sm-6 col-xl-4 mb-5">
+                            <a href="https://alertyprzetargowe.pl/nieruchomosci/wykaz-nieruchomosci-przeznaczonych-do-oddania-w-dzierzawe-8">
+
+                                <div class="card h-100 border-0 shadow">
+                                    <div class="card-img-top overflow-hidden  bg-cover"
+                                        style="background-image: url('https://alertyprzetargowe.pl/storage/82937/01JRTB7NWNCRHGB274ESWV7344.png'); min-height: 200px;background-repeat: no-repeat;background-size: contain;background-position: center;">
+
+
+
+                                    </div>
+                                    <div class="card-body">
+                                        <h2 class="text-sm text-muted mb-3">WYKAZ NIERUCHOMOŚCI PRZEZNACZONYCH...
+                                        </h2>
+                                                                                                                        <p class="text-sm text-muted text-uppercase mb-1">Data:
+                                            14.04.2025 </p>
+                                                                                                                            <div class="pt-2">
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Dzierżawa</div>
+                                                <div class="badge badge-transparent badge-pill px-3 py-2">
+                                                    Działka</div>
+                                            </div>
+                                                                                                                            <div class="pt-4">
+                                                <p>
+                                                    Grabie, malopolskie
+                                                <p>
+                                            </div>
+                                                                            </div>
+                                </div>
+                            </a>
+
+                        </div>
+                                    </div>
+                <!-- Pagination -->
+                <nav aria-label="Page navigation example">
+                    <nav class="d-flex justify-items-center justify-content-between">
+        <div class="d-flex justify-content-between flex-fill d-sm-none">
+            <ul class="pagination">
+                
+                                    <li class="page-item disabled" aria-disabled="true">
+                        <span class="page-link">Poprzednia</span>
+                    </li>
+                
+                
+                                    <li class="page-item">
+                        <a class="page-link"
+                            href="https://alertyprzetargowe.pl/nieruchomosci?page=2&latitude=50.0614&amp;longitude=19.9366&amp;radius=15&amp;city=Krak%C3%B3w"
+                            rel="next">Następna</a>
+                    </li>
+                            </ul>
+        </div>
+
+        <div class="d-none flex-sm-fill d-sm-flex align-items-sm-center justify-content-sm-between">
+            <div>
+                <form method="GET" class="d-flex justify-content-center mt-3">
+                    <div class="input-group mb-3" style="width: 150px;">
+                        <input type="number" name="page" class="form-control" min="1"
+                            max="14" value="1">
+                        <button class="btn btn-primary" type="submit">Idź</button>
+                    </div>
+                </form>
+            </div>
+
+            <div>
+                <ul class="pagination">
+                    
+                                            <li class="page-item disabled" aria-disabled="true" aria-label="Poprzednia">
+                            <span class="page-link" aria-hidden="true">&lsaquo;</span>
+                        </li>
+                                        
+                                            
+                        
+                        
+                                                                                                                        <li class="page-item active" aria-current="page"><span
+                                            class="page-link">1</span></li>
+                                                                                                                                <li class="page-item"><a class="page-link"
+                                            href="https://alertyprzetargowe.pl/nieruchomosci?page=2&latitude=50.0614&amp;longitude=19.9366&amp;radius=15&amp;city=Krak%C3%B3w">2</a>
+                                    </li>
+                                                                                                                                <li class="page-item"><a class="page-link"
+                                            href="https://alertyprzetargowe.pl/nieruchomosci?page=3&latitude=50.0614&amp;longitude=19.9366&amp;radius=15&amp;city=Krak%C3%B3w">3</a>
+                                    </li>
+                                                                                                                                <li class="page-item"><a class="page-link"
+                                            href="https://alertyprzetargowe.pl/nieruchomosci?page=4&latitude=50.0614&amp;longitude=19.9366&amp;radius=15&amp;city=Krak%C3%B3w">4</a>
+                                    </li>
+                                                                                                                                <li class="page-item"><a class="page-link"
+                                            href="https://alertyprzetargowe.pl/nieruchomosci?page=5&latitude=50.0614&amp;longitude=19.9366&amp;radius=15&amp;city=Krak%C3%B3w">5</a>
+                                    </li>
+                                                                                                                                <li class="page-item"><a class="page-link"
+                                            href="https://alertyprzetargowe.pl/nieruchomosci?page=6&latitude=50.0614&amp;longitude=19.9366&amp;radius=15&amp;city=Krak%C3%B3w">6</a>
+                                    </li>
+                                                                                                                                <li class="page-item"><a class="page-link"
+                                            href="https://alertyprzetargowe.pl/nieruchomosci?page=7&latitude=50.0614&amp;longitude=19.9366&amp;radius=15&amp;city=Krak%C3%B3w">7</a>
+                                    </li>
+                                                                                                                                <li class="page-item"><a class="page-link"
+                                            href="https://alertyprzetargowe.pl/nieruchomosci?page=8&latitude=50.0614&amp;longitude=19.9366&amp;radius=15&amp;city=Krak%C3%B3w">8</a>
+                                    </li>
+                                                                                                                                <li class="page-item"><a class="page-link"
+                                            href="https://alertyprzetargowe.pl/nieruchomosci?page=9&latitude=50.0614&amp;longitude=19.9366&amp;radius=15&amp;city=Krak%C3%B3w">9</a>
+                                    </li>
+                                                                                                                                <li class="page-item"><a class="page-link"
+                                            href="https://alertyprzetargowe.pl/nieruchomosci?page=10&latitude=50.0614&amp;longitude=19.9366&amp;radius=15&amp;city=Krak%C3%B3w">10</a>
+                                    </li>
+                                                                                                                                
+                                                    <li class="page-item disabled" aria-disabled="true"><span
+                                    class="page-link">...</span></li>
+                        
+                        
+                                                                    
+                        
+                        
+                                                                                                                        <li class="page-item"><a class="page-link"
+                                            href="https://alertyprzetargowe.pl/nieruchomosci?page=13&latitude=50.0614&amp;longitude=19.9366&amp;radius=15&amp;city=Krak%C3%B3w">13</a>
+                                    </li>
+                                                                                                                                <li class="page-item"><a class="page-link"
+                                            href="https://alertyprzetargowe.pl/nieruchomosci?page=14&latitude=50.0614&amp;longitude=19.9366&amp;radius=15&amp;city=Krak%C3%B3w">14</a>
+                                    </li>
+                                                                                                        
+                    
+                                            <li class="page-item">
+                            <a class="page-link"
+                                href="https://alertyprzetargowe.pl/nieruchomosci?page=2&amp;city=Krak%C3%B3w&amp;latitude=50.0614&amp;longitude=19.9366&amp;radius=15"
+                                rel="next" aria-label="Następna">&rsaquo;</a>
+                        </li>
+                                    </ul>
+            </div>
+        </div>
+    </nav>
+
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <footer class="position-relative z-index-10 d-print-none">
+    <!-- Main block - menus, subscribe form-->
+         <div class="py-6 bg-gray-200 text-muted">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-4 mb-5 mb-lg-0">
+                    <div class="fw-bold text-uppercase text-dark mb-3">OtoPrzetargi</div>
+                    <p>GC Trader z siedzibą w Warszawie.</p>
+                    <p>ul. Wasilkowskiego 1a lok. 10.</p>
+
+                    <ul class="list-inline">
+                        <li class="list-inline-item"><a class="text-muted text-primary-hover" href="#"
+                                target="_blank" title="facebook"><i class="fab fa-facebook"></i></a></li>
+                    </ul>
+                </div>
+                <div class="col-lg-2 col-md-6 mb-5 mb-lg-0">
+                    <h6 class="text-uppercase text-dark mb-3">Strony</h6>
+                    <ul class="list-unstyled">
+                        <li><a class="text-muted" href="/nieruchomosci">Nieruchomości</a></li>
+                        <li><a class="text-muted" href="/ruchomosci">Ruchomości</a></li>
+                        <li><a class="text-muted" href="/komunikaty">Komunikaty</a></li>
+                    </ul>
+                </div>
+                <div class="col-lg-2 col-md-6 mb-5 mb-lg-0">
+                    <h6 class="text-uppercase text-dark mb-3">Strony</h6>
+
+                    <ul class="list-unstyled">
+                        <li><a class="text-muted" href="/news">Informacje z rynku</a></li>
+                        <li><a class="text-muted" href="/">Regulamin</a></li>
+                        <li><a class="text-muted" href="/">Kontakt</a></li>
+                    </ul>
+
+                </div>
+                <div class="col-lg-4">
+
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Copyright section of the footer-->
+    <div class="py-4 fw-light bg-gray-800 text-gray-300">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-6 text-center text-md-start">
+                    <p class="text-sm mb-md-0">&copy; 2024, Otoprzetargi. Wszystkie prawa zastrzeżone. </p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <p>Portal wykonał:
+                        Daniel Czerepak
+                        <a href="mailto:firma.dcode@gmail.com">firma.dcode@gmail.com</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+    <script>
+    function injectSvgSprite(path) {
+
+        var ajax = new XMLHttpRequest();
+        ajax.open("GET", path, true);
+        ajax.send();
+        ajax.onload = function(e) {
+            var div = document.createElement("div");
+            div.className = 'd-none';
+            div.innerHTML = ajax.responseText;
+            document.body.insertBefore(div, document.body.childNodes[0]);
+        }
+    }
+</script>
+<script src="https://alertyprzetargowe.pl/vendor/jquery/jquery.min.js"></script>
+<script src="https://alertyprzetargowe.pl/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="https://alertyprzetargowe.pl/vendor/magnific-popup/jquery.magnific-popup.min.js"></script>
+<script src="https://alertyprzetargowe.pl/vendor/smooth-scroll/smooth-scroll.polyfills.min.js"></script>
+<script src="https://alertyprzetargowe.pl/vendor/bootstrap-select/js/bootstrap-select.min.js"></script>
+<script src="https://alertyprzetargowe.pl/vendor/object-fit-images/ofi.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Swiper/4.4.1/js/swiper.min.js"></script>
+<script src="https://alertyprzetargowe.pl/vendor/my/theme.js"></script>
+
+<script>
+    var basePath = ''
+</script>
+
+</body>
+
+</html>

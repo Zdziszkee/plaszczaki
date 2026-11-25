@@ -12,10 +12,14 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as MapRouteImport } from './routes/map'
+import { Route as ApiListingsRouteImport } from './routes/api/listings'
+import { Route as ApiSourcesRouteImport } from './routes/api/sources'
 import { Route as DemoBetterAuthRouteImport } from './routes/demo/better-auth'
 import { Route as DemoDrizzleRouteImport } from './routes/demo/drizzle'
 import { Route as DemoTanstackQueryRouteImport } from './routes/demo/tanstack-query'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiListingsClustersRouteImport } from './routes/api/listings/clusters'
+import { Route as ApiListingsStatsRouteImport } from './routes/api/listings/stats'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -30,6 +34,16 @@ const AboutRoute = AboutRouteImport.update({
 const MapRoute = MapRouteImport.update({
   id: '/map',
   path: '/map',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiListingsRoute = ApiListingsRouteImport.update({
+  id: '/api/listings',
+  path: '/api/listings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSourcesRoute = ApiSourcesRouteImport.update({
+  id: '/api/sources',
+  path: '/api/sources',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DemoBetterAuthRoute = DemoBetterAuthRouteImport.update({
@@ -52,34 +66,56 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiListingsClustersRoute = ApiListingsClustersRouteImport.update({
+  id: '/clusters',
+  path: '/clusters',
+  getParentRoute: () => ApiListingsRoute,
+} as any)
+const ApiListingsStatsRoute = ApiListingsStatsRouteImport.update({
+  id: '/stats',
+  path: '/stats',
+  getParentRoute: () => ApiListingsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/map': typeof MapRoute
+  '/api/listings': typeof ApiListingsRouteWithChildren
+  '/api/sources': typeof ApiSourcesRoute
   '/demo/better-auth': typeof DemoBetterAuthRoute
   '/demo/drizzle': typeof DemoDrizzleRoute
   '/demo/tanstack-query': typeof DemoTanstackQueryRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/listings/clusters': typeof ApiListingsClustersRoute
+  '/api/listings/stats': typeof ApiListingsStatsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/map': typeof MapRoute
+  '/api/listings': typeof ApiListingsRouteWithChildren
+  '/api/sources': typeof ApiSourcesRoute
   '/demo/better-auth': typeof DemoBetterAuthRoute
   '/demo/drizzle': typeof DemoDrizzleRoute
   '/demo/tanstack-query': typeof DemoTanstackQueryRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/listings/clusters': typeof ApiListingsClustersRoute
+  '/api/listings/stats': typeof ApiListingsStatsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/map': typeof MapRoute
+  '/api/listings': typeof ApiListingsRouteWithChildren
+  '/api/sources': typeof ApiSourcesRoute
   '/demo/better-auth': typeof DemoBetterAuthRoute
   '/demo/drizzle': typeof DemoDrizzleRoute
   '/demo/tanstack-query': typeof DemoTanstackQueryRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/listings/clusters': typeof ApiListingsClustersRoute
+  '/api/listings/stats': typeof ApiListingsStatsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -87,34 +123,48 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/map'
+    | '/api/listings'
+    | '/api/sources'
     | '/demo/better-auth'
     | '/demo/drizzle'
     | '/demo/tanstack-query'
     | '/api/auth/$'
+    | '/api/listings/clusters'
+    | '/api/listings/stats'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/about'
     | '/map'
+    | '/api/listings'
+    | '/api/sources'
     | '/demo/better-auth'
     | '/demo/drizzle'
     | '/demo/tanstack-query'
     | '/api/auth/$'
+    | '/api/listings/clusters'
+    | '/api/listings/stats'
   id:
     | '__root__'
     | '/'
     | '/about'
     | '/map'
+    | '/api/listings'
+    | '/api/sources'
     | '/demo/better-auth'
     | '/demo/drizzle'
     | '/demo/tanstack-query'
     | '/api/auth/$'
+    | '/api/listings/clusters'
+    | '/api/listings/stats'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   MapRoute: typeof MapRoute
+  ApiListingsRoute: typeof ApiListingsRouteWithChildren
+  ApiSourcesRoute: typeof ApiSourcesRoute
   DemoBetterAuthRoute: typeof DemoBetterAuthRoute
   DemoDrizzleRoute: typeof DemoDrizzleRoute
   DemoTanstackQueryRoute: typeof DemoTanstackQueryRoute
@@ -142,6 +192,20 @@ declare module '@tanstack/react-router' {
       path: '/map'
       fullPath: '/map'
       preLoaderRoute: typeof MapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/listings': {
+      id: '/api/listings'
+      path: '/api/listings'
+      fullPath: '/api/listings'
+      preLoaderRoute: typeof ApiListingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sources': {
+      id: '/api/sources'
+      path: '/api/sources'
+      fullPath: '/api/sources'
+      preLoaderRoute: typeof ApiSourcesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/demo/better-auth': {
@@ -172,13 +236,43 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/listings/clusters': {
+      id: '/api/listings/clusters'
+      path: '/clusters'
+      fullPath: '/api/listings/clusters'
+      preLoaderRoute: typeof ApiListingsClustersRouteImport
+      parentRoute: typeof ApiListingsRoute
+    }
+    '/api/listings/stats': {
+      id: '/api/listings/stats'
+      path: '/stats'
+      fullPath: '/api/listings/stats'
+      preLoaderRoute: typeof ApiListingsStatsRouteImport
+      parentRoute: typeof ApiListingsRoute
+    }
   }
 }
+
+interface ApiListingsRouteChildren {
+  ApiListingsClustersRoute: typeof ApiListingsClustersRoute
+  ApiListingsStatsRoute: typeof ApiListingsStatsRoute
+}
+
+const ApiListingsRouteChildren: ApiListingsRouteChildren = {
+  ApiListingsClustersRoute: ApiListingsClustersRoute,
+  ApiListingsStatsRoute: ApiListingsStatsRoute,
+}
+
+const ApiListingsRouteWithChildren = ApiListingsRoute._addFileChildren(
+  ApiListingsRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   MapRoute: MapRoute,
+  ApiListingsRoute: ApiListingsRouteWithChildren,
+  ApiSourcesRoute: ApiSourcesRoute,
   DemoBetterAuthRoute: DemoBetterAuthRoute,
   DemoDrizzleRoute: DemoDrizzleRoute,
   DemoTanstackQueryRoute: DemoTanstackQueryRoute,

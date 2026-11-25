@@ -1,15 +1,21 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeftIcon } from "lucide-react";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
 	DEFAULT_TOGGLES,
 	type LayerToggles,
+	LISTINGS_FILTERS_STORAGE_KEY,
 	TOGGLES_STORAGE_KEY,
 } from "#/components/map/constants";
 import MapControls from "#/components/map/MapControls";
+import { useListingsStats } from "#/components/map/useListingsStats";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Spinner } from "#/components/ui/spinner";
+import {
+	type ListingFilters,
+	sanitizeListingFilters,
+} from "#/lib/listing-filter-types";
 
 // mapbox-gl touches `window` at module load, so it must never be imported
 // during SSR. The dynamic import only runs after mount on the client.
@@ -48,6 +54,9 @@ function MapFallback() {
 function MapPage() {
 	const [mounted, setMounted] = useState(false);
 	const [toggles, setToggles] = useState<LayerToggles>(DEFAULT_TOGGLES);
+	const [filters, setFilters] = useState<ListingFilters>({});
+	const filtersRef = useRef<ListingFilters>({});
+	const { stats, loading: statsLoading } = useListingsStats(filters);
 
 	useEffect(() => {
 		setMounted(true);
@@ -57,6 +66,14 @@ function MapPage() {
 			if (raw) {
 				const parsed = sanitizeToggles(JSON.parse(raw));
 				setToggles((current) => ({ ...current, ...parsed }));
+			}
+			const rawFilters = window.localStorage.getItem(
+				LISTINGS_FILTERS_STORAGE_KEY,
+			);
+			if (rawFilters) {
+				const parsed = sanitizeListingFilters(JSON.parse(rawFilters));
+				filtersRef.current = parsed;
+				setFilters(parsed);
 			}
 		} catch {
 			// Storage disabled or malformed: keep the defaults.
@@ -78,11 +95,29 @@ function MapPage() {
 		});
 	};
 
+	const onFiltersChange = (patch: Partial<ListingFilters> | "reset") => {
+		const next = patch === "reset" ? {} : { ...filtersRef.current, ...patch };
+		filtersRef.current = next;
+		setFilters(next);
+		try {
+			window.localStorage.setItem(
+				LISTINGS_FILTERS_STORAGE_KEY,
+				JSON.stringify(next),
+			);
+		} catch {
+			// Not fatal: the filters just won't persist.
+		}
+	};
+
 	return (
 		<div className="fixed inset-0 z-[60] bg-background text-foreground">
 			{mounted ? (
 				<Suspense fallback={<MapFallback />}>
-					<MapView toggles={toggles} />
+					<MapView
+						toggles={toggles}
+						filters={filters}
+						totalAll={stats?.total ?? 0}
+					/>
 				</Suspense>
 			) : (
 				<MapFallback />
@@ -100,7 +135,14 @@ function MapPage() {
 						Mapa Polski
 					</Badge>
 				</div>
-				<MapControls toggles={toggles} onChange={onChange} />
+				<MapControls
+					toggles={toggles}
+					onChange={onChange}
+					filters={filters}
+					onFiltersChange={onFiltersChange}
+					stats={stats}
+					statsLoading={statsLoading}
+				/>
 			</div>
 		</div>
 	);

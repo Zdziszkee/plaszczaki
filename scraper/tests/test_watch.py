@@ -1,0 +1,359 @@
+"""Tests for the watch scheduler. No network access is used."""
+
+from __future__ import annotations
+
+import sqlite3
+from pathlib import Path
+
+import pytest
+
+from plaszczaki_scraper import watch
+from plaszczaki_scraper.adapters.base import Query, SearchPage
+from plaszczaki_scraper.config import (
+    AdapterConfig,
+    AdaptersConfig,
+    ConfigError,
+    load_regions_config,
+    repo_root,
+)
+from plaszczaki_scraper.db import Database
+from plaszczaki_scraper.models import Listing
+from plaszczaki_scraper.regions import RegionRegistry
+
+NOW = 1_700_000_000_000
+MINUTE_MS = 60_000
+
+
+def _database(tmp_path: Path) -> Database:
+    migrations = sorted((repo_root() / "web" / "drizzle").glob("000[1-9]_*.sql"))
+    assert migrations, "Drizzle migrations are missing"
+    sql = "\n".join(migration.read_text(encoding="utf-8") for migration in migrations)
+    path = tmp_path / "watch.db"
+    connection = sqlite3.connect(path)
+    connection.executescript(sql)
+    connection.commit()
+    connection.close()
+    return Database(path)
+
+
+def _regions() -> RegionRegistry:
+    return RegionRegistry(load_regions_config())
+
+
+def _source(
+    source_id: str,
+    *,
+    enabled: bool = True,
+    incremental: bool = True,
+    poll_minutes: int = 10,
+) -> AdapterConfig:
+    return AdapterConfig(
+        id=source_id,
+        adapter="fake",
+        label=source_id,
+        homepage="https://example.test",
+        enabled=enabled,
+        incremental=incremental,
+        poll_minutes=poll_minutes,
+        incremental_pages=2,
+    )
+
+
+def _adapters(*sources: AdapterConfig) -> AdaptersConfig:
+    return AdaptersConfig(defaults_rps=1.0, sources={source.id: source for source in sources})
+
+
+def _record_run(db: Database, source_id: str, started_at: int, mode: str = "incremental") -> None:
+    db.conn.execute(
+        """
+        INSERT INTO scraper_run (source_id, mode, started_at, status, stats)
+        VALUES (?, ?, ?, 'ok', '{}')
+        """,
+        (source_id, mode, started_at),
+    )
+    db.conn.commit()
+
+
+class NoopAdapter:
+    """Adapter without queries: never touches the network."""
+
+    def __init__(self, source_id: str) -> None:
+        self.id = source_id
+        self.calls = 0
+
+    def queries(self, regions: tuple[str, ...]) -> list[Query]:
+        self.calls += 1
+        return []
+
+    def with_page(self, query: Query, page: int) -> Query:
+        return query.with_page(page)
+
+    def parse_search(self, html: str, query: Query) -> SearchPage:
+        raise AssertionError("no search page should be parsed")
+
+    def parse_detail(self, html: str, summary: Listing) -> Listing:
+        raise AssertionError("no detail page should be parsed")
+
+
+def _patch_build(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    fail: frozenset[str] = frozenset(),
+) -> list[str]:
+    built: list[str] = []
+
+    def fake_build(config: AdapterConfig, *, regions: RegionRegistry) -> NoopAdapter:
+        built.append(config.id)
+        if config.id in fail:
+            raise ValueError(f"adapter {config.id} is broken")
+        return NoopAdapter(config.id)
+
+    monkeypatch.setattr(watch, "build_adapter", fake_build)
+    return built
+
+
+def test_is_due_without_history() -> None:
+    assert watch.is_due(_source("fake"), None, NOW) is True
+
+
+def test_is_due_uses_poll_interval() -> None:
+    source = _source("fake", poll_minutes=10)
+    interval = 10 * MINUTE_MS
+
+    assert watch.is_due(source, NOW - interval, NOW) is True
+    assert watch.is_due(source, NOW - interval + 1, NOW) is False
+    # A timestamp ahead of ``now`` (clock skew) is not due.
+    assert watch.is_due(source, NOW + 1, NOW) is False
+
+
+def test_due_sources_filters_and_sorts_by_id(tmp_path: Path) -> None:
+    with _database(tmp_path) as db:
+        adapters = _adapters(
+            _source("zeta-due"),
+            _source("alpha-due"),
+            _source("beta-fresh"),
+            _source("gamma-disabled", enabled=False),
+            _source("delta-full", incremental=False),
+            _source("epsilon-other-mode"),
+        )
+        _record_run(db, "alpha-due", NOW - 11 * MINUTE_MS)
+        _record_run(db, "beta-fresh", NOW - MINUTE_MS)
+        _record_run(db, "epsilon-other-mode", NOW, mode="run")
+
+        due = watch.due_sources(adapters, db, NOW)
+
+        assert [source.id for source in due] == [
+            "alpha-due",
+            "epsilon-other-mode",
+            "zeta-due",
+        ]
+
+
+def test_run_watch_once_runs_due_source_then_skips(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    built = _patch_build(monkeypatch)
+    lock = tmp_path / "watch.lock"
+
+    with _database(tmp_path) as db:
+        adapters = _adapters(_source("fake", poll_minutes=10))
+
+        first = watch.run_watch_once(
+            db=db,
+            adapters=adapters,
+            regions=_regions(),
+            now_ms=NOW,
+            lock_path=lock,
+        )
+
+        assert first["sources"] == 1
+        result = first["results"][0]
+        assert result["source_id"] == "fake"
+        assert result["mode"] == "incremental"
+        assert result["status"] == "ok"
+        assert built == ["fake"]
+        assert db.count_listings("fake") == 0
+        source_row = db.conn.execute("SELECT adapter FROM source WHERE id = 'fake'").fetchone()
+        assert source_row is not None
+        assert source_row["adapter"] == "fake"
+
+        last = db.last_run_at("fake")
+        assert last is not None
+
+        second = watch.run_watch_once(
+            db=db,
+            adapters=adapters,
+            regions=_regions(),
+            now_ms=last + 9 * MINUTE_MS,
+            lock_path=lock,
+        )
+        assert built == ["fake"]
+        assert second["results"][0]["status"] == "skipped"
+        assert second["results"][0]["reason"] == "not due"
+
+        forced = watch.run_watch_once(
+            db=db,
+            adapters=adapters,
+            regions=_regions(),
+            now_ms=last + 9 * MINUTE_MS,
+            force=True,
+            lock_path=lock,
+        )
+        assert built == ["fake", "fake"]
+        assert forced["results"][0]["status"] == "ok"
+
+        modes = [
+            row["mode"]
+            for row in db.conn.execute("SELECT mode FROM scraper_run ORDER BY id").fetchall()
+        ]
+        assert modes == ["incremental", "incremental"]
+
+
+def test_run_watch_once_dry_run_writes_no_listings(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    built = _patch_build(monkeypatch)
+
+    with _database(tmp_path) as db:
+        report = watch.run_watch_once(
+            db=db,
+            adapters=_adapters(_source("fake")),
+            regions=_regions(),
+            dry_run=True,
+            now_ms=NOW,
+            lock_path=tmp_path / "watch.lock",
+        )
+
+        assert built == ["fake"]
+        assert report["results"][0]["status"] == "ok"
+        assert db.count_listings("fake") == 0
+        assert db.last_run_at("fake") is None
+
+
+def test_run_watch_once_isolates_source_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    built = _patch_build(monkeypatch, fail=frozenset({"broken"}))
+
+    with _database(tmp_path) as db:
+        report = watch.run_watch_once(
+            db=db,
+            adapters=_adapters(_source("broken"), _source("fine")),
+            regions=_regions(),
+            now_ms=NOW,
+            lock_path=tmp_path / "watch.lock",
+        )
+
+        results = {item["source_id"]: item for item in report["results"]}
+        assert results["broken"]["status"] == "failed"
+        assert "broken" in results["broken"]["error"]
+        assert results["fine"]["status"] == "ok"
+        assert built == ["broken", "fine"]
+        assert db.last_run_at("broken") is None
+        assert db.last_run_at("fine") is not None
+
+
+def test_run_watch_once_skips_when_lock_is_held(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    built = _patch_build(monkeypatch)
+    lock = tmp_path / "watch.lock"
+
+    with _database(tmp_path) as db, watch.file_lock(lock) as acquired:
+        assert acquired
+        report = watch.run_watch_once(
+            db=db,
+            adapters=_adapters(_source("fake")),
+            regions=_regions(),
+            now_ms=NOW,
+            lock_path=lock,
+        )
+
+    assert report["results"][0]["status"] == "skipped"
+    assert report["results"][0]["reason"] == "locked"
+    assert built == []
+
+
+def test_run_watch_once_rejects_unknown_or_unwatchable_sources(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_build(monkeypatch)
+
+    with _database(tmp_path) as db:
+        with pytest.raises(ConfigError, match="unknown sources"):
+            watch.run_watch_once(
+                db=db,
+                adapters=_adapters(_source("fake")),
+                regions=_regions(),
+                sources=["nope"],
+                now_ms=NOW,
+                lock_path=tmp_path / "watch.lock",
+            )
+
+        with pytest.raises(ConfigError, match=r"not enabled\+incremental"):
+            watch.run_watch_once(
+                db=db,
+                adapters=_adapters(_source("full", incremental=False)),
+                regions=_regions(),
+                sources=["full"],
+                now_ms=NOW,
+                lock_path=tmp_path / "watch.lock",
+            )
+
+
+def test_watch_loop_stops_after_max_cycles(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_build(monkeypatch)
+    sleeps: list[float] = []
+    monkeypatch.setattr(watch.time, "sleep", sleeps.append)
+
+    with _database(tmp_path) as db:
+        reports = watch.watch_loop(
+            db=db,
+            adapters=_adapters(),
+            regions=_regions(),
+            interval=30,
+            max_cycles=2,
+            lock_path=tmp_path / "watch.lock",
+        )
+        empty = watch.watch_loop(
+            db=db,
+            adapters=_adapters(),
+            regions=_regions(),
+            max_cycles=0,
+            lock_path=tmp_path / "watch.lock",
+        )
+
+    assert len(reports) == 2
+    assert sleeps == [30]
+    assert empty == []
+
+
+def test_watch_loop_exits_cleanly_on_keyboard_interrupt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_build(monkeypatch)
+
+    def interrupt(_: float) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(watch.time, "sleep", interrupt)
+
+    with _database(tmp_path) as db:
+        reports = watch.watch_loop(
+            db=db,
+            adapters=_adapters(),
+            regions=_regions(),
+            interval=5,
+            lock_path=tmp_path / "watch.lock",
+        )
+
+    assert len(reports) == 1

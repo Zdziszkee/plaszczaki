@@ -1,6 +1,7 @@
 import type {
 	ExpressionSpecification,
 	FilterSpecification,
+	GeoJSONSource,
 	Map as MapboxMap,
 } from "mapbox-gl";
 
@@ -11,6 +12,7 @@ import {
 	DETAIL_3D_TREES_MINZOOM,
 	LAYER_IDS,
 	type LayerToggles,
+	LISTING_PIN_ICON,
 	MODELS_MINZOOM,
 	POI_HEATMAP_MAXZOOM,
 	POI_HEATMAP_MINZOOM,
@@ -20,13 +22,36 @@ import {
 	TRAM_MINZOOM,
 	TRAM_STOP_MINZOOM,
 } from "./constants";
+import type { ListingFeatureCollection, ListingsMode } from "./listings-types";
 
 /** One vector source serves rail, boundaries and the POI heatmap. */
 const STREETS_SOURCE = "streets";
 
+const PLANNED_RAIL_SOURCE = "planned-rail";
+/** Committed OSM snapshot, regenerated with `bun run data:planned-rail`. */
+const PLANNED_RAIL_URL = "/data/planned-rail.geojson";
+const PLANNED_RAIL_ATTRIBUTION =
+	'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> (ODbL)';
+
+const KOLEJ_PLUS_SOURCE = "kolej-plus";
+/** Committed PKP PLK Kolej Plus snapshot (`bun run data:kolej-plus`). */
+const KOLEJ_PLUS_URL = "/data/kolej-plus.geojson";
+const KOLEJ_PLUS_ATTRIBUTION = PLANNED_RAIL_ATTRIBUTION;
+
+/** Line layers that should show the project popup and pointer cursor. */
+export const PLANNED_RAIL_LINE_LAYERS = [
+	LAYER_IDS.plannedRailConstruction,
+	LAYER_IDS.plannedRailProposed,
+	LAYER_IDS.portPolskaLine,
+	LAYER_IDS.kolejPlusLine,
+	LAYER_IDS.kolejPlusPoint,
+] as const;
+
 const MODEL_ID = "wind-turbine";
 const WIND_FARM_SOURCE = "wind-farm";
 const TRAFFIC_SOURCE = "traffic";
+export const LISTINGS_SOURCE = "listings";
+export const LISTINGS_AGG_SOURCE = "listings-aggregate";
 
 /** Illustrative turbine positions inside the Margonin wind farm area. */
 const TURBINE_SITES: Array<[number, number]> = [
@@ -365,6 +390,292 @@ export function addRailLayers(map: MapboxMap): void {
 }
 
 /**
+ * Planned and under-construction heavy rail from the committed OSM snapshot.
+ * Line colour separates projects already being built from proposals; both are
+ * dashed/solid variants of the same magenta family so they never read as the
+ * orange existing network.
+ */
+export function addPlannedRailLayers(map: MapboxMap): void {
+	if (!map.getSource(PLANNED_RAIL_SOURCE)) {
+		map.addSource(PLANNED_RAIL_SOURCE, {
+			type: "geojson",
+			data: PLANNED_RAIL_URL,
+			attribution: PLANNED_RAIL_ATTRIBUTION,
+		});
+	}
+
+	const casingWidth: ExpressionSpecification = [
+		"interpolate",
+		["linear"],
+		["zoom"],
+		5,
+		2.8,
+		10,
+		4.8,
+		14,
+		8,
+		18,
+		13,
+	];
+	const lineWidth: ExpressionSpecification = [
+		"interpolate",
+		["linear"],
+		["zoom"],
+		5,
+		1.5,
+		10,
+		2.8,
+		14,
+		5,
+		18,
+		9,
+	];
+
+	if (!map.getLayer(LAYER_IDS.plannedRailCasingConstruction)) {
+		map.addLayer({
+			id: LAYER_IDS.plannedRailCasingConstruction,
+			type: "line",
+			source: PLANNED_RAIL_SOURCE,
+			filter: [
+				"all",
+				["==", ["get", "status"], "construction"],
+				["!=", ["coalesce", ["get", "program"], ""], "port-polska"],
+				["!=", ["coalesce", ["get", "program"], ""], "kolej-plus"],
+			],
+			layout: { "line-cap": "round", "line-join": "round" },
+			paint: {
+				"line-color": COLORS.plannedCasing,
+				"line-width": casingWidth,
+				"line-opacity": 0.75,
+			},
+			slot: "middle",
+		});
+	}
+
+	if (!map.getLayer(LAYER_IDS.plannedRailConstruction)) {
+		map.addLayer({
+			id: LAYER_IDS.plannedRailConstruction,
+			type: "line",
+			source: PLANNED_RAIL_SOURCE,
+			filter: [
+				"all",
+				["==", ["get", "status"], "construction"],
+				["!=", ["coalesce", ["get", "program"], ""], "port-polska"],
+				["!=", ["coalesce", ["get", "program"], ""], "kolej-plus"],
+			],
+			layout: { "line-cap": "round", "line-join": "round" },
+			paint: {
+				"line-color": COLORS.plannedConstruction,
+				"line-width": lineWidth,
+				"line-opacity": 0.95,
+				// Standard's night lighting darkens custom layers; keep the
+				// planned network readable without going full neon.
+				"line-emissive-strength": 1,
+			},
+			slot: "middle",
+		});
+	}
+
+	if (!map.getLayer(LAYER_IDS.plannedRailCasingProposed)) {
+		map.addLayer({
+			id: LAYER_IDS.plannedRailCasingProposed,
+			type: "line",
+			source: PLANNED_RAIL_SOURCE,
+			filter: [
+				"all",
+				["==", ["get", "status"], "proposed"],
+				["!=", ["coalesce", ["get", "program"], ""], "port-polska"],
+				["!=", ["coalesce", ["get", "program"], ""], "kolej-plus"],
+			],
+			layout: { "line-cap": "round", "line-join": "round" },
+			paint: {
+				"line-color": COLORS.plannedCasing,
+				"line-width": casingWidth,
+				"line-opacity": 0.55,
+				"line-dasharray": [3, 2],
+			},
+			slot: "middle",
+		});
+	}
+
+	if (!map.getLayer(LAYER_IDS.plannedRailProposed)) {
+		map.addLayer({
+			id: LAYER_IDS.plannedRailProposed,
+			type: "line",
+			source: PLANNED_RAIL_SOURCE,
+			filter: [
+				"all",
+				["==", ["get", "status"], "proposed"],
+				["!=", ["coalesce", ["get", "program"], ""], "port-polska"],
+				["!=", ["coalesce", ["get", "program"], ""], "kolej-plus"],
+			],
+			layout: { "line-cap": "round", "line-join": "round" },
+			paint: {
+				"line-color": COLORS.plannedProposed,
+				"line-width": lineWidth,
+				"line-opacity": 0.95,
+				"line-dasharray": [3, 2],
+				"line-emissive-strength": 1,
+			},
+			slot: "middle",
+		});
+	}
+
+	const portCasingWidth: ExpressionSpecification = [
+		"interpolate",
+		["linear"],
+		["zoom"],
+		5,
+		3.2,
+		10,
+		5.6,
+		14,
+		9,
+		18,
+		14,
+	];
+	const portLineWidth: ExpressionSpecification = [
+		"interpolate",
+		["linear"],
+		["zoom"],
+		5,
+		1.8,
+		10,
+		3.4,
+		14,
+		6,
+		18,
+		10,
+	];
+
+	if (!map.getLayer(LAYER_IDS.portPolskaCasing)) {
+		map.addLayer({
+			id: LAYER_IDS.portPolskaCasing,
+			type: "line",
+			source: PLANNED_RAIL_SOURCE,
+			filter: ["==", ["get", "program"], "port-polska"],
+			layout: { "line-cap": "round", "line-join": "round" },
+			paint: {
+				"line-color": COLORS.plannedCasing,
+				"line-width": portCasingWidth,
+				"line-opacity": 0.75,
+				"line-dasharray": [4, 1.5],
+			},
+			slot: "middle",
+		});
+	}
+
+	if (!map.getLayer(LAYER_IDS.portPolskaLine)) {
+		map.addLayer({
+			id: LAYER_IDS.portPolskaLine,
+			type: "line",
+			source: PLANNED_RAIL_SOURCE,
+			filter: ["==", ["get", "program"], "port-polska"],
+			layout: { "line-cap": "round", "line-join": "round" },
+			paint: {
+				"line-color": COLORS.portPolska,
+				"line-width": portLineWidth,
+				"line-opacity": 0.95,
+				"line-dasharray": [4, 1.5],
+				"line-emissive-strength": 1,
+			},
+			slot: "middle",
+		});
+	}
+}
+
+/**
+ * Current Kolej Plus projects (PKP PLK): new lines plus modernisations of
+ * existing tracks. Drawn in lime so they stay distinct from generic proposals,
+ * Port Polska and the existing network.
+ */
+export function addKolejPlusLayers(map: MapboxMap): void {
+	if (!map.getSource(KOLEJ_PLUS_SOURCE)) {
+		map.addSource(KOLEJ_PLUS_SOURCE, {
+			type: "geojson",
+			data: KOLEJ_PLUS_URL,
+			attribution: KOLEJ_PLUS_ATTRIBUTION,
+		});
+	}
+
+	const casingWidth: ExpressionSpecification = [
+		"interpolate",
+		["linear"],
+		["zoom"],
+		5,
+		3,
+		10,
+		5,
+		14,
+		8.5,
+		18,
+		13,
+	];
+	const lineWidth: ExpressionSpecification = [
+		"interpolate",
+		["linear"],
+		["zoom"],
+		5,
+		1.7,
+		10,
+		3,
+		14,
+		5.4,
+		18,
+		9.5,
+	];
+
+	if (!map.getLayer(LAYER_IDS.kolejPlusCasing)) {
+		map.addLayer({
+			id: LAYER_IDS.kolejPlusCasing,
+			type: "line",
+			source: KOLEJ_PLUS_SOURCE,
+			layout: { "line-cap": "round", "line-join": "round" },
+			paint: {
+				"line-color": COLORS.plannedCasing,
+				"line-width": casingWidth,
+				"line-opacity": 0.75,
+				"line-dasharray": [4, 1.5],
+			},
+			slot: "middle",
+		});
+	}
+
+	if (!map.getLayer(LAYER_IDS.kolejPlusLine)) {
+		map.addLayer({
+			id: LAYER_IDS.kolejPlusLine,
+			type: "line",
+			source: KOLEJ_PLUS_SOURCE,
+			layout: { "line-cap": "round", "line-join": "round" },
+			paint: {
+				"line-color": COLORS.kolejPlus,
+				"line-width": lineWidth,
+				"line-opacity": 0.95,
+				"line-dasharray": [4, 1.5],
+				"line-emissive-strength": 1,
+			},
+			slot: "middle",
+		});
+	}
+
+	if (!map.getLayer(LAYER_IDS.kolejPlusPoint)) {
+		map.addLayer({
+			id: LAYER_IDS.kolejPlusPoint,
+			type: "circle",
+			source: KOLEJ_PLUS_SOURCE,
+			filter: ["==", ["geometry-type"], "Point"],
+			paint: {
+				"circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 5, 12, 7],
+				"circle-color": COLORS.kolejPlus,
+				"circle-stroke-color": COLORS.labelHalo,
+				"circle-stroke-width": 1.5,
+				"circle-emissive-strength": 1,
+			},
+		});
+	}
+}
+
+/**
  * Voivodeship and powiat borders from Streets v8. `worldview` must be part of
  * the filter or the tileset returns duplicate boundary geometry.
  */
@@ -642,6 +953,11 @@ export function syncModels(map: MapboxMap, enabled: boolean): void {
 		return;
 	}
 
+	if (!map.isStyleLoaded()) {
+		map.once("idle", () => syncModels(map, true));
+		return;
+	}
+
 	if (!map.hasModel(MODEL_ID)) {
 		map.addModel(MODEL_ID, "/models/wind-turbine.glb");
 	}
@@ -679,11 +995,275 @@ export function syncModels(map: MapboxMap, enabled: boolean): void {
 	}
 }
 
+function emptyListings(): ListingFeatureCollection {
+	return { type: "FeatureCollection", features: [] };
+}
+
+/** Pin sprite dimensions in device pixels; drawn at 2x for crisp rendering. */
+const LISTING_PIN_WIDTH = 48;
+const LISTING_PIN_HEIGHT = 60;
+const LISTING_PIN_PIXEL_RATIO = 2;
+
+/**
+ * Solid white SDF pin silhouette. The symbol layer tints it per feature with
+ * `icon-color`, so one image serves every source. Mapbox keeps images when a
+ * layer is removed, so the `hasImage` guard is all the lifetime management it
+ * needs.
+ */
+function ensureListingPinIcon(map: MapboxMap): void {
+	if (map.hasImage(LISTING_PIN_ICON)) return;
+
+	const canvas = document.createElement("canvas");
+	canvas.width = LISTING_PIN_WIDTH;
+	canvas.height = LISTING_PIN_HEIGHT;
+
+	const ctx = canvas.getContext("2d");
+	if (!ctx) return;
+
+	// Teardrop: circular head centred at (24, 21) with r=13, then two bezier
+	// curves tapering down to the tip at (24, 54). Edges stay transparent.
+	ctx.beginPath();
+	ctx.moveTo(24, 54);
+	ctx.bezierCurveTo(19, 42, 11, 33, 11, 21);
+	ctx.arc(24, 21, 13, Math.PI, 0, false);
+	ctx.bezierCurveTo(37, 33, 29, 42, 24, 54);
+	ctx.closePath();
+	ctx.fillStyle = "#fff";
+	ctx.fill();
+
+	map.addImage(
+		LISTING_PIN_ICON,
+		ctx.getImageData(0, 0, LISTING_PIN_WIDTH, LISTING_PIN_HEIGHT),
+		{ sdf: true, pixelRatio: LISTING_PIN_PIXEL_RATIO },
+	);
+}
+
+function removeListingPoints(map: MapboxMap): void {
+	removeLayer(map, LAYER_IDS.listingPoint);
+	removeLayer(map, LAYER_IDS.listingClusterCount);
+	removeLayer(map, LAYER_IDS.listingClusters);
+	removeSource(map, LISTINGS_SOURCE);
+}
+
+function removeListingAggregate(map: MapboxMap): void {
+	removeLayer(map, LAYER_IDS.listingAggregateCount);
+	removeLayer(map, LAYER_IDS.listingAggregate);
+	removeSource(map, LISTINGS_AGG_SOURCE);
+}
+
+/** Individual listings, clustered by Mapbox at high zoom. */
+export function syncListingPoints(
+	map: MapboxMap,
+	data?: ListingFeatureCollection,
+): void {
+	const existing = map.getSource(LISTINGS_SOURCE) as GeoJSONSource | undefined;
+	if (!existing) {
+		map.addSource(LISTINGS_SOURCE, {
+			type: "geojson",
+			data: data ?? emptyListings(),
+			cluster: true,
+			clusterMaxZoom: 13,
+			clusterRadius: 48,
+		});
+	} else if (data) {
+		existing.setData(data);
+	}
+
+	if (!map.getLayer(LAYER_IDS.listingClusters)) {
+		map.addLayer({
+			id: LAYER_IDS.listingClusters,
+			type: "circle",
+			source: LISTINGS_SOURCE,
+			filter: ["has", "point_count"],
+			paint: {
+				"circle-color": COLORS.listingCluster,
+				"circle-radius": ["step", ["get", "point_count"], 12, 10, 16, 50, 21],
+				"circle-opacity": 0.92,
+				"circle-stroke-color": COLORS.label,
+				"circle-stroke-width": 1.2,
+				"circle-stroke-opacity": 0.55,
+			},
+		});
+	}
+
+	if (!map.getLayer(LAYER_IDS.listingClusterCount)) {
+		map.addLayer({
+			id: LAYER_IDS.listingClusterCount,
+			type: "symbol",
+			source: LISTINGS_SOURCE,
+			filter: ["has", "point_count"],
+			layout: {
+				"text-field": ["get", "point_count_abbreviated"],
+				"text-size": 11,
+				"text-allow-overlap": true,
+			},
+			paint: {
+				"text-color": COLORS.label,
+				"text-halo-color": COLORS.labelHalo,
+				"text-halo-width": 1,
+			},
+		});
+	}
+
+	ensureListingPinIcon(map);
+
+	if (!map.getLayer(LAYER_IDS.listingPoint)) {
+		map.addLayer({
+			id: LAYER_IDS.listingPoint,
+			type: "symbol",
+			source: LISTINGS_SOURCE,
+			filter: ["!", ["has", "point_count"]],
+			layout: {
+				"icon-image": LISTING_PIN_ICON,
+				"icon-anchor": "bottom",
+				"icon-allow-overlap": true,
+				"icon-ignore-placement": true,
+				"icon-size": [
+					"interpolate",
+					["linear"],
+					["zoom"],
+					8,
+					0.45,
+					12,
+					0.62,
+					16,
+					0.9,
+				],
+			},
+			paint: {
+				"icon-color": ["coalesce", ["get", "color"], COLORS.listingOther],
+				"icon-halo-color": COLORS.labelHalo,
+				"icon-halo-width": 1.4,
+				"icon-halo-blur": 0.2,
+				"icon-opacity": 0.95,
+			},
+		});
+	}
+}
+
+/** Low-zoom aggregate cells returned by `/api/listings/clusters`. */
+export function syncListingAggregate(
+	map: MapboxMap,
+	data?: ListingFeatureCollection,
+): void {
+	const existing = map.getSource(LISTINGS_AGG_SOURCE) as
+		| GeoJSONSource
+		| undefined;
+	if (!existing) {
+		map.addSource(LISTINGS_AGG_SOURCE, {
+			type: "geojson",
+			data: data ?? emptyListings(),
+		});
+	} else if (data) {
+		existing.setData(data);
+	}
+
+	if (!map.getLayer(LAYER_IDS.listingAggregate)) {
+		map.addLayer({
+			id: LAYER_IDS.listingAggregate,
+			type: "circle",
+			source: LISTINGS_AGG_SOURCE,
+			paint: {
+				"circle-color": [
+					"step",
+					["get", "count"],
+					COLORS.listingOther,
+					10,
+					COLORS.listingSale,
+					50,
+					COLORS.listingRent,
+					200,
+					COLORS.listingAuction,
+				],
+				"circle-radius": ["step", ["get", "count"], 9, 10, 14, 50, 20, 200, 28],
+				"circle-opacity": 0.82,
+				"circle-stroke-color": COLORS.labelHalo,
+				"circle-stroke-width": 1.5,
+			},
+		});
+	}
+
+	if (!map.getLayer(LAYER_IDS.listingAggregateCount)) {
+		map.addLayer({
+			id: LAYER_IDS.listingAggregateCount,
+			type: "symbol",
+			source: LISTINGS_AGG_SOURCE,
+			layout: {
+				"text-field": ["to-string", ["get", "count"]],
+				"text-size": ["step", ["get", "count"], 10, 100, 11, 1000, 12],
+				"text-allow-overlap": true,
+			},
+			paint: {
+				"text-color": COLORS.label,
+				"text-halo-color": COLORS.labelHalo,
+				"text-halo-width": 1.5,
+			},
+		});
+	}
+}
+
+/** Switch between aggregate cells and individual listings. */
+export function syncListingLayer(
+	map: MapboxMap,
+	enabled: boolean,
+	mode: ListingsMode,
+	data?: ListingFeatureCollection,
+): void {
+	if (!enabled) {
+		removeListingPoints(map);
+		removeListingAggregate(map);
+		return;
+	}
+
+	if (mode === "clusters") {
+		removeListingPoints(map);
+		syncListingAggregate(map, data);
+		return;
+	}
+
+	removeListingAggregate(map);
+	syncListingPoints(map, data);
+}
+
 /** Enable/disable every custom layer and terrain to match the UI toggles. */
 export function applyToggles(map: MapboxMap, toggles: LayerToggles): void {
 	setVisibility(map, LAYER_IDS.railCasing, toggles.rail);
 	setVisibility(map, LAYER_IDS.railMajor, toggles.rail);
 	setVisibility(map, LAYER_IDS.railService, toggles.rail);
+
+	setVisibility(
+		map,
+		LAYER_IDS.plannedRailCasingConstruction,
+		toggles.plannedRail,
+	);
+	setVisibility(map, LAYER_IDS.plannedRailConstruction, toggles.plannedRail);
+	setVisibility(map, LAYER_IDS.plannedRailCasingProposed, toggles.plannedRail);
+	setVisibility(map, LAYER_IDS.plannedRailProposed, toggles.plannedRail);
+	setVisibility(
+		map,
+		LAYER_IDS.portPolskaCasing,
+		toggles.plannedRail && toggles.portPolska,
+	);
+	setVisibility(
+		map,
+		LAYER_IDS.portPolskaLine,
+		toggles.plannedRail && toggles.portPolska,
+	);
+	setVisibility(
+		map,
+		LAYER_IDS.kolejPlusCasing,
+		toggles.plannedRail && toggles.kolejPlus,
+	);
+	setVisibility(
+		map,
+		LAYER_IDS.kolejPlusLine,
+		toggles.plannedRail && toggles.kolejPlus,
+	);
+	setVisibility(
+		map,
+		LAYER_IDS.kolejPlusPoint,
+		toggles.plannedRail && toggles.kolejPlus,
+	);
 
 	setVisibility(map, LAYER_IDS.tramCasing, toggles.tram);
 	setVisibility(map, LAYER_IDS.tramLine, toggles.tram);
@@ -696,6 +1276,12 @@ export function applyToggles(map: MapboxMap, toggles: LayerToggles): void {
 	setVisibility(map, LAYER_IDS.admin1, toggles.boundaries);
 	setVisibility(map, LAYER_IDS.admin2, toggles.boundaries);
 	setVisibility(map, LAYER_IDS.poiHeat, toggles.heatmap);
+
+	setVisibility(map, LAYER_IDS.listingClusters, toggles.listings);
+	setVisibility(map, LAYER_IDS.listingClusterCount, toggles.listings);
+	setVisibility(map, LAYER_IDS.listingPoint, toggles.listings);
+	setVisibility(map, LAYER_IDS.listingAggregate, toggles.listings);
+	setVisibility(map, LAYER_IDS.listingAggregateCount, toggles.listings);
 
 	setVisibility(map, LAYER_IDS.contourLine, toggles.contours);
 	setVisibility(map, LAYER_IDS.contourLabel, toggles.contours);

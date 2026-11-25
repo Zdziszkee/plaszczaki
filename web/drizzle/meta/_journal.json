@@ -8,6 +8,27 @@
       "when": 1795467954271,
       "tag": "0000_gigantic_luke_cage",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1795554574907,
+      "tag": "0001_melted_tusk",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1795556236204,
+      "tag": "0002_overjoyed_prism",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1795559619730,
+      "tag": "0003_purple_sue_storm",
+      "breakpoints": true
     }
   ]
 }

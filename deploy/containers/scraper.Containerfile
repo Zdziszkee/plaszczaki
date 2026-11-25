@@ -19,6 +19,10 @@ COPY src ./src
 COPY config ./config
 RUN uv sync --locked --no-dev --no-editable
 
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    DATABASE_URL=/data/plaszczaki.db \
+    PLASZCZAKI_CACHE_DIR=/data/cache
 
 ENTRYPOINT ["python", "-m", "plaszczaki_scraper"]
+CMD ["watch", "--once", "--limit", "200"]

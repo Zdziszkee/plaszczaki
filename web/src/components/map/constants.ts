@@ -45,10 +45,21 @@ export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN ?? "";
 export const COLORS = {
 	rail: "#fb923c",
 	railCasing: "#020617",
+	plannedConstruction: "#f472b6",
+	plannedProposed: "#e879f9",
+	plannedCasing: "#020617",
+	portPolska: "#2dd4bf",
+	kolejPlus: "#a3e635",
 	tram: "#38bdf8",
 	tramCasing: "#020617",
 	station: "#fbbf24",
 	tramStop: "#7dd3fc",
+	listingSale: "#38bdf8",
+	listingRent: "#fbbf24",
+	listingAuction: "#f472b6",
+	listingOther: "#94a3b8",
+	/** Clusters are source-agnostic, so they stay a neutral slate. */
+	listingCluster: "#64748b",
 	label: "#e2e8f0",
 	labelHalo: "#020617",
 	boundary: "#c4b5fd",
@@ -62,11 +73,15 @@ export const COLORS = {
 
 export type LayerToggles = {
 	rail: boolean;
+	plannedRail: boolean;
+	portPolska: boolean;
+	kolejPlus: boolean;
 	tram: boolean;
 	stops: boolean;
 	boundaries: boolean;
 	traffic: boolean;
 	heatmap: boolean;
+	listings: boolean;
 	models3d: boolean;
 	contours: boolean;
 	hillshade: boolean;
@@ -77,11 +92,15 @@ export type LayerToggles = {
 
 export const DEFAULT_TOGGLES: LayerToggles = {
 	rail: true,
+	plannedRail: true,
+	portPolska: true,
+	kolejPlus: true,
 	tram: true,
 	stops: true,
 	boundaries: true,
 	traffic: false,
 	heatmap: false,
+	listings: true,
 	models3d: false,
 	contours: true,
 	hillshade: true,
@@ -91,11 +110,22 @@ export const DEFAULT_TOGGLES: LayerToggles = {
 };
 
 export const TOGGLES_STORAGE_KEY = "plaszczaki:map:toggles";
+export const LISTINGS_FILTERS_STORAGE_KEY = "plaszczaki:map:listings-filters";
+export const LISTINGS_AGGREGATE_MIN_ZOOM = 10;
 
 export const LAYER_IDS = {
 	railCasing: "rail-casing",
 	railMajor: "rail-major",
 	railService: "rail-service",
+	plannedRailCasingConstruction: "planned-rail-casing-construction",
+	plannedRailConstruction: "planned-rail-construction",
+	plannedRailCasingProposed: "planned-rail-casing-proposed",
+	plannedRailProposed: "planned-rail-proposed",
+	portPolskaCasing: "port-polska-casing",
+	portPolskaLine: "port-polska-line",
+	kolejPlusCasing: "kolej-plus-casing",
+	kolejPlusLine: "kolej-plus-line",
+	kolejPlusPoint: "kolej-plus-point",
 	tramCasing: "tram-casing",
 	tramLine: "tram-line",
 	railStation: "rail-station",
@@ -108,8 +138,19 @@ export const LAYER_IDS = {
 	admin1: "admin-1",
 	admin2: "admin-2",
 	poiHeat: "poi-heat",
+	listingClusters: "listing-clusters",
+	listingClusterCount: "listing-cluster-count",
+	listingPoint: "listing-point",
+	listingAggregate: "listing-aggregate",
+	listingAggregateCount: "listing-aggregate-count",
 	trafficCasing: "traffic-casing",
 	trafficLine: "traffic-line",
 	trafficClosed: "traffic-closed",
 	turbineModels: "turbine-models",
 } as const;
+
+/**
+ * Registered image id for the SDF pin drawn in `layers.ts`. Maps, not layer ids:
+ * the same sprite is tinted per listing source through `icon-color`.
+ */
+export const LISTING_PIN_ICON = "listing-pin";

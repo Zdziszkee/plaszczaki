@@ -12,6 +12,8 @@
     "preview": "bun --bun vite preview",
     "start": "bun run .output/server/index.mjs",
     "typecheck": "tsc --noEmit",
+    "data:planned-rail": "bun scripts/fetch-planned-rail.ts",
+    "data:kolej-plus": "bun scripts/fetch-kolej-plus.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",

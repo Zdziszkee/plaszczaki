@@ -5,7 +5,13 @@ description = "Data collection sidecar for plaszczaki"
 readme = "README.md"
 authors = [{ name = "Zdziszkee", email = "zdziszkee@gmail.com" }]
 requires-python = ">=3.15"
-dependencies = []
+dependencies = [
+    "httpx>=0.28,<0.29",
+    "lxml>=6,<7",
+    "protego>=0.7,<0.8",
+    "pydantic>=2.12,<3",
+    "scrapling[fetchers]>=0.5.1,<0.6",
+]
 
 [project.scripts]
 plaszczaki-scraper = "plaszczaki_scraper:main"
@@ -15,7 +21,7 @@ requires = ["uv_build>=0.13.0,<0.14.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
-dev = ["ruff>=0.17.6,<0.18", "ty==0.0.109"]
+dev = ["pytest>=8.4,<9", "ruff>=0.17.6,<0.18", "ty==0.0.109"]
 
 [tool.ruff]
 target-version = "py315"
@@ -40,3 +46,6 @@ python-version = "3.15"
 
 [tool.ty.terminal]
 output-format = "concise"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

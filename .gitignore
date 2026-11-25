@@ -28,3 +28,6 @@ __pycache__/
 *.py[cod]
 .ruff_cache/
 .ty_cache/
+
+# Browser tooling output
+.playwright-mcp/

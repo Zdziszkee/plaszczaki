@@ -1,162 +1,1804 @@
 {
-	"urls": [
-		"https://www.otodom.pl",
-		"https://www.olx.pl/nieruchomosci/",
-		"https://gratka.pl",
-		"https://www.morizon.pl",
-		"https://www.nieruchomosci-online.pl",
-		"https://www.domiporta.pl",
-		"https://domy.pl",
-		"https://szybko.pl",
-		"https://nportal.pl",
-		"https://gethome.pl",
-		"https://www.nieruchomosci.pl",
-		"https://nieruchomosci-pl.pl",
-		"https://homeportal.pl",
-		"https://adresowo.pl",
-		"https://kazo.pl",
-		"https://www.okolica.pl",
-		"https://gdom.pl",
-		"https://dimdom.pl",
-		"https://bezposrednio.net.pl",
-		"https://www.kupbezposrednio.pl",
-		"https://www.120portali.pl",
-		"https://www.oferty.net",
-		"https://nieruchomosci.abyhom.pl",
-		"https://allget.pl",
-		"https://edilo.pl",
-		"https://sprzedajemy.pl/nieruchomosci",
-		"https://rentumo.pl",
-		"https://rentola.pl",
-		"https://wynajem24.pl",
-		"https://flats.pl",
-		"https://sprawnynajem.pl",
-		"https://www.kavalerka.pl",
-		"https://lifespot.pl",
-		"https://homeportal.pl/wynajem/mieszkania",
-		"https://dzialki.pl",
-		"https://dzialkinasprzedaz.pl",
-		"https://www.gov.pl/web/kowr",
-		"https://www.agroprzetargi.pl",
-		"https://www.bdl.lasy.gov.pl/portal/sprzedaz-i-zakup-dzialek-lesnych",
-		"https://gratka.pl/nieruchomosci",
-		"https://terenyprzemyslowe.pl",
-		"https://www.axiimmo.com",
-		"https://rynekpierwotny.pl",
-		"https://tabelaofert.pl/nowe-mieszkania",
-		"https://noweinwestycje.pl",
-		"https://wybierzdewelopera.pl",
-		"https://www.infoinwest.pl",
-		"https://www.szukam-nieruchomosci.com",
-		"https://www.biznesoferty.pl/nieruchomosci-komercyjne",
-		"https://szybkokomercyjne.pl",
-		"https://magazyny.online",
-		"https://www.ahk.pl/pl/doradztwo-rynkowe/nieruchomosci-w-polsce-polsko-niemiecki-portal-ogloszen",
-		"https://sprzedambiznes.pl/nieruchomosci-komercyjne",
-		"https://www.sothebysrealty.com/polandsir",
-		"https://vilea.pl",
-		"https://partnersinternational.pl",
-		"https://luksusowemieszkania.pl",
-		"https://www.luxuryestate.com/pl/poland",
-		"https://www.domiporta.pl/nieruchomosci-premium",
-		"https://licytacje.komornik.pl",
-		"https://elicytacje.mf.gov.pl",
-		"https://amw.com.pl/pl/nieruchomosci/przetargi-nieruchomosci",
-		"https://www.pkp.pl/pl/sprzedaz",
-		"https://portalurzedowy.pl",
-		"https://licytor.pl",
-		"https://monitor-nieruchomosci.pl",
-		"https://listaprzetargow.pl",
-		"https://radarnieruchomosci.com",
-		"https://mapaofert.pl",
-		"https://mapalicytacji.pl",
-		"https://www.komunikaty.pl",
-		"https://tu-zamieszkam.pl/przetargi",
-		"https://i-przetargi.com.pl",
-		"https://www.przetargi.egospodarka.pl",
-		"https://licytacjesyndyka.pl",
-		"https://ogloszeniasyndyka.pl",
-		"https://syndyksprzedaje.pl",
-		"https://syndyk-licytacje.pl",
-		"https://www.syndyksprzeda.com",
-		"https://syndykaukcje.pl",
-		"https://syndyk.org/sprzedaz",
-		"https://www.muir.pl",
-		"https://wyszukiwarka-msig.ms.gov.pl",
-		"https://www.imsig.pl",
-		"https://txo.pl",
-		"https://landomo.pl",
-		"https://nieruchomosciowi.pl",
-		"https://allegro.pl/dzial/nieruchomosci",
-		"https://allegrolokalnie.pl/oferty/nieruchomosci",
-		"https://ogloszenia.trojmiasto.pl",
-		"https://opolskie-nieruchomosci.pl",
-		"https://www.booking.com",
-		"https://www.airbnb.pl",
-		"https://www.hometogo.pl",
-		"https://www.vrbo.com",
-		"https://alohacamp.com/pl",
-		"https://slowhop.com",
-		"https://www.nocowanie.pl",
-		"https://www.noclegi.pl",
-		"https://www.noclegi-online.pl",
-		"https://www.noclegowo.pl",
-		"https://e-turysta.pl/domki-letniskowe",
-		"https://www.nocujmy.pl",
-		"https://www.i-noclegi.pl",
-		"https://otonoclegi.pl",
-		"https://polskiewczasy.com.pl",
-		"https://cypryda.pl",
-		"https://www.noclegi.com/polska/domki",
-		"https://sunandsnow.pl",
-		"https://renters.pl",
-		"https://www.rentplanet.pl",
-		"https://millionhotels.pl",
-		"https://fairyflats.com",
-		"https://jumpinhere.com.pl",
-		"https://restful.pl",
-		"https://www.bookinghost.com/pl",
-		"https://rentujemy.pl",
-		"https://mamapartament.pl",
-		"https://www.gov.pl/web/aktywa-panstwowe/sprzedaz-aktywow-trwalych",
-		"https://www.pkpcargo.com",
-		"https://amw.com.pl/pl/uzbrojenie-i-sprzet-wojskowy/uzbrojenie/sprzedaz-przetargowa",
-		"https://amw.com.pl/pl/uzbrojenie-i-sprzet-wojskowy/sprzet-wojskowy-i-wyposazenie/sprzedaz-przetargowa-1",
-		"https://amw.com.pl/pl/uzbrojenie-i-sprzet-wojskowy/sprzet-wojskowy-i-wyposazenie/sprzedaz-bezprzetargowa",
-		"https://amw.com.pl/pl/amw/nasze-sklepy",
-		"https://kzn.bip.gov.pl",
-		"https://arp.bip.gov.pl",
-		"https://nieruchomosci.poczta-polska.pl",
-		"https://www.archiwum.gddkia.gov.pl/pl/64/sprzedaz-i-dzierzawa",
-		"https://www.orlen.pl/pl/dla-biznesu/przetargi-i-dostawy/przetargi/zbycie-nieruchomosci",
-		"https://nieruchomosci.tauron.pl",
-		"https://www.enea.pl",
-		"https://www.otoprzetargi.pl/nieruchomosci",
-		"https://www.jsw.pl/dla-kontrahentow/przetargi/170",
-		"https://bip.pgg.pl/37-przetargi-na-nieruchomosci.html",
-		"https://phnsa.gratka.pl",
-		"https://nieruchomosci.pzu.pl",
-		"https://www.totalizator.pl/wspolpraca/postepowania-przetargowe",
-		"https://nieruchomosci.pkobp.pl",
-		"https://www.bankbps.pl/nieruchomosci-na-sprzedaz",
-		"https://www.kbsbank.com.pl/nasz-bank/nieruchomosci-i-wierzytelnosci-na-sprzedaz",
-		"https://www.pkobp.pl/aktualnosci/przetargi-licytacje-ogloszenia",
-		"https://przetargi.portgdansk.pl",
-		"https://bip.port.szczecin.pl/przetargi-nieruchomosci/47",
-		"https://www.port.gdynia.pl",
-		"https://www.polish-airports.com",
-		"https://ppl.bip.gov.pl",
-		"https://zgm-gliwice.pl/wykaz-lokali-przeznaczonych-do-sprzedazy-w-przetargu",
-		"https://www.stbs.pl",
-		"https://www.srodmiescie.lodz.pl",
-		"https://www.smlokum.pl",
-		"https://przetargi-gctrader.pl",
-		"https://przetargi.adradar.pl",
-		"https://www.adradar.pl",
-		"https://monitorurzedowy.pl",
-		"https://tenderiq.pl",
-		"https://alertyprzetargowe.pl",
-		"https://atlasprzetargow.pl",
-		"https://przetargpro.pl"
+	"sources": [
+		{
+			"id": "120portali",
+			"label": "120portali",
+			"kind": "portal",
+			"tier": 1,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.120portali.pl"
+			],
+			"notes": "Joomla directory; detail exposes cityid only, no street address."
+		},
+		{
+			"id": "abyhom",
+			"label": "Abyhom",
+			"kind": "portal",
+			"tier": 1,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://nieruchomosci.abyhom.pl"
+			],
+			"notes": "robots.txt disallows /*.html detail pages and ?page= pagination."
+		},
+		{
+			"id": "adresowo",
+			"label": "Adresowo",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://adresowo.pl"
+			]
+		},
+		{
+			"id": "allegro",
+			"label": "Allegro Nieruchomości",
+			"kind": "portal",
+			"tier": 1,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://allegro.pl/dzial/nieruchomosci"
+			],
+			"notes": "DataDome bot challenge: HTTP 403 on every listing URL; bypass is out of scope."
+		},
+		{
+			"id": "allegrolokalnie",
+			"label": "Allegro Lokalnie Nieruchomości",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": false,
+			"urls": [
+				"https://allegrolokalnie.pl/oferty/nieruchomosci"
+			],
+			"notes": "Adapter implemented, but the live site currently returns HTTP 429; disabled until it recovers."
+		},
+		{
+			"id": "allget",
+			"label": "Allget",
+			"kind": "portal",
+			"tier": 1,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://allget.pl"
+			],
+			"notes": "Voivodeship facet exists but detail pages expose city/district only, no street line."
+		},
+		{
+			"id": "bezposrednio",
+			"label": "Bezpośrednio.net.pl",
+			"kind": "portal",
+			"tier": 1,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://bezposrednio.net.pl"
+			],
+			"notes": "Cloudflare managed challenge (HTTP 403 Just a moment) on /, sitemap and listing paths."
+		},
+		{
+			"id": "dimdom",
+			"label": "Dimdom",
+			"kind": "portal",
+			"tier": 1,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://dimdom.pl"
+			],
+			"notes": "robots.txt is Disallow: / and the domain 301-redirects to domoleo.pl."
+		},
+		{
+			"id": "domiporta",
+			"label": "Domiporta",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://www.domiporta.pl",
+				"https://www.domiporta.pl/nieruchomosci-premium"
+			]
+		},
+		{
+			"id": "domy",
+			"label": "Domy.pl",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://domy.pl"
+			]
+		},
+		{
+			"id": "edilo",
+			"label": "Edilo",
+			"kind": "portal",
+			"tier": 1,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://edilo.pl"
+			],
+			"notes": "Lublin-centric and no verified street address or małopolskie/śląskie coverage."
+		},
+		{
+			"id": "flats",
+			"label": "Flats.pl",
+			"kind": "rental",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://flats.pl"
+			]
+		},
+		{
+			"id": "gdom",
+			"label": "Gdom",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": false,
+			"urls": [
+				"https://gdom.pl"
+			],
+			"notes": "Adapter complete, but robots.txt Crawl-delay is 1200 (20 min/request); intentionally disabled."
+		},
+		{
+			"id": "gethome",
+			"label": "GetHome",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://gethome.pl"
+			]
+		},
+		{
+			"id": "gratka",
+			"label": "Gratka",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://gratka.pl",
+				"https://gratka.pl/nieruchomosci"
+			]
+		},
+		{
+			"id": "homeportal",
+			"label": "HomePortal",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://homeportal.pl",
+				"https://homeportal.pl/wynajem/mieszkania"
+			]
+		},
+		{
+			"id": "kavalerka",
+			"label": "Kawalerka.pl",
+			"kind": "rental",
+			"tier": 1,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.kavalerka.pl"
+			],
+			"notes": "JSON-LD streetAddress is a district, not a street; no geo."
+		},
+		{
+			"id": "kazo",
+			"label": "Kazo",
+			"kind": "portal",
+			"tier": 1,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://kazo.pl"
+			],
+			"notes": "No coordinates anywhere; detail pages only expose BreadcrumbList JSON-LD and no map/marker data."
+		},
+		{
+			"id": "kupbezposrednio",
+			"label": "Kupbezpośrednio.pl",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://www.kupbezposrednio.pl"
+			]
+		},
+		{
+			"id": "landomo",
+			"label": "Landomo",
+			"kind": "portal",
+			"tier": 1,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://landomo.pl"
+			],
+			"notes": "Responds 307 to /slow-down?retry=86400 (Cloudflare backoff); no usable pages."
+		},
+		{
+			"id": "lifespot",
+			"label": "Lifespot",
+			"kind": "rental",
+			"tier": 1,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://lifespot.pl"
+			],
+			"notes": "Operator/building marketing site with apartment-type pages, not individual listings with coordinates."
+		},
+		{
+			"id": "morizon",
+			"label": "Morizon",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://www.morizon.pl"
+			]
+		},
+		{
+			"id": "nieruchomosci",
+			"label": "Nieruchomosci.pl",
+			"kind": "portal",
+			"tier": 1,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.nieruchomosci.pl"
+			],
+			"notes": "robots.txt Crawl-delay 900 (15 min/request); 15 in-scope listings would take about 4 hours per run."
+		},
+		{
+			"id": "nieruchomosci-online",
+			"label": "Nieruchomości-online",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://www.nieruchomosci-online.pl"
+			]
+		},
+		{
+			"id": "nieruchomosci-pl",
+			"label": "Nieruchomosci-pl.pl",
+			"kind": "portal",
+			"tier": 1,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://nieruchomosci-pl.pl"
+			],
+			"notes": "Vite/React SPA; no SSR or JSON-LD; data only in an undocumented Supabase backend."
+		},
+		{
+			"id": "nieruchomosciowi",
+			"label": "Nieruchomosciowi",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://nieruchomosciowi.pl"
+			]
+		},
+		{
+			"id": "nportal",
+			"label": "Nportal",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://nportal.pl"
+			]
+		},
+		{
+			"id": "oferty-net",
+			"label": "Oferty.net",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://www.oferty.net"
+			]
+		},
+		{
+			"id": "okolica",
+			"label": "Okolica",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://www.okolica.pl"
+			]
+		},
+		{
+			"id": "olx",
+			"label": "OLX",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://www.olx.pl/nieruchomosci/"
+			]
+		},
+		{
+			"id": "opolskie-nieruchomosci",
+			"label": "Opolskie Nieruchomości",
+			"kind": "portal",
+			"tier": 1,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://opolskie-nieruchomosci.pl"
+			],
+			"notes": "Only Opole/Namysłów listings; zero małopolskie/śląskie inventory."
+		},
+		{
+			"id": "otodom",
+			"label": "Otodom",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://www.otodom.pl"
+			],
+			"notes": "Structured __NEXT_DATA__; detail pages expose coordinates."
+		},
+		{
+			"id": "rentola",
+			"label": "Rentola",
+			"kind": "rental",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://rentola.pl"
+			]
+		},
+		{
+			"id": "rentumo",
+			"label": "Rentumo",
+			"kind": "rental",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://rentumo.pl"
+			]
+		},
+		{
+			"id": "sprawnynajem",
+			"label": "Sprawny Najem",
+			"kind": "rental",
+			"tier": 1,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://sprawnynajem.pl"
+			],
+			"notes": "City page is a JS shell; listings come from /api/listings, which robots.txt disallows."
+		},
+		{
+			"id": "sprzedajemy",
+			"label": "Sprzedajemy.pl",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://sprzedajemy.pl/nieruchomosci"
+			]
+		},
+		{
+			"id": "szybko",
+			"label": "Szybko.pl",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://szybko.pl"
+			]
+		},
+		{
+			"id": "trojmiasto",
+			"label": "Ogloszenia.trojmiasto.pl",
+			"kind": "portal",
+			"tier": 1,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://ogloszenia.trojmiasto.pl"
+			],
+			"notes": "Pomerania-only portal with no małopolskie/śląskie listings; detail pages have no coordinates."
+		},
+		{
+			"id": "txo",
+			"label": "TXO",
+			"kind": "portal",
+			"tier": 1,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://txo.pl"
+			]
+		},
+		{
+			"id": "wynajem24",
+			"label": "Wynajem24",
+			"kind": "rental",
+			"tier": 1,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://wynajem24.pl"
+			],
+			"notes": "No regional search URL; nationwide list only, real search is a PHP-session POST form; robots.txt Crawl-delay 20."
+		},
+		{
+			"id": "infoinwest",
+			"label": "Infoinwest",
+			"kind": "primary",
+			"tier": 2,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.infoinwest.pl"
+			],
+			"notes": "B2B construction-project database; no listing coordinates or sale prices; full data behind baza.infoinwest.pl login."
+		},
+		{
+			"id": "noweinwestycje",
+			"label": "Nowe Inwestycje",
+			"kind": "primary",
+			"tier": 2,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://noweinwestycje.pl"
+			]
+		},
+		{
+			"id": "phn",
+			"label": "PHN Nieruchomości",
+			"kind": "primary",
+			"tier": 2,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://phnsa.gratka.pl"
+			],
+			"notes": "robots.txt allows only the homepage (Allow: /$ plus Disallow: /); single-agency Gratka microsite."
+		},
+		{
+			"id": "rynekpierwotny",
+			"label": "Rynek Pierwotny",
+			"kind": "primary",
+			"tier": 2,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://rynekpierwotny.pl"
+			]
+		},
+		{
+			"id": "szukam-nieruchomosci",
+			"label": "Szukam Nieruchomości",
+			"kind": "commercial",
+			"tier": 2,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.szukam-nieruchomosci.com"
+			],
+			"notes": "Commercial classifieds only; main listings have no coordinates; /oferty/mieszkania and /oferty/domy return 404."
+		},
+		{
+			"id": "tabelaofert",
+			"label": "Tabela Ofert",
+			"kind": "primary",
+			"tier": 2,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://tabelaofert.pl/nowe-mieszkania"
+			]
+		},
+		{
+			"id": "wybierzdewelopera",
+			"label": "Wybierz Dewelopera",
+			"kind": "primary",
+			"tier": 2,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://wybierzdewelopera.pl"
+			]
+		},
+		{
+			"id": "agroprzetargi",
+			"label": "Agroprzetargi",
+			"kind": "commercial",
+			"tier": 3,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.agroprzetargi.pl"
+			],
+			"notes": "Descriptions and prices are paywalled; no coordinates."
+		},
+		{
+			"id": "ahk",
+			"label": "AHK Polska",
+			"kind": "commercial",
+			"tier": 3,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.ahk.pl/pl/doradztwo-rynkowe/nieruchomosci-w-polsce-polsko-niemiecki-portal-ogloszen"
+			],
+			"notes": "Location is city-only; exact location is an external Google Maps shortlink."
+		},
+		{
+			"id": "axiimmo",
+			"label": "AXI Immo",
+			"kind": "commercial",
+			"tier": 3,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://www.axiimmo.com"
+			]
+		},
+		{
+			"id": "biznesoferty",
+			"label": "Biznesoferty",
+			"kind": "commercial",
+			"tier": 3,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.biznesoferty.pl/nieruchomosci-komercyjne"
+			],
+			"notes": "Detail publishes only voivodeship and city; Ulica belongs to the advertiser."
+		},
+		{
+			"id": "dzialki",
+			"label": "Działki.pl",
+			"kind": "commercial",
+			"tier": 3,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://dzialki.pl"
+			],
+			"notes": "TLS certificate hostname mismatch (CN=*.home.pl)."
+		},
+		{
+			"id": "dzialkinasprzedaz",
+			"label": "Działki na Sprzedaż",
+			"kind": "commercial",
+			"tier": 3,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://dzialkinasprzedaz.pl"
+			],
+			"notes": "City paths only; detail street address not verified."
+		},
+		{
+			"id": "lasy-panstwowe",
+			"label": "Lasy Państwowe",
+			"kind": "commercial",
+			"tier": 3,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.bdl.lasy.gov.pl/portal/sprzedaz-i-zakup-dzialek-lesnych"
+			],
+			"notes": "Configured BDL page is informational; real classifieds are a Blazor Server app with no API/sitemap."
+		},
+		{
+			"id": "luksusowemieszkania",
+			"label": "Luksusowe Mieszkania",
+			"kind": "luxury",
+			"tier": 3,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://luksusowemieszkania.pl"
+			]
+		},
+		{
+			"id": "luxuryestate",
+			"label": "LuxuryEstate",
+			"kind": "luxury",
+			"tier": 3,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.luxuryestate.com/pl/poland"
+			],
+			"notes": "WAF captcha blocks the listing pages."
+		},
+		{
+			"id": "magazyny-online",
+			"label": "Magazyny Online",
+			"kind": "commercial",
+			"tier": 3,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://magazyny.online"
+			]
+		},
+		{
+			"id": "partnersinternational",
+			"label": "Partners International",
+			"kind": "luxury",
+			"tier": 3,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://partnersinternational.pl"
+			]
+		},
+		{
+			"id": "sothebys",
+			"label": "Sotheby's Poland",
+			"kind": "luxury",
+			"tier": 3,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.sothebysrealty.com/polandsir"
+			],
+			"notes": "WAF blocks the listing pages."
+		},
+		{
+			"id": "sprzedambiznes",
+			"label": "Sprzedam Biznes",
+			"kind": "commercial",
+			"tier": 3,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://sprzedambiznes.pl/nieruchomosci-komercyjne"
+			]
+		},
+		{
+			"id": "szybkokomercyjne",
+			"label": "Szybko Komercyjne",
+			"kind": "commercial",
+			"tier": 3,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://szybkokomercyjne.pl"
+			]
+		},
+		{
+			"id": "terenyprzemyslowe",
+			"label": "Tereny Przemysłowe",
+			"kind": "commercial",
+			"tier": 3,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://terenyprzemyslowe.pl"
+			]
+		},
+		{
+			"id": "vilea",
+			"label": "Vilea",
+			"kind": "luxury",
+			"tier": 3,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://vilea.pl"
+			]
+		},
+		{
+			"id": "adradar",
+			"label": "Adradar",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.adradar.pl"
+			],
+			"notes": "Paid/login portal; public summaries expose no coordinates and full details require an account."
+		},
+		{
+			"id": "aktywa-panstwowe",
+			"label": "Aktywa Państwowe",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.gov.pl/web/aktywa-panstwowe/sprzedaz-aktywow-trwalych"
+			],
+			"notes": "Announcement directory, not a listing source with coordinates."
+		},
+		{
+			"id": "amw-nieruchomosci",
+			"label": "AMW Nieruchomości",
+			"kind": "government",
+			"tier": 4,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://amw.com.pl/pl/nieruchomosci/przetargi-nieruchomosci"
+			]
+		},
+		{
+			"id": "arp",
+			"label": "ARP BIP",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://arp.bip.gov.pl"
+			],
+			"notes": "Empty article lists; no usable listings."
+		},
+		{
+			"id": "bankbps",
+			"label": "Bank BPS Nieruchomości",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.bankbps.pl/nieruchomosci-na-sprzedaz"
+			],
+			"notes": "Bailiff auctions without coordinates."
+		},
+		{
+			"id": "egospodarka",
+			"label": "Przetargi eGospodarka",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.przetargi.egospodarka.pl"
+			],
+			"notes": "Public-procurement notices, not property auctions."
+		},
+		{
+			"id": "elicytacje-mf",
+			"label": "eLicytacje MF",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://elicytacje.mf.gov.pl"
+			],
+			"notes": "Incapsula + hCaptcha challenge blocks automated access."
+		},
+		{
+			"id": "enea",
+			"label": "Enea",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.enea.pl"
+			],
+			"notes": "Announcements on operator.enea.pl; no coordinates."
+		},
+		{
+			"id": "gctrader",
+			"label": "GC Trader Przetargi",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://przetargi-gctrader.pl"
+			],
+			"notes": "Shares Otoprzetargi data; region URL and street-address coverage not verified."
+		},
+		{
+			"id": "gddkia",
+			"label": "GDDKiA Sprzedaż i Dzierżawa",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.archiwum.gddkia.gov.pl/pl/64/sprzedaz-i-dzierzawa"
+			],
+			"notes": "Archive host times out."
+		},
+		{
+			"id": "i-przetargi",
+			"label": "i-Przetargi",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://i-przetargi.com.pl"
+			],
+			"notes": "Public-procurement notices, not property auctions."
+		},
+		{
+			"id": "imsig",
+			"label": "IMSIG",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.imsig.pl"
+			],
+			"notes": "Subscription-only access."
+		},
+		{
+			"id": "jsw",
+			"label": "JSW Przetargi",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.jsw.pl/dla-kontrahentow/przetargi/170"
+			],
+			"notes": "PDF tender documents only."
+		},
+		{
+			"id": "kbsbank",
+			"label": "KBS Bank Nieruchomości",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.kbsbank.com.pl/nasz-bank/nieruchomosci-i-wierzytelnosci-na-sprzedaz"
+			],
+			"notes": "Prose plus PDF attachments; no coordinates."
+		},
+		{
+			"id": "komornik",
+			"label": "Licytacje Komornik",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://licytacje.komornik.pl"
+			],
+			"notes": "Search __NUXT_DATA__ exposes street/building/city/province, but source coordinates are 0,0 and the detail item API is WAF-blocked; needs a search-only adapter."
+		},
+		{
+			"id": "komunikaty",
+			"label": "Komunikaty",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.komunikaty.pl"
+			],
+			"notes": "No coordinates on detail pages."
+		},
+		{
+			"id": "kowr",
+			"label": "KOWR",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.gov.pl/web/kowr"
+			],
+			"notes": "Real portal is behind Incapsula; gov.pl pages are PDFs without coordinates."
+		},
+		{
+			"id": "kzn",
+			"label": "KZN BIP",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://kzn.bip.gov.pl"
+			],
+			"notes": "PDF attachments only; no coordinates."
+		},
+		{
+			"id": "licytacjesyndyka",
+			"label": "Licytacje Syndyka",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://licytacjesyndyka.pl"
+			],
+			"notes": "Regional /ogloszenia/{region}/ paths exist; street address and auction fields not yet implemented."
+		},
+		{
+			"id": "licytor",
+			"label": "Licytor",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://licytor.pl"
+			],
+			"notes": "Prices, descriptions and case numbers are paywalled (isAccessibleForFree false); no coordinates."
+		},
+		{
+			"id": "listaprzetargow",
+			"label": "Lista Przetargów",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://listaprzetargow.pl"
+			],
+			"notes": "Coordinates exist in a map iframe, but description and exact address are paywalled."
+		},
+		{
+			"id": "mapalicytacji",
+			"label": "Mapa Licytacji",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://mapalicytacji.pl"
+			],
+			"notes": "No coordinates on detail pages."
+		},
+		{
+			"id": "mapaofert",
+			"label": "Mapa Ofert",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://mapaofert.pl"
+			],
+			"notes": "No coordinates on detail pages."
+		},
+		{
+			"id": "monitor-nieruchomosci",
+			"label": "Monitor Nieruchomości",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://monitor-nieruchomosci.pl"
+			],
+			"notes": "Detail URLs are redirect shells to the source; no description or coordinates."
+		},
+		{
+			"id": "msig",
+			"label": "MSiG Wyszukiwarka",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://wyszukiwarka-msig.ms.gov.pl"
+			],
+			"notes": "No coordinates on detail pages."
+		},
+		{
+			"id": "muir",
+			"label": "MUIR",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.muir.pl"
+			],
+			"notes": "Insolvency registry, not a property-auction listing source."
+		},
+		{
+			"id": "ogloszeniasyndyka",
+			"label": "Ogłoszenia Syndyka",
+			"kind": "auction",
+			"tier": 4,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://ogloszeniasyndyka.pl"
+			]
+		},
+		{
+			"id": "orlen",
+			"label": "Orlen Nieruchomości",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.orlen.pl/pl/dla-biznesu/przetargi-i-dostawy/przetargi/zbycie-nieruchomosci"
+			],
+			"notes": "PDF/ZIP rows; no coordinates."
+		},
+		{
+			"id": "otoprzetargi",
+			"label": "Oto Przetargi",
+			"kind": "auction",
+			"tier": 4,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://www.otoprzetargi.pl/nieruchomosci"
+			]
+		},
+		{
+			"id": "pgg",
+			"label": "PGG BIP",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://bip.pgg.pl/37-przetargi-na-nieruchomosci.html"
+			],
+			"notes": "Single PDF tender only."
+		},
+		{
+			"id": "pkobp-nieruchomosci",
+			"label": "PKO BP Nieruchomości",
+			"kind": "government",
+			"tier": 4,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://nieruchomosci.pkobp.pl"
+			]
+		},
+		{
+			"id": "pkobp-przetargi",
+			"label": "PKO BP Przetargi",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.pkobp.pl/aktualnosci/przetargi-licytacje-ogloszenia"
+			],
+			"notes": "Corporate news feed, not a property listing source."
+		},
+		{
+			"id": "pkp",
+			"label": "PKP Sprzedaż",
+			"kind": "government",
+			"tier": 4,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://www.pkp.pl/pl/sprzedaz"
+			]
+		},
+		{
+			"id": "pkp-cargo",
+			"label": "PKP Cargo",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.pkpcargo.com"
+			],
+			"notes": "Detail prose only; no coordinates."
+		},
+		{
+			"id": "poczta-polska",
+			"label": "Poczta Polska Nieruchomości",
+			"kind": "government",
+			"tier": 4,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://nieruchomosci.poczta-polska.pl"
+			]
+		},
+		{
+			"id": "polish-airports",
+			"label": "Polish Airports",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.polish-airports.com"
+			],
+			"notes": "Corporate site; WAF Request Rejected; no property inventory."
+		},
+		{
+			"id": "port-gdynia",
+			"label": "Port Gdynia",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.port.gdynia.pl"
+			],
+			"notes": "TLS chain incomplete; out of scope (pomorskie)."
+		},
+		{
+			"id": "port-szczecin",
+			"label": "Port Szczecin Przetargi",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://bip.port.szczecin.pl/przetargi-nieruchomosci/47"
+			],
+			"notes": "Szczecin/Świnoujście/Międzywodzie; out of scope (zachodniopomorskie) and no coordinates."
+		},
+		{
+			"id": "portalurzedowy",
+			"label": "Portal Urzędowy",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://portalurzedowy.pl"
+			],
+			"notes": "Nationwide category page only, no voivodeship filter; detail street address unverified."
+		},
+		{
+			"id": "portgdansk",
+			"label": "Port Gdańsk Przetargi",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://przetargi.portgdansk.pl"
+			],
+			"notes": "ZMP Gdańsk lease auctions; out of scope (pomorskie) and no coordinates."
+		},
+		{
+			"id": "ppl",
+			"label": "PPL BIP",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://ppl.bip.gov.pl"
+			],
+			"notes": "BIP has procurement only; airports are in mazowieckie."
+		},
+		{
+			"id": "przetargi-adradar",
+			"label": "Adradar Przetargi",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://przetargi.adradar.pl"
+			],
+			"notes": "Paid/login notice monitor; detail pages expose no coordinates and full data requires an account."
+		},
+		{
+			"id": "pzu",
+			"label": "PZU Nieruchomości",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://nieruchomosci.pzu.pl"
+			],
+			"notes": "Map feed has 8 offers, none in scope; detail is client-rendered without coordinates."
+		},
+		{
+			"id": "radarnieruchomosci",
+			"label": "Radar Nieruchomości",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://radarnieruchomosci.com"
+			],
+			"notes": "No coordinates; full access requires the paid Inwestor plan."
+		},
+		{
+			"id": "smlokum",
+			"label": "SMLOKUM",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.smlokum.pl"
+			],
+			"notes": "Sosnowiec listings have descriptions but no coordinates."
+		},
+		{
+			"id": "srodmiescie-lodz",
+			"label": "Śródmieście Łódź",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.srodmiescie.lodz.pl"
+			],
+			"notes": "Łódź cooperative; out of scope (łódzkie)."
+		},
+		{
+			"id": "stbs",
+			"label": "STBS",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.stbs.pl"
+			],
+			"notes": "Szczecińskie TBS; out of scope (zachodniopomorskie)."
+		},
+		{
+			"id": "syndyk-licytacje",
+			"label": "Syndyk Licytacje",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://syndyk-licytacje.pl"
+			],
+			"notes": "No coordinates on detail pages."
+		},
+		{
+			"id": "syndyk-org",
+			"label": "Syndyk.org",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://syndyk.org/sprzedaz"
+			],
+			"notes": "No coordinates on detail pages."
+		},
+		{
+			"id": "syndykaukcje",
+			"label": "Syndyk Aukcje",
+			"kind": "auction",
+			"tier": 4,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://syndykaukcje.pl"
+			]
+		},
+		{
+			"id": "syndyksprzeda",
+			"label": "Syndyk Sprzeda",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.syndyksprzeda.com"
+			],
+			"notes": "No coordinates on detail pages."
+		},
+		{
+			"id": "syndyksprzedaje",
+			"label": "Syndyk Sprzedaje",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://syndyksprzedaje.pl"
+			],
+			"notes": "No coordinates on detail pages."
+		},
+		{
+			"id": "tauron",
+			"label": "Tauron Nieruchomości",
+			"kind": "government",
+			"tier": 4,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://nieruchomosci.tauron.pl"
+			]
+		},
+		{
+			"id": "totalizator",
+			"label": "Totalizator Sportowy",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://www.totalizator.pl/wspolpraca/postepowania-przetargowe"
+			],
+			"notes": "Invalid TLS chain."
+		},
+		{
+			"id": "tu-zamieszkam",
+			"label": "Tu Zamieszkam",
+			"kind": "auction",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://tu-zamieszkam.pl/przetargi"
+			],
+			"notes": "No coordinates on detail pages."
+		},
+		{
+			"id": "zgm-gliwice",
+			"label": "ZGM Gliwice",
+			"kind": "government",
+			"tier": 4,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://zgm-gliwice.pl/wykaz-lokali-przeznaczonych-do-sprzedazy-w-przetargu"
+			],
+			"notes": "Official wykaz records are PDF-only; HTML pages lack coordinates."
+		},
+		{
+			"id": "alertyprzetargowe",
+			"label": "Alerty Przetargowe",
+			"kind": "aggregator",
+			"tier": 5,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://alertyprzetargowe.pl"
+			]
+		},
+		{
+			"id": "amw-sklepy",
+			"label": "AMW Sklepy",
+			"kind": "non-property",
+			"tier": 5,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://amw.com.pl/pl/amw/nasze-sklepy"
+			],
+			"notes": "Retail shops; outside the property scope."
+		},
+		{
+			"id": "amw-uzbrojenie",
+			"label": "AMW Uzbrojenie i Sprzęt",
+			"kind": "non-property",
+			"tier": 5,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://amw.com.pl/pl/uzbrojenie-i-sprzet-wojskowy/uzbrojenie/sprzedaz-przetargowa",
+				"https://amw.com.pl/pl/uzbrojenie-i-sprzet-wojskowy/sprzet-wojskowy-i-wyposazenie/sprzedaz-przetargowa-1",
+				"https://amw.com.pl/pl/uzbrojenie-i-sprzet-wojskowy/sprzet-wojskowy-i-wyposazenie/sprzedaz-bezprzetargowa"
+			],
+			"notes": "Military equipment sales; outside the property scope."
+		},
+		{
+			"id": "atlasprzetargow",
+			"label": "Atlas Przetargów",
+			"kind": "aggregator",
+			"tier": 5,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://atlasprzetargow.pl"
+			],
+			"notes": "BZP/TED only; /nieruchomosci returns 404; no property records."
+		},
+		{
+			"id": "monitorurzedowy",
+			"label": "Monitor Urzędowy",
+			"kind": "aggregator",
+			"tier": 5,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://monitorurzedowy.pl"
+			],
+			"notes": "Subscription portal; anonymous search POST returns HTTP 500."
+		},
+		{
+			"id": "przetargpro",
+			"label": "Przetarg Pro",
+			"kind": "aggregator",
+			"tier": 5,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://przetargpro.pl"
+			],
+			"notes": "BZP/TED SaaS behind login/paid plans."
+		},
+		{
+			"id": "tenderiq",
+			"label": "TenderIQ",
+			"kind": "aggregator",
+			"tier": 5,
+			"status": "blocked",
+			"enabled": false,
+			"urls": [
+				"https://tenderiq.pl"
+			],
+			"notes": "Paid plans; some notices lack descriptions and coordinates."
+		},
+		{
+			"id": "airbnb",
+			"label": "Airbnb",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://www.airbnb.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "alohacamp",
+			"label": "AlohaCamp",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://alohacamp.com/pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "booking",
+			"label": "Booking.com",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://www.booking.com"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "bookinghost",
+			"label": "BookingHost",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://www.bookinghost.com/pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "cypryda",
+			"label": "Cypryda",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://cypryda.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "e-turysta",
+			"label": "e-Turysta",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://e-turysta.pl/domki-letniskowe"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "fairyflats",
+			"label": "Fairy Flats",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://fairyflats.com"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "hometogo",
+			"label": "HomeToGo",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://www.hometogo.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "i-noclegi",
+			"label": "i-Noclegi",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://www.i-noclegi.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "jumpinhere",
+			"label": "Jump In Here",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://jumpinhere.com.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "mamapartament",
+			"label": "Mama Apartament",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://mamapartament.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "millionhotels",
+			"label": "Million Hotels",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://millionhotels.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "noclegi",
+			"label": "Noclegi.pl",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://www.noclegi.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "noclegi-com",
+			"label": "Noclegi.com",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://www.noclegi.com/polska/domki"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "noclegi-online",
+			"label": "Noclegi-Online",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://www.noclegi-online.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "noclegowo",
+			"label": "Noclegowo",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://www.noclegowo.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "nocowanie",
+			"label": "Nocowanie",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://www.nocowanie.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "nocujmy",
+			"label": "Nocujmy",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://www.nocujmy.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "otonoclegi",
+			"label": "Otonoclegi",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://otonoclegi.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "polskiewczasy",
+			"label": "Polskie Wczasy",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://polskiewczasy.com.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "renters",
+			"label": "Renters",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://renters.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "rentplanet",
+			"label": "RentPlanet",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://www.rentplanet.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "rentujemy",
+			"label": "Rentujemy",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://rentujemy.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "restful",
+			"label": "Restful",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://restful.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "slowhop",
+			"label": "Slowhop",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://slowhop.com"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "sunandsnow",
+			"label": "Sun & Snow",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://sunandsnow.pl"
+			],
+			"notes": "Short-term rentals excluded for now."
+		},
+		{
+			"id": "vrbo",
+			"label": "Vrbo",
+			"kind": "short-term",
+			"tier": 6,
+			"status": "excluded",
+			"enabled": false,
+			"urls": [
+				"https://www.vrbo.com"
+			],
+			"notes": "Short-term rentals excluded for now."
+		}
 	]
 }

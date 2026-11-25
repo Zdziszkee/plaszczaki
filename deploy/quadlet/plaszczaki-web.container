@@ -1,7 +1,5 @@
 [Unit]
 Description=plaszczaki web
-Wants=network-online.target
-After=network-online.target
 
 [Container]
 Image=localhost/plaszczaki-web:0.1.0

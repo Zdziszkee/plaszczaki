@@ -2,7 +2,7 @@
 
 ## Layout
 - `web/` — TanStack Start app (routes, components, db, auth).
-- `scraper/` — Python sidecar; the source list lives in `scraper/config/sources.json` (`{ "urls": [...] }`), loaded and validated by `scraper/src/plaszczaki_scraper/config.py`.
+- `scraper/` — Python sidecar; the portal inventory is `scraper/config/sources.json`, adapter settings are `scraper/config/adapters.json`, and the geographic scope is `scraper/config/regions.json`. It writes listings directly to `data/plaszczaki.db`; the schema is owned by Drizzle.
 - `deploy/` — Containerfiles and Podman quadlets; install them to `~/.config/containers/systemd`.
 - `data/` — runtime only (SQLite DB, scraper output); gitignored.
 
@@ -27,9 +27,9 @@
 
 ## Verify before done
 - Run `bun run check` (Biome lint + format) and fix issues.
-- Run `bun run typecheck` and `bun run py:check` when the change touches `web/` or `scraper/`.
+- Run `bun run typecheck` and `bun run py:check` when the change touches `web/` or `scraper/`; run `bun run py:test` for scraper changes.
 - Build with `bun --bun run build` when the change affects routing or the server.
-- There is no test runner configured in `package.json`; do not claim tests passed.
+- There is no JavaScript test runner configured; Python tests run with `bun run py:test`. Do not claim unrun tests passed.
 - Do not commit unless explicitly asked.
 
 <!-- intent-skills:start -->

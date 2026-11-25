@@ -1,25 +1,26 @@
 [Unit]
 Description=plaszczaki scraper
-Wants=network-online.target
-After=network-online.target
 
 [Container]
 Image=localhost/plaszczaki-scraper:0.1.0
 ContainerName=plaszczaki-scraper
-Volume=%h/Projects/plaszczaki/data/out:/data/out
+Volume=%h/Projects/plaszczaki/data:/data
 EnvironmentFile=%h/.config/plaszczaki/scraper.env
 Environment=HOME=/tmp
 Environment=TZ=Europe/Warsaw
+Environment=PYTHONUNBUFFERED=1
+Environment=DATABASE_URL=/data/plaszczaki.db
+Environment=PLASZCZAKI_CACHE_DIR=/data/cache
 ReadOnly=true
 Tmpfs=/tmp:size=512m
 DropCapability=all
 NoNewPrivileges=true
 PidsLimit=256
-Memory=1g
+Memory=2g
 Network=default
 
 [Service]
-TimeoutStartSec=600
+TimeoutStartSec=7200
 Restart=no
 
 [Install]

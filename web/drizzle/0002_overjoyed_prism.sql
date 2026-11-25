@@ -1,0 +1,1 @@
+CREATE INDEX `listing_bbox_idx` ON `listing` (`status`,`lat`,`lng`);

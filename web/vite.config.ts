@@ -12,7 +12,17 @@ const config = defineConfig({
 		devtools(),
 		tailwindcss(),
 		tanstackStart(),
-		nitro({ preset: "bun" }),
+		nitro({
+			preset: "bun",
+			publicAssets: [
+				{
+					dir: "node_modules/.nitro/vite/services/ssr/assets",
+					baseURL: "/assets",
+					maxAge: 60 * 60 * 24 * 365,
+					ignore: ["**/*.js", "**/*.mjs", "**/*.map"],
+				},
+			],
+		}),
 		viteReact(),
 	],
 });

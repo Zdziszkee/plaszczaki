@@ -12,6 +12,8 @@
     "check": "biome check",
     "format": "biome format --write",
     "lint": "biome lint",
+    "data:planned-rail": "bun run --cwd web data:planned-rail",
+    "data:kolej-plus": "bun run --cwd web data:kolej-plus",
     "db:generate": "bun run --cwd web db:generate",
     "db:migrate": "bun run --cwd web db:migrate",
     "db:push": "bun run --cwd web db:push",
@@ -21,13 +23,16 @@
     "py:lint": "uv run --directory scraper ruff check .",
     "py:format": "uv run --directory scraper ruff format .",
     "py:typecheck": "uv run --directory scraper ty check",
+    "py:test": "uv run --directory scraper pytest",
     "py:check": "bun run py:lint && uv run --directory scraper ruff format --check && bun run py:typecheck",
     "deploy:up": "bash deploy/plaszczaki.sh up",
     "deploy:build": "bash deploy/plaszczaki.sh build",
     "deploy:down": "bash deploy/plaszczaki.sh down",
     "deploy:restart": "bash deploy/plaszczaki.sh restart",
+    "deploy:restart-all": "bash deploy/plaszczaki.sh restart-all",
     "deploy:status": "bash deploy/plaszczaki.sh status",
-    "deploy:logs": "bash deploy/plaszczaki.sh logs"
+    "deploy:logs": "bash deploy/plaszczaki.sh logs",
+    "deploy:scraper-logs": "bash deploy/plaszczaki.sh logs scraper"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.5"

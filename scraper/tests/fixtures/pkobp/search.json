@@ -1,0 +1,153 @@
+{
+ "count": 1,
+ "next": null,
+ "previous": null,
+ "results": [
+  {
+   "main_photo": {
+    "name": "hala1cms",
+    "alt_desc": "",
+    "url": "/api/public/52d64550-9da7-451a-8d04-5a6fdd82ca52.jpg"
+   },
+   "page_link": "nieruchomosci.pkobp.pl/oferty-nieruchomosci-pko-banku-polskiego/jaroszowiec-ul-kolejowa-2c",
+   "property_type": "budynki użytkowo-biurowe",
+   "is_active": true,
+   "uuid": "e1a19b4e-1e67-4446-8d8f-fbbf6ec67f47",
+   "created": "2026-09-11T15:49:42.298552+02:00",
+   "transaction_type": "sale",
+   "voivodeship": "malopolskie",
+   "price": 1839000.0,
+   "area": 1918.41,
+   "leasable_area": null,
+   "offer_date_created": "2026-09-11T15:42:57.459000+02:00",
+   "city": "Jaroszowiec",
+   "leaseback": false,
+   "is_archived": false,
+   "street": "Kolejowa",
+   "building_number": "2c",
+   "apartment_number": null,
+   "previous_price": 2102000.0,
+   "offer_deadline": "2027-01-12T15:00:00+01:00",
+   "lat": 50.3339491,
+   "lng": 19.6020247,
+   "label": null,
+   "href": "",
+   "content": "",
+   "aria_label": "",
+   "link_label": "",
+   "link_external": null,
+   "open_in_new": false,
+   "is_atm": false,
+   "page": 10491,
+   "manager": 6,
+   "picture": null,
+   "link_internal": null,
+   "photos": [
+    26163,
+    26164,
+    26162
+   ]
+  }
+ ],
+ "aggregates": {
+  "total_count": 57,
+  "voivodeship_counts": [
+   {
+    "voivodeship": "dolnoslaskie",
+    "count": 8
+   },
+   {
+    "voivodeship": "kujawsko_pomorskie",
+    "count": 3
+   },
+   {
+    "voivodeship": "lodzkie",
+    "count": 7
+   },
+   {
+    "voivodeship": "lubelskie",
+    "count": 1
+   },
+   {
+    "voivodeship": "lubuskie",
+    "count": 1
+   },
+   {
+    "voivodeship": "malopolskie",
+    "count": 7
+   },
+   {
+    "voivodeship": "mazowieckie",
+    "count": 2
+   },
+   {
+    "voivodeship": "podkarpackie",
+    "count": 6
+   },
+   {
+    "voivodeship": "podlaskie",
+    "count": 1
+   },
+   {
+    "voivodeship": "pomorskie",
+    "count": 3
+   },
+   {
+    "voivodeship": "slaskie",
+    "count": 3
+   },
+   {
+    "voivodeship": "swietokrzyskie",
+    "count": 3
+   },
+   {
+    "voivodeship": "warminsko_mazurskie",
+    "count": 5
+   },
+   {
+    "voivodeship": "wielkopolskie",
+    "count": 3
+   },
+   {
+    "voivodeship": "zachodniopomorskie",
+    "count": 4
+   }
+  ],
+  "transaction_type_counts": [
+   {
+    "transaction_type": "rent",
+    "count": 35
+   },
+   {
+    "transaction_type": "sale",
+    "count": 22
+   }
+  ],
+  "property_type_counts": [
+   {
+    "property_type__name": "budynki użytkowo-biurowe",
+    "count": 10
+   },
+   {
+    "property_type__name": "garaże",
+    "count": 2
+   },
+   {
+    "property_type__name": "grunty",
+    "count": 1
+   },
+   {
+    "property_type__name": "lokale mieszkalne",
+    "count": 4
+   },
+   {
+    "property_type__name": "lokale użytkowe",
+    "count": 10
+   },
+   {
+    "property_type__name": "lokale użytkowo-biurowe",
+    "count": 30
+   }
+  ]
+ }
+}
