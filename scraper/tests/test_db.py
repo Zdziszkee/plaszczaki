@@ -185,3 +185,64 @@ def test_canonical_keys_are_set_and_backfilled(tmp_path: Path) -> None:
         with db.conn:
             db.conn.execute("UPDATE listing SET canonical_key = NULL")
         assert db.backfill_canonical_keys() == 2
+
+
+def test_update_listing_geo_sets_canonical_key(tmp_path: Path) -> None:
+    with _database(tmp_path) as db:
+        db.upsert_source(
+            source_id="otodom",
+            label="Otodom",
+            homepage_url="https://www.otodom.pl",
+            adapter="otodom",
+        )
+        no_geo = _listing()
+        no_geo.lat = None
+        no_geo.lng = None
+        db.upsert_listing(no_geo)
+
+        row = db.conn.execute("SELECT canonical_key FROM listing").fetchone()
+        assert row is not None
+        before = row["canonical_key"]
+
+        assert db.update_listing_geo(
+            source_id="otodom",
+            external_id="123",
+            lat=50.1,
+            lng=19.9,
+            geo_source="geocoded_address",
+            canonical_key="geo:50.1000:19.9000:50:2:sale:flat",
+        )
+
+        row = db.conn.execute("SELECT canonical_key FROM listing").fetchone()
+        assert row is not None
+        assert row["canonical_key"] == "geo:50.1000:19.9000:50:2:sale:flat"
+        assert row["canonical_key"] != before
+
+
+def test_update_listing_geo_keeps_canonical_key_by_default(tmp_path: Path) -> None:
+    with _database(tmp_path) as db:
+        db.upsert_source(
+            source_id="otodom",
+            label="Otodom",
+            homepage_url="https://www.otodom.pl",
+            adapter="otodom",
+        )
+        no_geo = _listing()
+        no_geo.lat = None
+        no_geo.lng = None
+        db.upsert_listing(no_geo)
+        row = db.conn.execute("SELECT canonical_key FROM listing").fetchone()
+        assert row is not None
+        before = row["canonical_key"]
+
+        assert db.update_listing_geo(
+            source_id="otodom",
+            external_id="123",
+            lat=50.1,
+            lng=19.9,
+            geo_source="geocoded_address",
+        )
+
+        row = db.conn.execute("SELECT canonical_key FROM listing").fetchone()
+        assert row is not None
+        assert row["canonical_key"] == before

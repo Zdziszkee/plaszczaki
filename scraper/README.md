@@ -6,11 +6,11 @@ the SQLite database also used by the web app. The schema is owned by Drizzle in
 `web/src/db/schema.ts`; the scraper only verifies and writes rows.
 
 The scope is **małopolskie + śląskie** by default. The catalog in
-`config/sources.json` lists every known portal (160 URLs across 154 sources) with
+`config/sources.json` lists every known portal (161 URLs across 154 sources) with
 its tier, kind and implementation status. Every source now has a decision:
 
-- `implemented` — adapter exists (see `list-sources`; `gdom` is implemented but
-  disabled because its robots.txt asks for a 20-minute crawl delay).
+- `implemented` — adapter exists (see `list-sources`; `gdom` runs as a slow lane
+  inside `watch` because its robots.txt asks for a 20-minute crawl delay).
 - `planned` — a usable location signal exists (coordinates or a street address
   for the geocoder) but the adapter is not written yet.
 - `blocked` — no usable location, paywall/login, WAF/captcha, out-of-scope
@@ -60,9 +60,7 @@ uv run python -m plaszczaki_scraper run --source otodom --newest
 uv run python -m plaszczaki_scraper watch --once
 uv run python -m plaszczaki_scraper watch --interval 60
 uv run python -m plaszczaki_scraper geocode --limit 100
-uv run python -m plaszczaki_scraper coverage
-uv run python -m plaszczaki_scraper coverage --missing
-uv run python -m plaszczaki_scraper coverage --region slaskie --offer-type rent --cells
+uv run python -m plaszczaki_scraper geocode --limit 100 --enqueue-existing --requeue-rejected
 uv run python -m plaszczaki_scraper list-sources
 uv run python -m plaszczaki_scraper probe --source otodom
 uv run python -m plaszczaki_scraper probe --tier 1
@@ -74,8 +72,9 @@ uv run python -m plaszczaki_scraper llm check
 uv run python -m plaszczaki_scraper verify-schema
 ```
 
-`watch` polls only sources marked `incremental` in `config/adapters.json`, at
-their `poll_minutes` cadence. Each cycle reads the newest pages
+`watch` polls only sources whose `incremental` flag is set in
+`config/sources.json`, at their `refresh_minutes` cadence from the same file. Each
+cycle reads the newest pages
 (`incremental_pages`, default 2), skips listings already in the database, and
 hydrates only new detail pages. `watch --once` is suitable for a systemd timer.
 `--offer-type rent` / `--offer-type sale` and `--region slaskie` /
@@ -83,19 +82,29 @@ hydrates only new detail pages. `watch --once` is suitable for a systemd timer.
 the filters, so a rent pass never masks a sale pass and a śląskie pass never
 masks a małopolskie one.
 
-`coverage` compares `config/coverage.json` (the declared matrix), the queries an
-adapter actually emits and the rows stored in SQLite. The default view is one
-line per source and voivodeship with `declared cells / stored rows` per
-transaction; `!` marks a group with empty cells or a missing query, `+` marks
-cells the adapter emits without declaring. `--cells` expands to property types,
-`--missing` prints only the work queue, and `--strict` exits 2 when any reported
-cell needs work. Run it after a backfill to see which site/region/transaction
-combination is still empty.
-
 `geocode` drains the street-level geocoding queue in
-`data/cache/geocode.db` with Nominatim at 1 req/s. Only house/street results are
-accepted; city-only addresses stay unlocated. Geocoding data ©
-OpenStreetMap contributors.
+`data/cache/geocode.db` with Nominatim at 1 req/s. Queries are structured
+(`street`, `city`, `postcode`, `state`) and fall back from a house number to the
+street when the building cannot be resolved; the building number comes from
+`street` or from `address_text`. Jobs for auctions are drained first, ordered by
+`auction_date`. `--requeue-rejected` re-opens the jobs an older, less precise
+matcher rejected. Only house/street results are accepted; city-only addresses
+stay unlocated. Geocoding data © OpenStreetMap contributors.
+
+`gdom` runs inside `watch`, not as a separate service or quadlet: it is configured
+with `crawl_delay_mode: "defer"` and `hydrate_details: false`. Its robots.txt asks
+for a 20-minute crawl delay, so the client records the last request time per host
+and a pass makes at most one request, stopping with a `deferred` stat when the
+delay has not elapsed. The adapter rotates one category per pass/day, and
+`refresh_minutes: 1440` in `config/sources.json` spreads the fourteen categories
+over two weeks. Detail hydration is skipped because search cards already carry
+coordinates and the address.
+
+PDF-backed sources use `pdf.py`: attachments are fetched through the same
+polite HTTP client, cached by SHA-256 under `data/cache/pdf/`, and parsed with
+`pdfplumber` into text and tables. The first adapter on this lane is
+`zgm-gliwice`; documents without a text layer are reported as `needs_ocr`
+instead of being guessed.
 
 `run-all` runs every enabled adapter, optionally filtered with `--tier`, and keeps
 going when one source fails. `probe` fetches one page per source and reports HTTP
@@ -123,20 +132,21 @@ query, and `--dry-run` prints records without writing.
 
 ## Configuration
 
-- `config/sources.json` — the complete source catalog: id, label, kind, tier,
-  status, enabled flag and one or more inventory URLs.
-- `config/adapters.json` — implemented adapters, RPS, notes, incremental mode,
-  newest-sort parameter, incremental page count and polling cadence.
-- `config/coverage.json` — the declared scrape matrix per source: regions and
-  offer types with their property types. `coverage` and the test suite fail when
-  an adapter emits a declared cell for one voivodeship but not the other, or
-  when an adapter is added without a coverage entry.
+- `config/sources.json` — the single config file: `defaults.rps` (rate fallback)
+  plus one entry per source. Catalog fields are `id`, `label`, `kind`, `tier`,
+  `status`, `enabled`, `urls`, `notes`, `last_verified`, `recheck_days` and
+  `refresh_minutes`; `implemented` entries add their adapter settings in the same
+  object: `adapter`, `rps`, `incremental`, `incremental_pages`, `newest_param`,
+  `newest_value`, `hydrate_details`, `fetch_mode` (`http`, or `stealth` for
+  Scrapling's browser engine) and `crawl_delay_mode` (`sleep`, or `defer` to stop
+  instead of sleeping). Parked sources keep only the catalog fields.
 - `config/regions.json` — Małopolskie/Śląskie, TERYT codes, bboxes and place lists.
 
-`PLASZCZAKI_CONFIG_DIR` overrides the config directory. `DATABASE_URL` points at
-the SQLite file (defaults to `../data/plaszczaki.db` relative to the repo root;
-the container uses `/data/plaszczaki.db`). `PLASZCZAKI_CACHE_DIR` stores robots
-cache and reports (default `data/cache`).
+`PLASZCZAKI_CONFIG_DIR` overrides the config directory and
+`PLASZCZAKI_SOURCES_CONFIG` points directly at a `sources.json` file.
+`DATABASE_URL` points at the SQLite file (defaults to `../data/plaszczaki.db`
+relative to the repo root; the container uses `/data/plaszczaki.db`).
+`PLASZCZAKI_CACHE_DIR` stores robots cache and reports (default `data/cache`).
 
 ## Database
 
@@ -178,16 +188,17 @@ podman build -t localhost/plaszczaki-scraper:0.1.0 -f ../deploy/containers/scrap
 podman run --rm -v "$PWD/../data:/data" localhost/plaszczaki-scraper:0.1.0
 ```
 
-The container defaults to `run --source otodom`. Override the command for a
-backfill or a dry run.
+The container defaults to `watch --once --limit 200`, which is what the timer
+runs. Override the command for a backfill or a dry run.
 
-Scheduled runs are defined outside the repository. The source units live in
-`../deploy/quadlet/` and are installed to:
+Scheduled runs are defined in `../deploy/quadlet/` and installed to:
 
 - `~/.config/containers/systemd/plaszczaki-scraper.container`
 - `~/.config/systemd/user/plaszczaki-scraper.timer`
 - `~/.config/containers/systemd/plaszczaki-review.container`
 - `~/.config/systemd/user/plaszczaki-review.timer`
 
-The timer is installed but disabled until the first production run is validated.
-The scraper binds `data/` read-write so it can write the database and robots cache.
+`bun run deploy` copies and enables both timers: the scraper runs `watch --once`
+every five minutes and `plaszczaki-review.timer` runs the monthly parked-source
+review. There is no gdom unit; gdom is a slow lane inside `watch`. The scraper
+container binds `data/` read-write so it can write the database and robots cache.

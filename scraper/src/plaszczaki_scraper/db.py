@@ -412,15 +412,17 @@ class Database:
         lat: float,
         lng: float,
         geo_source: str,
+        canonical_key: str | None = None,
     ) -> bool:
         with self.conn:
             cursor = self.conn.execute(
                 """
                 UPDATE listing
-                SET lat = ?, lng = ?, geo_source = ?
+                SET lat = ?, lng = ?, geo_source = ?,
+                    canonical_key = coalesce(?, canonical_key)
                 WHERE source_id = ? AND external_id = ?
                 """,
-                (lat, lng, geo_source, source_id, external_id),
+                (lat, lng, geo_source, canonical_key, source_id, external_id),
             )
         return cursor.rowcount > 0
 

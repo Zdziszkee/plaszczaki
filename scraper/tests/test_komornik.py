@@ -125,7 +125,7 @@ def test_parse_search_fixture() -> None:
     assert house.area_m2 == 125.0
     assert house.city == "Kraków"
     assert house.voivodeship == "malopolskie"
-    assert house.street == "Kurozwęckiego"
+    assert house.street == "Kurozwęckiego 14"
     assert house.address_text == "Kurozwęckiego 14, 30-198"
     assert house.extra["postal_code"] == "30-198"
     assert house.auction_date == int(
@@ -143,7 +143,7 @@ def test_flat_number_and_postal_code_are_decoded() -> None:
     assert flat.property_type == "flat"
     assert flat.price_pln == 393750
     assert flat.area_m2 is None
-    assert flat.street == "Wysokie"
+    assert flat.street == "Wysokie 1/63"
     assert flat.address_text == "Wysokie 1/63, 31-818"
     assert flat.extra["postal_code"] == "31-818"
     assert flat.auction_date == int(
@@ -161,6 +161,32 @@ def test_plot_area_is_parsed_from_title() -> None:
     assert plot.land_area_m2 == 1448.0
     assert plot.city == "Łapanów"
     assert plot.extra["postal_code"] == "32-740"
+
+
+def test_street_includes_building_and_flat_number() -> None:
+    house, flat, _plot = _search_page().items
+
+    assert house.street == "Kurozwęckiego 14"
+    assert flat.street == "Wysokie 1/63"
+    # The human readable address keeps the postal code.
+    assert house.address_text == "Kurozwęckiego 14, 30-198"
+
+
+def test_street_without_a_building_number_stays_bare() -> None:
+    listing = _adapter()._summary(
+        {
+            "id": 3,
+            "title": "lokal mieszkalny",
+            "province": "malopolskie",
+            "address": {"province": "malopolskie", "city": "Brzesko", "street": "Partyzantów"},
+        },
+        _query(),
+        {},
+    )
+
+    assert listing is not None
+    assert listing.street == "Partyzantów"
+    assert listing.address_text == "Partyzantów"
 
 
 def test_zero_coordinates_are_never_emitted() -> None:

@@ -1,4 +1,7 @@
 {
+	"defaults": {
+		"rps": 1.0
+	},
 	"sources": [
 		{
 			"id": "120portali",
@@ -37,7 +40,18 @@
 			"enabled": true,
 			"urls": [
 				"https://adresowo.pl"
-			]
+			],
+			"notes": "Server-rendered cards; detail schema.org Place geo + labelled parameter list. Path pagination (_l2, _l3), region aliases fma/fsl.",
+			"refresh_minutes": 30,
+			"adapter": "adresowo",
+			"rps": 0.5,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "allegro",
@@ -59,11 +73,22 @@
 			"kind": "portal",
 			"tier": 1,
 			"status": "implemented",
-			"enabled": false,
+			"enabled": true,
 			"urls": [
 				"https://allegrolokalnie.pl/oferty/nieruchomosci"
 			],
-			"notes": "Adapter implemented, but the live site currently returns HTTP 429; disabled until it recovers."
+			"notes": "City paths only; street from structured Lokalizacja block; no coordinates, geocoder required. The 429 throttle cleared in November 2026 (HTTP 200).",
+			"last_verified": "2026-11-25",
+			"refresh_minutes": 60,
+			"adapter": "allegrolokalnie",
+			"rps": 0.2,
+			"incremental": true,
+			"incremental_pages": 1,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "allget",
@@ -116,7 +141,18 @@
 			"urls": [
 				"https://www.domiporta.pl",
 				"https://www.domiporta.pl/nieruchomosci-premium"
-			]
+			],
+			"notes": "Schema.org JSON-LD for regular and premium listings; detail pages expose geo coordinates and full descriptions.",
+			"refresh_minutes": 10,
+			"adapter": "domiporta",
+			"rps": 1.0,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": "SortingOrderDirection",
+			"newest_value": "InsertionDateDescending",
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "domy",
@@ -127,7 +163,18 @@
 			"enabled": true,
 			"urls": [
 				"https://domy.pl"
-			]
+			],
+			"notes": "Server-rendered HTML; detail pages expose coordinates and full descriptions.",
+			"refresh_minutes": 30,
+			"adapter": "domy",
+			"rps": 1.0,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "edilo",
@@ -152,7 +199,18 @@
 			"enabled": true,
 			"urls": [
 				"https://flats.pl"
-			]
+			],
+			"notes": "Embedded Next.js RSC listing objects; detail lat/lng + description.",
+			"refresh_minutes": 30,
+			"adapter": "flats",
+			"rps": 0.5,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "gdom",
@@ -160,11 +218,22 @@
 			"kind": "portal",
 			"tier": 1,
 			"status": "implemented",
-			"enabled": false,
+			"enabled": true,
 			"urls": [
 				"https://gdom.pl"
 			],
-			"notes": "Adapter complete, but robots.txt Crawl-delay is 1200 (20 min/request); intentionally disabled."
+			"notes": "Slow lane inside watch: robots.txt Crawl-delay is 1200 (20 min/request), so a pass stops after one rotated category page and defers when the delay has not elapsed. Search cards carry coordinates and the address, so detail hydration is disabled.",
+			"last_verified": "2026-11-25",
+			"refresh_minutes": 1440,
+			"adapter": "gdom",
+			"rps": 0.1,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": false,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "defer"
 		},
 		{
 			"id": "gethome",
@@ -175,7 +244,18 @@
 			"enabled": true,
 			"urls": [
 				"https://gethome.pl"
-			]
+			],
+			"notes": "window.__INITIAL_STATE__ JSON on search+detail; coordinates and descriptions present. robots.txt caps pagination at ?page=6.",
+			"refresh_minutes": 30,
+			"adapter": "gethome",
+			"rps": 0.5,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "gratka",
@@ -187,7 +267,18 @@
 			"urls": [
 				"https://gratka.pl",
 				"https://gratka.pl/nieruchomosci"
-			]
+			],
+			"notes": "Nuxt __NUXT_DATA__; detail pages expose coordinates + description; robots allows only ?page=2..10.",
+			"refresh_minutes": 10,
+			"adapter": "gratka",
+			"rps": 1.0,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "homeportal",
@@ -199,7 +290,18 @@
 			"urls": [
 				"https://homeportal.pl",
 				"https://homeportal.pl/wynajem/mieszkania"
-			]
+			],
+			"notes": "Server-rendered listings with RealEstateListing JSON-LD; geo coordinates on detail pages.",
+			"refresh_minutes": 30,
+			"adapter": "homeportal",
+			"rps": 1.0,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "kavalerka",
@@ -236,7 +338,18 @@
 			"enabled": true,
 			"urls": [
 				"https://www.kupbezposrednio.pl"
-			]
+			],
+			"notes": "Next.js flight payload exposes coordinates and descriptions; detail pages confirm them via JSON-LD.",
+			"refresh_minutes": 30,
+			"adapter": "kupbezposrednio",
+			"rps": 1.0,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "landomo",
@@ -275,7 +388,18 @@
 			"enabled": true,
 			"urls": [
 				"https://www.morizon.pl"
-			]
+			],
+			"notes": "Same Nuxt platform as Gratka; detail pages expose coordinates + description; robots allows only ?page=2..10.",
+			"refresh_minutes": 10,
+			"adapter": "morizon",
+			"rps": 1.0,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "nieruchomosci",
@@ -300,7 +424,18 @@
 			"enabled": true,
 			"urls": [
 				"https://www.nieruchomosci-online.pl"
-			]
+			],
+			"notes": "Schema.org JSON-LD; detail pages expose geo coordinates and full descriptions.",
+			"refresh_minutes": 10,
+			"adapter": "nieruchomosci-online",
+			"rps": 1.0,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "nieruchomosci-pl",
@@ -324,7 +459,18 @@
 			"enabled": true,
 			"urls": [
 				"https://nieruchomosciowi.pl"
-			]
+			],
+			"notes": "Public /api/v1 JSON API (coords + description); 60 req/min, nationwide feed.",
+			"refresh_minutes": 30,
+			"adapter": "nieruchomosciowi",
+			"rps": 0.9,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "nportal",
@@ -335,7 +481,18 @@
 			"enabled": true,
 			"urls": [
 				"https://nportal.pl"
-			]
+			],
+			"notes": "Legacy server-rendered frontend; queries use HTTP because the TLS certificate does not match the hostname.",
+			"refresh_minutes": 30,
+			"adapter": "nportal",
+			"rps": 0.5,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "oferty-net",
@@ -346,7 +503,18 @@
 			"enabled": true,
 			"urls": [
 				"https://www.oferty.net"
-			]
+			],
+			"notes": "Region paths plus data-lat/data-lng on detail pages.",
+			"refresh_minutes": 30,
+			"adapter": "oferty-net",
+			"rps": 1.0,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "okolica",
@@ -357,7 +525,18 @@
 			"enabled": true,
 			"urls": [
 				"https://www.okolica.pl"
-			]
+			],
+			"notes": "City-level search paths only (no voivodeship URL); detail has data-lat/data-lng and full description. /pokoj/ is disallowed by robots.",
+			"refresh_minutes": 30,
+			"adapter": "okolica",
+			"rps": 0.5,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "olx",
@@ -368,7 +547,18 @@
 			"enabled": true,
 			"urls": [
 				"https://www.olx.pl/nieruchomosci/"
-			]
+			],
+			"notes": "Server-rendered __PRERENDERED_STATE__; detail pages expose map coordinates and descriptions; 13 categories per region.",
+			"refresh_minutes": 10,
+			"adapter": "olx",
+			"rps": 0.5,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": "search[order]",
+			"newest_value": "created_at:desc",
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "opolskie-nieruchomosci",
@@ -394,7 +584,17 @@
 			"urls": [
 				"https://www.otodom.pl"
 			],
-			"notes": "Structured __NEXT_DATA__; detail pages expose coordinates."
+			"notes": "Structured __NEXT_DATA__; detail pages expose coordinates.",
+			"refresh_minutes": 10,
+			"adapter": "otodom",
+			"rps": 1.0,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "rentola",
@@ -405,7 +605,18 @@
 			"enabled": true,
 			"urls": [
 				"https://rentola.pl"
-			]
+			],
+			"notes": "JSON-LD SearchResultsPage/RealEstateListing; geo on search and detail.",
+			"refresh_minutes": 30,
+			"adapter": "rentola",
+			"rps": 0.5,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": "order",
+			"newest_value": "desc",
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "rentumo",
@@ -416,7 +627,18 @@
 			"enabled": true,
 			"urls": [
 				"https://rentumo.pl"
-			]
+			],
+			"notes": "Server-rendered cards; JSON-LD detail + map lat/lng.",
+			"refresh_minutes": 30,
+			"adapter": "rentumo",
+			"rps": 1.0,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "sprawnynajem",
@@ -441,7 +663,18 @@
 			"enabled": true,
 			"urls": [
 				"https://sprzedajemy.pl/nieruchomosci"
-			]
+			],
+			"notes": "Server-rendered HTML + schema.org; detail pages expose data-coordinates and descriptions; 12 categories per region.",
+			"refresh_minutes": 30,
+			"adapter": "sprzedajemy",
+			"rps": 0.5,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "szybko",
@@ -452,7 +685,18 @@
 			"enabled": true,
 			"urls": [
 				"https://szybko.pl"
-			]
+			],
+			"notes": "Server-rendered listings + JSON-LD; coordinates in map links.",
+			"refresh_minutes": 30,
+			"adapter": "szybko",
+			"rps": 1.0,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": "sort",
+			"newest_value": "newest",
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "trojmiasto",
@@ -477,7 +721,18 @@
 			"enabled": true,
 			"urls": [
 				"https://txo.pl"
-			]
+			],
+			"notes": "Inertia JSON payload + RealEstateListing JSON-LD; coords on search and detail. Aggregates several other portals.",
+			"refresh_minutes": 30,
+			"adapter": "txo",
+			"rps": 1.0,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "wynajem24",
@@ -516,7 +771,18 @@
 			"enabled": true,
 			"urls": [
 				"https://noweinwestycje.pl"
-			]
+			],
+			"notes": "Homsters server-rendered cards; path pagination only (robots disallows query strings); detail exposes map coords and GmgDevelopmentEventData.",
+			"refresh_minutes": 60,
+			"adapter": "noweinwestycje",
+			"rps": 0.5,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "phn",
@@ -541,7 +807,18 @@
 			"enabled": true,
 			"urls": [
 				"https://rynekpierwotny.pl"
-			]
+			],
+			"notes": "Server-rendered __INITIAL_STATE__; investment detail exposes geo_point, description and the cheapest unit price.",
+			"refresh_minutes": 60,
+			"adapter": "rynekpierwotny",
+			"rps": 0.5,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "szukam-nieruchomosci",
@@ -565,7 +842,18 @@
 			"enabled": true,
 			"urls": [
 				"https://tabelaofert.pl/nowe-mieszkania"
-			]
+			],
+			"notes": "Next.js flight payload; investment detail exposes Product JSON-LD with unit geo, lowPrice and full description.",
+			"refresh_minutes": 60,
+			"adapter": "tabelaofert",
+			"rps": 0.5,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "wybierzdewelopera",
@@ -576,7 +864,18 @@
 			"enabled": true,
 			"urls": [
 				"https://wybierzdewelopera.pl"
-			]
+			],
+			"notes": "WordPress, REST API disabled. Server-rendered cards; detail exposes Product JSON-LD, data-lat/data-lng and price per m² only (no total price).",
+			"refresh_minutes": 60,
+			"adapter": "wybierzdewelopera",
+			"rps": 0.5,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": "sort",
+			"newest_value": "latest",
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "agroprzetargi",
@@ -614,7 +913,18 @@
 			"enabled": true,
 			"urls": [
 				"https://www.axiimmo.com"
-			]
+			],
+			"notes": "WordPress + schema.org JSON-LD; precise map-marker coordinates; /page/N/ pagination.",
+			"refresh_minutes": 60,
+			"adapter": "axiimmo",
+			"rps": 0.5,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "biznesoferty",
@@ -680,7 +990,18 @@
 			"enabled": true,
 			"urls": [
 				"https://luksusowemieszkania.pl"
-			]
+			],
+			"notes": "schema.org Product/AggregateOffer JSON-LD; geo on search and detail pages.",
+			"refresh_minutes": 60,
+			"adapter": "luksusowemieszkania",
+			"rps": 0.5,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "luxuryestate",
@@ -704,7 +1025,18 @@
 			"enabled": true,
 			"urls": [
 				"https://magazyny.online"
-			]
+			],
+			"notes": "Warehouse-park directory; JSON-LD Place.geo coordinates, floor size and full description on detail pages. Price on request.",
+			"refresh_minutes": 60,
+			"adapter": "magazyny-online",
+			"rps": 1.0,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "partnersinternational",
@@ -715,7 +1047,18 @@
 			"enabled": true,
 			"urls": [
 				"https://partnersinternational.pl"
-			]
+			],
+			"notes": "Server-rendered cards; source coordinates when present, missing street addresses are geocoded.",
+			"refresh_minutes": 180,
+			"adapter": "partnersinternational",
+			"rps": 1.0,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "sothebys",
@@ -740,7 +1083,18 @@
 			"enabled": true,
 			"urls": [
 				"https://sprzedambiznes.pl/nieruchomosci-komercyjne"
-			]
+			],
+			"notes": "Server-rendered commercial cards; JSON-LD Product offers.areaServed.geo coordinates and full description. Legacy details without JSON-LD are skipped.",
+			"refresh_minutes": 60,
+			"adapter": "sprzedambiznes",
+			"rps": 0.5,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "szybkokomercyjne",
@@ -751,7 +1105,18 @@
 			"enabled": true,
 			"urls": [
 				"https://szybkokomercyjne.pl"
-			]
+			],
+			"notes": "Server-rendered search cards; detail JSON-LD + full description; OpenStreetMap iframe provides coordinates.",
+			"refresh_minutes": 60,
+			"adapter": "szybkokomercyjne",
+			"rps": 0.5,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": "sort",
+			"newest_value": "newest",
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "terenyprzemyslowe",
@@ -762,7 +1127,18 @@
 			"enabled": true,
 			"urls": [
 				"https://terenyprzemyslowe.pl"
-			]
+			],
+			"notes": "Server-rendered HTML; detail pages embed a GeoJSON polygon. Filter by wojewodztwo + rodzaj; all results arrive on one page.",
+			"refresh_minutes": 60,
+			"adapter": "terenyprzemyslowe",
+			"rps": 1.0,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": "sort",
+			"newest_value": "najnowsze",
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "vilea",
@@ -773,7 +1149,18 @@
 			"enabled": true,
 			"urls": [
 				"https://vilea.pl"
-			]
+			],
+			"notes": "Server-rendered JSON-LD; source coordinates when present, missing street addresses are geocoded.",
+			"refresh_minutes": 180,
+			"adapter": "vilea",
+			"rps": 1.0,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "adradar",
@@ -812,7 +1199,18 @@
 			"enabled": true,
 			"urls": [
 				"https://amw.com.pl/pl/nieruchomosci/przetargi-nieruchomosci"
-			]
+			],
+			"notes": "National tender list, path pagination; street address on detail, no source coordinates, geocoder required.",
+			"refresh_minutes": 180,
+			"adapter": "amw-nieruchomosci",
+			"rps": 0.5,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "arp",
@@ -978,8 +1376,18 @@
 			"urls": [
 				"https://licytacje.komornik.pl"
 			],
-			"notes": "Search __NUXT_DATA__ decomposes street/buildingNo/flatNo/zipCode/province; lat/lon are 0,0, geocoder required. Detail item API is WAF-blocked.",
-			"last_verified": "2026-11-25"
+			"notes": "Search __NUXT_DATA__ decomposes street/buildingNo/flatNo/zipCode/province; lat/lon are 0,0 so street-level geocoding is required. Detail route is WAF-blocked and not used; pagination is offset-based (20 per page).",
+			"last_verified": "2026-11-25",
+			"refresh_minutes": 180,
+			"adapter": "komornik",
+			"rps": 0.5,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "komunikaty",
@@ -1074,8 +1482,18 @@
 			"urls": [
 				"https://mapalicytacji.pl"
 			],
-			"notes": "JSON-LD about.address + per-offer about.geo; /wojewodztwo/<slug> paths with ?strona=N pagination. Street addresses omit building numbers by design; /malopolskie/ currently 404s.",
-			"last_verified": "2026-11-25"
+			"notes": "JSON-LD about.address + per-offer about.geo. Listing paths are /wojewodztwo/<slug>; pagination uses ?strona=N. Street addresses omit the building number by design.",
+			"last_verified": "2026-11-25",
+			"refresh_minutes": 180,
+			"adapter": "mapalicytacji",
+			"rps": 0.5,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "mapaofert",
@@ -1142,7 +1560,18 @@
 			"enabled": true,
 			"urls": [
 				"https://ogloszeniasyndyka.pl"
-			]
+			],
+			"notes": "Server-rendered cards; detail pages expose data-latitude/data-longitude. Very small inventory in małopolskie/śląskie.",
+			"refresh_minutes": 180,
+			"adapter": "ogloszeniasyndyka",
+			"rps": 1.0,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": "sort",
+			"newest_value": "newest",
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "orlen",
@@ -1167,7 +1596,18 @@
 			"enabled": true,
 			"urls": [
 				"https://www.otoprzetargi.pl/nieruchomosci"
-			]
+			],
+			"notes": "Search + notice details; detail pages expose full text and map-centre coordinates.",
+			"refresh_minutes": 180,
+			"adapter": "otoprzetargi",
+			"rps": 1.0,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "pgg",
@@ -1192,7 +1632,18 @@
 			"enabled": true,
 			"urls": [
 				"https://nieruchomosci.pkobp.pl"
-			]
+			],
+			"notes": "JSON search API exposes lat/lng; detail pages carry descriptions in __NEXT_DATA__ accordions.",
+			"refresh_minutes": 180,
+			"adapter": "pkobp-nieruchomosci",
+			"rps": 1.0,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": "ordering",
+			"newest_value": "-offer_date_created",
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "pkobp-przetargi",
@@ -1217,7 +1668,18 @@
 			"enabled": true,
 			"urls": [
 				"https://www.pkp.pl/pl/sprzedaz"
-			]
+			],
+			"notes": "GeoJSON offers on the sale page; coordinates on every offer; detail pages have full descriptions.",
+			"refresh_minutes": 180,
+			"adapter": "pkp",
+			"rps": 1.0,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "pkp-cargo",
@@ -1241,7 +1703,18 @@
 			"enabled": true,
 			"urls": [
 				"https://nieruchomosci.poczta-polska.pl"
-			]
+			],
+			"notes": "National sale/lease lists; street address on detail, no source coordinates, geocoder required.",
+			"refresh_minutes": 180,
+			"adapter": "poczta-polska",
+			"rps": 0.5,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "polish-airports",
@@ -1406,8 +1879,18 @@
 				"https://srk.com.pl/oferta/przetargi-nieruchomosci",
 				"https://srk.com.pl/oferta/przetargi-mieszkania"
 			],
-			"notes": "Śląskie-only tender tables and sale catalogue; street address in the row/title, no coordinates, geocoder required. ?strona=N pagination, prices only on oferty-nieruchomosci cards.",
-			"last_verified": "2026-11-25"
+			"notes": "Śląskie-only tender tables and sale catalogue; street address in the row/title, no coordinates, geocoder required. ?strona=N pagination. Prices only on oferty-nieruchomosci cards.",
+			"last_verified": "2026-11-25",
+			"refresh_minutes": 180,
+			"adapter": "srk",
+			"rps": 0.5,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "stbs",
@@ -1459,7 +1942,18 @@
 			"enabled": true,
 			"urls": [
 				"https://syndykaukcje.pl"
-			]
+			],
+			"notes": "Listivo cards + OpenStreetMap :position coordinates on detail pages. Coordinate coverage is template-dependent.",
+			"refresh_minutes": 180,
+			"adapter": "syndykaukcje",
+			"rps": 1.0,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "syndyksprzeda",
@@ -1496,7 +1990,18 @@
 			"enabled": true,
 			"urls": [
 				"https://nieruchomosci.tauron.pl"
-			]
+			],
+			"notes": "Regional sale/lease list; detail pages expose data-latitude/data-longitude, descriptions and galleries. A minority of offers publish empty coordinates.",
+			"refresh_minutes": 180,
+			"adapter": "tauron",
+			"rps": 1.0,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "totalizator",
@@ -1530,14 +2035,23 @@
 			"label": "ZGM Gliwice",
 			"kind": "government",
 			"tier": 4,
-			"status": "blocked",
-			"enabled": false,
+			"status": "implemented",
+			"enabled": true,
 			"urls": [
 				"https://zgm-gliwice.pl/wykaz-lokali-przeznaczonych-do-sprzedazy-w-przetargu"
 			],
-			"notes": "Official wykaz records are PDF-only; HTML pages lack coordinates.",
-			"blocker": "pdf",
-			"last_verified": "2026-11-25"
+			"notes": "Municipal auction wykazy published as one PDF per flat; the adapter extracts the lokal table row, skips scanned PDFs and relies on the geocoder for coordinates.",
+			"last_verified": "2026-11-25",
+			"refresh_minutes": 1440,
+			"adapter": "zgm_gliwice",
+			"rps": 0.5,
+			"incremental": false,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": false,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "alertyprzetargowe",
@@ -1548,7 +2062,18 @@
 			"enabled": true,
 			"urls": [
 				"https://alertyprzetargowe.pl"
-			]
+			],
+			"notes": "Server-rendered Otoprzetargi register; detail pages expose source coordinates and full descriptions.",
+			"refresh_minutes": 180,
+			"adapter": "alertyprzetargowe",
+			"rps": 0.5,
+			"incremental": true,
+			"incremental_pages": 2,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "amw-sklepy",

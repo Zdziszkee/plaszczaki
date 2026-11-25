@@ -1,8 +1,8 @@
 """Configuration loading for the scraper.
 
-The portal inventory lives in ``scraper/config/sources.json``. Operational
-settings for implemented adapters live in ``scraper/config/adapters.json`` and
-the geographic scope in ``scraper/config/regions.json``.
+The portal inventory and the settings of implemented adapters live together in
+``scraper/config/sources.json``. The geographic scope lives in
+``scraper/config/regions.json``.
 """
 
 from __future__ import annotations
@@ -11,18 +11,13 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlsplit
 
 CONFIG_ENV_VAR = "PLASZCZAKI_SOURCES_CONFIG"
 CONFIG_DIR_ENV_VAR = "PLASZCZAKI_CONFIG_DIR"
 CONFIG_RELATIVE_PATH = Path("config") / "sources.json"
-ADAPTERS_RELATIVE_PATH = Path("config") / "adapters.json"
 REGIONS_RELATIVE_PATH = Path("config") / "regions.json"
-COVERAGE_RELATIVE_PATH = Path("config") / "coverage.json"
-
-OFFER_TYPES = {"sale", "rent", "lease", "auction", "other"}
-PROPERTY_TYPES = {"flat", "house", "plot", "commercial", "garage", "room", "other"}
 
 SOURCE_KINDS = {
     "portal",
@@ -38,6 +33,19 @@ SOURCE_KINDS = {
 }
 SOURCE_STATUSES = {"implemented", "planned", "blocked", "excluded"}
 
+# Adapter settings may only appear on sources with status "implemented".
+ADAPTER_FIELDS = {
+    "adapter",
+    "rps",
+    "incremental",
+    "incremental_pages",
+    "newest_param",
+    "newest_value",
+    "hydrate_details",
+    "fetch_mode",
+    "crawl_delay_mode",
+}
+
 
 class ConfigError(RuntimeError):
     """Raised when configuration is missing or invalid."""
@@ -45,7 +53,7 @@ class ConfigError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class SourceConfig:
-    """One catalogued source in the portal inventory."""
+    """One catalogued source, with its adapter settings when implemented."""
 
     id: str
     label: str
@@ -58,12 +66,28 @@ class SourceConfig:
     blocker: str | None = None
     last_verified: str | None = None
     recheck_days: int = 90
+    refresh_minutes: int | None = None
+    adapter: str | None = None
+    rps: float = 1.0
+    incremental: bool = False
+    incremental_pages: int = 2
+    newest_param: str | None = None
+    newest_value: str | None = None
+    # Some sources (e.g. gdom with a 20-minute crawl delay) are complete enough
+    # on search cards, so fetching one detail page per listing is not worth it.
+    hydrate_details: bool = True
+    # "stealth" runs the fetch through Scrapling's browser engine (Playwright).
+    fetch_mode: Literal["http", "stealth"] = "http"
+    # "defer" makes a run stop when robots.txt crawl delay has not elapsed
+    # instead of sleeping inside the process (used by the gdom slow lane).
+    crawl_delay_mode: Literal["sleep", "defer"] = "sleep"
 
 
 @dataclass(frozen=True, slots=True)
 class SourcesConfig:
     """The complete source inventory, implemented or not."""
 
+    defaults_rps: float
     sources: dict[str, SourceConfig]
 
     def urls(self) -> list[str]:
@@ -75,34 +99,12 @@ class SourcesConfig:
     def by_tier(self, tier: int) -> list[SourceConfig]:
         return [source for source in self.sources.values() if source.tier == tier]
 
-
-@dataclass(frozen=True, slots=True)
-class AdapterConfig:
-    """Settings for one implemented source adapter."""
-
-    id: str
-    adapter: str
-    label: str
-    homepage: str
-    enabled: bool = True
-    rps: float = 1.0
-    notes: str = ""
-    incremental: bool = False
-    newest_param: str | None = None
-    newest_value: str | None = None
-    incremental_pages: int = 2
-    poll_minutes: int = 60
-
-
-@dataclass(frozen=True, slots=True)
-class AdaptersConfig:
-    """The full adapter registry."""
-
-    defaults_rps: float
-    sources: dict[str, AdapterConfig]
-
-    def enabled(self) -> list[AdapterConfig]:
-        return [source for source in self.sources.values() if source.enabled]
+    def enabled_adapters(self) -> list[SourceConfig]:
+        return [
+            source
+            for source in sorted(self.sources.values(), key=lambda item: item.id)
+            if source.enabled and source.adapter is not None
+        ]
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,36 +126,6 @@ class RegionsConfig:
 
     default: tuple[str, ...]
     regions: dict[str, RegionConfig]
-
-
-@dataclass(frozen=True, slots=True)
-class SourceCoverage:
-    """The (region, offer type, property type) matrix a source promises to cover."""
-
-    id: str
-    regions: tuple[str, ...]
-    offers: dict[str, tuple[str, ...]]
-    note: str = ""
-
-
-@dataclass(frozen=True, slots=True)
-class CoverageConfig:
-    """Declared scrape coverage per implemented source."""
-
-    defaults_regions: tuple[str, ...]
-    sources: dict[str, SourceCoverage]
-
-    def cells(self, source_id: str) -> list[tuple[str, str, str]]:
-        """Expand one source into (region, offer_type, property_type) cells."""
-        coverage = self.sources.get(source_id)
-        if coverage is None:
-            return []
-        return [
-            (region, offer_type, property_type)
-            for region in coverage.regions
-            for offer_type, property_types in coverage.offers.items()
-            for property_type in property_types
-        ]
 
 
 def repo_root() -> Path:
@@ -221,9 +193,24 @@ def load_sources_config(path: Path | None = None) -> SourcesConfig:
     config_path = path or find_config_path()
     payload = _read_json(config_path)
 
-    unknown = set(payload) - {"sources"}
+    unknown = set(payload) - {"defaults", "sources"}
     if unknown:
         raise ConfigError(f"Unknown keys in sources config: {sorted(unknown)}")
+
+    defaults = payload.get("defaults", {})
+    if not isinstance(defaults, dict):
+        raise ConfigError("'defaults' must be an object")
+    unknown = set(defaults) - {"rps"}
+    if unknown:
+        raise ConfigError(f"Unknown keys in defaults: {sorted(unknown)}")
+
+    defaults_rps = defaults.get("rps", 1.0)
+    if (
+        not isinstance(defaults_rps, int | float)
+        or isinstance(defaults_rps, bool)
+        or defaults_rps <= 0
+    ):
+        raise ConfigError("defaults.rps must be a positive number")
 
     raw_sources = payload.get("sources")
     if not isinstance(raw_sources, list) or not raw_sources:
@@ -249,6 +236,8 @@ def load_sources_config(path: Path | None = None) -> SourcesConfig:
             "blocker",
             "last_verified",
             "recheck_days",
+            "refresh_minutes",
+            *ADAPTER_FIELDS,
         }
         if unknown:
             raise ConfigError(f"Unknown keys in {context}: {sorted(unknown)}")
@@ -294,6 +283,67 @@ def load_sources_config(path: Path | None = None) -> SourcesConfig:
         if recheck_days < 1:
             raise ConfigError(f"{context}.recheck_days must be positive")
 
+        adapter_fields_present = sorted(set(raw) & ADAPTER_FIELDS)
+        if status == "implemented":
+            adapter = _require_string(raw, "adapter", context)
+
+            rps = raw.get("rps", defaults_rps)
+            if not isinstance(rps, int | float) or isinstance(rps, bool) or rps <= 0:
+                raise ConfigError(f"{context}.rps must be a positive number")
+
+            incremental = raw.get("incremental", False)
+            if not isinstance(incremental, bool):
+                raise ConfigError(f"{context}.incremental must be a boolean")
+
+            incremental_pages = raw.get("incremental_pages", 2)
+            if not isinstance(incremental_pages, int) or isinstance(incremental_pages, bool):
+                raise ConfigError(f"{context}.incremental_pages must be an integer")
+            if incremental_pages < 1:
+                raise ConfigError(f"{context}.incremental_pages must be at least 1")
+
+            newest_param = raw.get("newest_param")
+            if newest_param is not None and (not isinstance(newest_param, str) or not newest_param):
+                raise ConfigError(f"{context}.newest_param must be a non-empty string")
+
+            newest_value = raw.get("newest_value")
+            if newest_value is not None and (not isinstance(newest_value, str) or not newest_value):
+                raise ConfigError(f"{context}.newest_value must be a non-empty string")
+
+            hydrate_details = raw.get("hydrate_details", True)
+            if not isinstance(hydrate_details, bool):
+                raise ConfigError(f"{context}.hydrate_details must be a boolean")
+
+            fetch_mode = raw.get("fetch_mode", "http")
+            if fetch_mode not in {"http", "stealth"}:
+                raise ConfigError(f"{context}.fetch_mode must be 'http' or 'stealth'")
+
+            crawl_delay_mode = raw.get("crawl_delay_mode", "sleep")
+            if crawl_delay_mode not in {"sleep", "defer"}:
+                raise ConfigError(f"{context}.crawl_delay_mode must be 'sleep' or 'defer'")
+        else:
+            if adapter_fields_present:
+                raise ConfigError(
+                    f"{context} has adapter fields {adapter_fields_present} "
+                    f"but status is '{status}'",
+                )
+            adapter = None
+            rps = float(defaults_rps)
+            incremental = False
+            incremental_pages = 2
+            newest_param = None
+            newest_value = None
+            hydrate_details = True
+            fetch_mode = "http"
+            crawl_delay_mode = "sleep"
+
+        refresh_minutes = raw.get("refresh_minutes")
+        if refresh_minutes is None:
+            refresh_minutes = 60 if adapter is not None else None
+        elif not isinstance(refresh_minutes, int) or isinstance(refresh_minutes, bool):
+            raise ConfigError(f"{context}.refresh_minutes must be an integer")
+        elif refresh_minutes < 1:
+            raise ConfigError(f"{context}.refresh_minutes must be positive")
+
         urls = raw.get("urls")
         if not isinstance(urls, list) or not urls:
             raise ConfigError(f"{context}.urls must be a non-empty array")
@@ -329,9 +379,19 @@ def load_sources_config(path: Path | None = None) -> SourcesConfig:
             blocker=blocker,
             last_verified=last_verified,
             recheck_days=recheck_days,
+            refresh_minutes=refresh_minutes,
+            adapter=adapter,
+            rps=float(rps),
+            incremental=incremental,
+            incremental_pages=incremental_pages,
+            newest_param=newest_param,
+            newest_value=newest_value,
+            hydrate_details=hydrate_details,
+            fetch_mode=fetch_mode,
+            crawl_delay_mode=crawl_delay_mode,
         )
 
-    return SourcesConfig(sources=sources)
+    return SourcesConfig(defaults_rps=float(defaults_rps), sources=sources)
 
 
 def load_source_urls(path: Path | None = None) -> list[str]:
@@ -344,106 +404,6 @@ def _require_string(payload: dict[str, Any], key: str, context: str) -> str:
     if not isinstance(value, str) or not value:
         raise ConfigError(f"{context}.{key} must be a non-empty string")
     return value
-
-
-def load_adapters_config(path: Path | None = None) -> AdaptersConfig:
-    """Load the adapter registry."""
-    config_path = path or find_config_path(ADAPTERS_RELATIVE_PATH)
-    payload = _read_json(config_path)
-
-    unknown = set(payload) - {"defaults", "sources"}
-    if unknown:
-        raise ConfigError(f"Unknown keys in adapters config: {sorted(unknown)}")
-
-    defaults = payload.get("defaults", {})
-    if not isinstance(defaults, dict):
-        raise ConfigError("'defaults' must be an object")
-    defaults_rps = defaults.get("rps", 1.0)
-    if not isinstance(defaults_rps, int | float) or defaults_rps <= 0:
-        raise ConfigError("defaults.rps must be a positive number")
-
-    sources_payload = payload.get("sources")
-    if not isinstance(sources_payload, dict) or not sources_payload:
-        raise ConfigError("'sources' must be a non-empty object")
-
-    sources: dict[str, AdapterConfig] = {}
-    for source_id, raw in sources_payload.items():
-        if not isinstance(raw, dict):
-            raise ConfigError(f"sources.{source_id} must be an object")
-
-        context = f"sources.{source_id}"
-        unknown = set(raw) - {
-            "adapter",
-            "label",
-            "homepage",
-            "enabled",
-            "rps",
-            "notes",
-            "incremental",
-            "newest_param",
-            "newest_value",
-            "incremental_pages",
-            "poll_minutes",
-        }
-        if unknown:
-            raise ConfigError(f"Unknown keys in {context}: {sorted(unknown)}")
-
-        homepage = _require_string(raw, "homepage", context)
-        if not homepage.startswith("https://"):
-            raise ConfigError(f"{context}.homepage must be an https URL")
-
-        rps = raw.get("rps", defaults_rps)
-        if not isinstance(rps, int | float) or rps <= 0:
-            raise ConfigError(f"{context}.rps must be a positive number")
-
-        enabled = raw.get("enabled", True)
-        if not isinstance(enabled, bool):
-            raise ConfigError(f"{context}.enabled must be a boolean")
-
-        notes = raw.get("notes", "")
-        if not isinstance(notes, str):
-            raise ConfigError(f"{context}.notes must be a string")
-
-        incremental = raw.get("incremental", False)
-        if not isinstance(incremental, bool):
-            raise ConfigError(f"{context}.incremental must be a boolean")
-
-        newest_param = raw.get("newest_param")
-        if newest_param is not None and (not isinstance(newest_param, str) or not newest_param):
-            raise ConfigError(f"{context}.newest_param must be a non-empty string")
-
-        newest_value = raw.get("newest_value")
-        if newest_value is not None and (not isinstance(newest_value, str) or not newest_value):
-            raise ConfigError(f"{context}.newest_value must be a non-empty string")
-
-        incremental_pages = raw.get("incremental_pages", 2)
-        if not isinstance(incremental_pages, int) or isinstance(incremental_pages, bool):
-            raise ConfigError(f"{context}.incremental_pages must be an integer")
-        if incremental_pages < 1:
-            raise ConfigError(f"{context}.incremental_pages must be at least 1")
-
-        poll_minutes = raw.get("poll_minutes", 60)
-        if not isinstance(poll_minutes, int) or isinstance(poll_minutes, bool):
-            raise ConfigError(f"{context}.poll_minutes must be an integer")
-        if poll_minutes < 1:
-            raise ConfigError(f"{context}.poll_minutes must be at least 1")
-
-        sources[source_id] = AdapterConfig(
-            id=source_id,
-            adapter=_require_string(raw, "adapter", context),
-            label=_require_string(raw, "label", context),
-            homepage=homepage,
-            enabled=enabled,
-            rps=float(rps),
-            notes=notes,
-            incremental=incremental,
-            newest_param=newest_param,
-            newest_value=newest_value,
-            incremental_pages=incremental_pages,
-            poll_minutes=poll_minutes,
-        )
-
-    return AdaptersConfig(defaults_rps=float(defaults_rps), sources=sources)
 
 
 def load_regions_config(path: Path | None = None) -> RegionsConfig:
@@ -511,85 +471,3 @@ def load_regions_config(path: Path | None = None) -> RegionsConfig:
         raise ConfigError(f"'default' references unknown regions: {missing}")
 
     return RegionsConfig(default=tuple(default), regions=regions)
-
-
-def load_coverage_config(path: Path | None = None) -> CoverageConfig:
-    """Load the declared per-source coverage matrix."""
-    config_path = path or find_config_path(COVERAGE_RELATIVE_PATH)
-    payload = _read_json(config_path)
-
-    unknown = set(payload) - {"defaults", "sources"}
-    if unknown:
-        raise ConfigError(f"Unknown keys in coverage config: {sorted(unknown)}")
-
-    defaults = payload.get("defaults", {})
-    if not isinstance(defaults, dict):
-        raise ConfigError("'defaults' must be an object")
-    unknown = set(defaults) - {"regions"}
-    if unknown:
-        raise ConfigError(f"Unknown keys in defaults: {sorted(unknown)}")
-
-    default_regions = defaults.get("regions", [])
-    if not isinstance(default_regions, list) or not all(
-        isinstance(item, str) and item for item in default_regions
-    ):
-        raise ConfigError("defaults.regions must be an array of strings")
-
-    sources_payload = payload.get("sources")
-    if not isinstance(sources_payload, dict) or not sources_payload:
-        raise ConfigError("'sources' must be a non-empty object")
-
-    sources: dict[str, SourceCoverage] = {}
-    for source_id, raw in sources_payload.items():
-        if not isinstance(raw, dict):
-            raise ConfigError(f"sources.{source_id} must be an object")
-
-        context = f"sources.{source_id}"
-        unknown = set(raw) - {"regions", "offers", "note"}
-        if unknown:
-            raise ConfigError(f"Unknown keys in {context}: {sorted(unknown)}")
-
-        regions = raw.get("regions", default_regions)
-        if not isinstance(regions, list) or not all(
-            isinstance(item, str) and item for item in regions
-        ):
-            raise ConfigError(f"{context}.regions must be an array of strings")
-        if not regions:
-            raise ConfigError(f"{context}.regions must not be empty")
-
-        offers = raw.get("offers")
-        if not isinstance(offers, dict) or not offers:
-            raise ConfigError(f"{context}.offers must be a non-empty object")
-
-        normalized_offers: dict[str, tuple[str, ...]] = {}
-        for offer_type, property_types in offers.items():
-            if offer_type not in OFFER_TYPES:
-                raise ConfigError(
-                    f"{context}.offers.{offer_type} must be one of {sorted(OFFER_TYPES)}",
-                )
-            if not isinstance(property_types, list) or not property_types:
-                raise ConfigError(
-                    f"{context}.offers.{offer_type} must be a non-empty array",
-                )
-            for property_type in property_types:
-                if property_type not in PROPERTY_TYPES:
-                    raise ConfigError(
-                        f"{context}.offers.{offer_type} has unknown property type "
-                        f"'{property_type}' (expected {sorted(PROPERTY_TYPES)})",
-                    )
-            if len(set(property_types)) != len(property_types):
-                raise ConfigError(f"{context}.offers.{offer_type} has duplicate entries")
-            normalized_offers[offer_type] = tuple(property_types)
-
-        note = raw.get("note", "")
-        if not isinstance(note, str):
-            raise ConfigError(f"{context}.note must be a string")
-
-        sources[source_id] = SourceCoverage(
-            id=source_id,
-            regions=tuple(regions),
-            offers=normalized_offers,
-            note=note,
-        )
-
-    return CoverageConfig(defaults_regions=tuple(default_regions), sources=sources)

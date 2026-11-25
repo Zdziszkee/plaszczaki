@@ -11,9 +11,11 @@ SCRAPER_IMAGE=localhost/plaszczaki-scraper:0.1.0
 DATA_DIR="$ROOT/data"
 ENV_DIR=${PLASZCZAKI_ENV_DIR:-$HOME/.config/plaszczaki}
 QUADLET_DIR=${PLASZCZAKI_QUADLET_DIR:-$HOME/.config/containers/systemd}
+UNIT_DIR=${PLASZCZAKI_UNIT_DIR:-$HOME/.config/systemd/user}
 WEB_UNIT=plaszczaki-web.service
 SCRAPER_UNIT=plaszczaki-scraper.service
 SCRAPER_TIMER=plaszczaki-scraper.timer
+REVIEW_TIMER=plaszczaki-review.timer
 
 log() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarn:\033[0m %s\n' "$*" >&2; }
@@ -71,7 +73,9 @@ EOF
 
 stop_services() {
 	log "stopping $WEB_UNIT and $SCRAPER_UNIT"
-	systemctl --user stop "$WEB_UNIT" "$SCRAPER_UNIT" "$SCRAPER_TIMER" 2>/dev/null || true
+	systemctl --user stop \
+		"$WEB_UNIT" "$SCRAPER_UNIT" "$SCRAPER_TIMER" "$REVIEW_TIMER" \
+		2>/dev/null || true
 }
 
 build() {
@@ -92,11 +96,21 @@ build() {
 }
 
 install_quadlets() {
-	mkdir -p "$QUADLET_DIR"
+	mkdir -p "$QUADLET_DIR" "$UNIT_DIR"
 	local f
-	for f in "$ROOT"/deploy/quadlet/*.container "$ROOT"/deploy/quadlet/*.timer; do
+	# Quadlet reads *.container from containers/systemd; plain .timer units are
+	# loaded from the normal systemd user unit directory, not from that folder.
+	for f in "$ROOT"/deploy/quadlet/*.container; do
+		[ -e "$f" ] || continue
 		install -Dm644 "$f" "$QUADLET_DIR/$(basename "$f")"
 	done
+	for f in "$ROOT"/deploy/quadlet/*.timer; do
+		[ -e "$f" ] || continue
+		install -Dm644 "$f" "$UNIT_DIR/$(basename "$f")"
+	done
+	# Older deploys copied timers into the Quadlet directory, where systemd
+	# never looked for them; drop those stale copies.
+	rm -f "$QUADLET_DIR"/plaszczaki-*.timer
 	log "reloading systemd user units"
 	systemctl --user daemon-reload
 }
@@ -108,6 +122,9 @@ start_services() {
 	log "starting $SCRAPER_UNIT and enabling $SCRAPER_TIMER"
 	systemctl --user start "$SCRAPER_UNIT"
 	systemctl --user enable --now "$SCRAPER_TIMER"
+
+	log "enabling $REVIEW_TIMER (monthly parked-source review)"
+	systemctl --user enable --now "$REVIEW_TIMER"
 }
 
 print_status() {

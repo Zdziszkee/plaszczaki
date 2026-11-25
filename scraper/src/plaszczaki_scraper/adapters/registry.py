@@ -2,7 +2,7 @@
 
 Adapters are imported lazily so a missing optional module does not break the
 whole CLI. The mapping is intentionally small; adding a source means adding one
-entry here and one entry in ``config/adapters.json``.
+entry here and one entry in ``config/sources.json``.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from importlib import import_module
 from typing import Protocol
 
 from plaszczaki_scraper.adapters.base import Adapter
-from plaszczaki_scraper.config import AdapterConfig
+from plaszczaki_scraper.config import SourceConfig
 from plaszczaki_scraper.regions import RegionRegistry
 
 _ADAPTERS: dict[str, tuple[str, str]] = {
@@ -125,6 +125,10 @@ _ADAPTERS: dict[str, tuple[str, str]] = {
         "plaszczaki_scraper.adapters.wybierzdewelopera",
         "WybierzdeweloperaAdapter",
     ),
+    "zgm_gliwice": (
+        "plaszczaki_scraper.adapters.zgm_gliwice",
+        "ZgmGliwiceAdapter",
+    ),
 }
 
 
@@ -148,15 +152,17 @@ def _load_factory(adapter: str) -> AdapterFactory:
 
 
 def build_adapter(
-    config: AdapterConfig,
+    source: SourceConfig,
     *,
     regions: RegionRegistry,
 ) -> Adapter:
-    """Instantiate the adapter named in the configuration."""
+    """Instantiate the adapter named in the source configuration."""
+    adapter = source.adapter
+    assert adapter is not None, f"source '{source.id}' has no adapter"
     try:
-        factory = _load_factory(config.adapter)
+        factory = _load_factory(adapter)
     except (ImportError, AttributeError) as exc:
         raise ValueError(
-            f"adapter '{config.adapter}' for source '{config.id}' is not available: {exc}",
+            f"adapter '{adapter}' for source '{source.id}' is not available: {exc}",
         ) from exc
-    return factory(source_id=config.id, regions=regions)
+    return factory(source_id=source.id, regions=regions)

@@ -13,9 +13,11 @@ from plaszczaki_scraper.geocode import (
     GEO_SOURCE,
     NOMINATIM_URL,
     USER_AGENT,
+    AddressQuery,
     GeocodeStore,
     GeocodeWorker,
     build_address,
+    build_address_query,
     default_geocode_db_path,
 )
 from plaszczaki_scraper.models import Listing
@@ -103,10 +105,12 @@ class RecordingFetcher:
         self,
         payload: Any = None,
         *,
+        payloads: list[Any] | None = None,
         status_code: int = 200,
         exc: Exception | None = None,
     ) -> None:
         self.payload = payload
+        self.payloads = payloads
         self.status_code = status_code
         self.exc = exc
         self.calls: list[dict[str, Any]] = []
@@ -124,6 +128,9 @@ class RecordingFetcher:
         )
         if self.exc is not None:
             raise self.exc
+        if self.payloads is not None:
+            index = min(len(self.calls) - 1, len(self.payloads) - 1)
+            return FakeResponse(self.payloads[index], self.status_code)
         return FakeResponse(self.payload, self.status_code)
 
 
@@ -194,6 +201,72 @@ def _warsaw_payload() -> list[dict[str, Any]]:
     ]
 
 
+def _brzesko_payload() -> list[dict[str, Any]]:
+    return [
+        {
+            "place_id": 11,
+            "lat": "49.8211",
+            "lon": "20.6114",
+            "display_name": "Partyzantów 24, Brzesko, małopolskie, Polska",
+            "addresstype": "building",
+            "type": "building",
+            "address": {
+                "house_number": "24",
+                "road": "Partyzantów",
+                "city": "Brzesko",
+                "state": "województwo małopolskie",
+                "postcode": "32-800",
+                "country": "Polska",
+                "country_code": "pl",
+            },
+        },
+    ]
+
+
+def _ambiguous_payload() -> list[dict[str, Any]]:
+    """Two same-road candidates in different places: no unique best score."""
+    return [
+        {
+            "place_id": 21,
+            "lat": "50.0614",
+            "lon": "19.9366",
+            "display_name": "Partyzantów, Kraków, małopolskie, Polska",
+            "addresstype": "residential",
+            "type": "residential",
+            "address": {
+                "road": "Partyzantów",
+                "city": "Kraków",
+                "state": "województwo małopolskie",
+                "country": "Polska",
+                "country_code": "pl",
+            },
+        },
+        {
+            "place_id": 22,
+            "lat": "50.0712",
+            "lon": "19.9501",
+            "display_name": "Partyzantów, Kraków, małopolskie, Polska",
+            "addresstype": "residential",
+            "type": "residential",
+            "address": {
+                "road": "Partyzantów",
+                "city": "Kraków",
+                "state": "województwo małopolskie",
+                "country": "Polska",
+                "country_code": "pl",
+            },
+        },
+    ]
+
+
+def _brzesko_listing() -> Listing:
+    return _listing(
+        street="Partyzantów",
+        address_text="Partyzantów 24/59, 32-800",
+        city="Brzesko",
+    )
+
+
 def test_build_address_prefers_street() -> None:
     assert build_address(_listing()) == "ul. Długa 5, Kraków, malopolskie"
 
@@ -216,6 +289,57 @@ def test_build_address_uses_street_like_address_text() -> None:
         == "ul. Długa 5, Kraków"
     )
     assert build_address(_listing(street=None, address_text="Kraków, Długa 5")) == "Kraków, Długa 5"
+
+
+def test_build_address_rejects_postcode_only_address_text() -> None:
+    assert build_address(_listing(street=None, city=None, address_text="32-800")) is None
+    assert (
+        build_address(_listing(street=None, city="Trzebinia", address_text="32-540 Trzebinia"))
+        is None
+    )
+
+
+def test_build_address_extracts_house_number_from_address_text() -> None:
+    listing = _brzesko_listing()
+
+    assert build_address(listing) == "Partyzantów 24, Brzesko, malopolskie"
+
+
+def test_build_address_query_uses_structured_fields() -> None:
+    assert build_address_query(_brzesko_listing()) == AddressQuery(
+        street="Partyzantów 24",
+        city="Brzesko",
+        postalcode="32-800",
+        state="małopolskie",
+    )
+
+
+def test_build_address_query_drops_the_flat_number() -> None:
+    listing = _brzesko_listing()
+    listing.street = "Partyzantów 24/59"
+
+    query = build_address_query(listing)
+
+    assert query is not None
+    assert query.street == "Partyzantów 24"
+
+
+def test_build_address_query_reads_postal_code_from_extra() -> None:
+    listing = _listing(street="ul. Długa 5", extra={"postal_code": "31-147"})
+
+    query = build_address_query(listing)
+
+    assert query is not None
+    assert query.postalcode == "31-147"
+
+
+def test_build_address_query_falls_back_to_the_raw_voivodeship() -> None:
+    listing = _listing(voivodeship="mazowieckie")
+
+    query = build_address_query(listing)
+
+    assert query is not None
+    assert query.state == "mazowieckie"
 
 
 def test_enqueue_skips_city_only_and_deduplicates(tmp_path: Path) -> None:
@@ -287,11 +411,16 @@ def test_accepts_house_result_and_updates_listing(tmp_path: Path) -> None:
 
         call = fetcher.calls[0]
         assert call["url"] == NOMINATIM_URL
-        assert call["params"]["q"] == query
+        assert call["params"]["street"] == "ul. Długa 5"
+        assert call["params"]["city"] == "Kraków"
+        assert call["params"]["state"] == "małopolskie"
+        assert call["params"]["country"] == "Polska"
         assert call["params"]["format"] == "jsonv2"
         assert call["params"]["addressdetails"] == 1
-        assert call["params"]["limit"] == 1
+        assert call["params"]["limit"] == 5
         assert call["params"]["countrycodes"] == "pl"
+        assert "q" not in call["params"]
+        assert "postalcode" not in call["params"]
         assert call["headers"]["User-Agent"] == USER_AGENT
         assert call["timeout"] == 30.0
 
@@ -320,7 +449,8 @@ def test_rejects_city_level_result(tmp_path: Path) -> None:
 
         assert counts["rejected"] == 1
         assert counts["geocoded"] == 0
-        assert counts["requests"] == 1
+        # House number, then road level: a non-street answer falls through.
+        assert counts["requests"] == 2
 
         stored = db.get_listing("otodom", "123")
         assert stored is not None
@@ -441,3 +571,226 @@ def test_default_store_lives_in_cache_dir(
     with GeocodeStore() as store:
         assert store.path == tmp_path / "geocode.db"
         assert store.path.is_file()
+
+
+def test_komornik_style_address_uses_a_structured_query(tmp_path: Path) -> None:
+    listing = _brzesko_listing()
+    fetcher = RecordingFetcher(_brzesko_payload())
+
+    with _database(tmp_path) as db, GeocodeStore(tmp_path / "geocode.db") as store:
+        _seed(db, listing)
+        store.enqueue(listing)
+
+        counts = _worker(db, store, fetcher).run()
+
+        assert counts["geocoded"] == 1
+        assert counts["requests"] == 1
+
+        params = fetcher.calls[0]["params"]
+        assert params["street"] == "Partyzantów 24"
+        assert params["city"] == "Brzesko"
+        assert params["postalcode"] == "32-800"
+        assert params["state"] == "małopolskie"
+
+        stored = db.get_listing("otodom", "123")
+        assert stored is not None
+        assert stored.lat == 49.8211
+        assert stored.lng == 20.6114
+
+
+def test_ambiguous_result_falls_through_to_the_next_variant(tmp_path: Path) -> None:
+    listing = _brzesko_listing()
+    fetcher = RecordingFetcher(payloads=[_ambiguous_payload(), _brzesko_payload()])
+
+    with _database(tmp_path) as db, GeocodeStore(tmp_path / "geocode.db") as store:
+        _seed(db, listing)
+        store.enqueue(listing)
+
+        counts = _worker(db, store, fetcher).run()
+
+        assert counts["geocoded"] == 1
+        assert counts["rejected"] == 0
+        assert counts["requests"] == 2
+        assert "postalcode" in fetcher.calls[0]["params"]
+        assert "postalcode" not in fetcher.calls[1]["params"]
+        assert fetcher.calls[1]["params"]["street"] == "Partyzantów 24"
+
+        stored = db.get_listing("otodom", "123")
+        assert stored is not None
+        assert stored.lat == 49.8211
+
+
+def test_road_level_variant_follows_a_rejected_house_number(tmp_path: Path) -> None:
+    listing = _brzesko_listing()
+    road_payload: list[dict[str, Any]] = [
+        {
+            "place_id": 31,
+            "lat": "49.8213",
+            "lon": "20.6120",
+            "display_name": "Partyzantów, Brzesko, małopolskie, Polska",
+            "addresstype": "road",
+            "type": "road",
+            "address": {
+                "road": "Partyzantów",
+                "city": "Brzesko",
+                "state": "województwo małopolskie",
+                "country": "Polska",
+                "country_code": "pl",
+            },
+        },
+    ]
+    fetcher = RecordingFetcher(payloads=[[], [], road_payload])
+
+    with _database(tmp_path) as db, GeocodeStore(tmp_path / "geocode.db") as store:
+        _seed(db, listing)
+        store.enqueue(listing)
+
+        counts = _worker(db, store, fetcher).run()
+
+        assert counts["geocoded"] == 1
+        assert counts["requests"] == 3
+        assert fetcher.calls[0]["params"]["street"] == "Partyzantów 24"
+        assert fetcher.calls[1]["params"]["street"] == "Partyzantów 24"
+        assert fetcher.calls[2]["params"]["street"] == "Partyzantów"
+
+
+def test_region_rejection_does_not_retry_weaker_variants(tmp_path: Path) -> None:
+    listing = _brzesko_listing()
+    fetcher = RecordingFetcher(_warsaw_payload())
+
+    with _database(tmp_path) as db, GeocodeStore(tmp_path / "geocode.db") as store:
+        _seed(db, listing)
+        store.enqueue(listing)
+
+        counts = _worker(db, store, fetcher).run()
+
+        assert counts["rejected"] == 1
+        assert len(fetcher.calls) == 1
+
+
+def test_pending_orders_earliest_auction_first(tmp_path: Path) -> None:
+    with GeocodeStore(tmp_path / "geocode.db") as store:
+        store.enqueue(_listing(external_id="late", auction_date=2_000))
+        store.enqueue(_listing(external_id="undated"))
+        store.enqueue(_listing(external_id="early", auction_date=1_000))
+
+        jobs = store.pending(10)
+
+        assert [job["external_id"] for job in jobs] == ["early", "late", "undated"]
+        assert [job["auction_date"] for job in jobs] == [1_000, 2_000, None]
+
+
+def test_pending_limit_keeps_the_earliest_auction(tmp_path: Path) -> None:
+    with GeocodeStore(tmp_path / "geocode.db") as store:
+        store.enqueue(_listing(external_id="late", auction_date=9_000))
+        store.enqueue(_listing(external_id="early", auction_date=1_000))
+
+        jobs = store.pending(1)
+
+        assert [job["external_id"] for job in jobs] == ["early"]
+
+
+def test_requeue_rejected_resets_the_job(tmp_path: Path) -> None:
+    listing = _listing()
+    with GeocodeStore(tmp_path / "geocode.db") as store:
+        store.enqueue(listing)
+        job_id = int(store.pending(1)[0]["id"])
+        store.mark_rejected(job_id, "no result")
+        assert store.pending(1) == []
+
+        assert store.requeue_rejected() == 1
+
+        jobs = store.pending(1)
+        assert len(jobs) == 1
+        assert jobs[0]["status"] == "pending"
+        assert jobs[0]["attempts"] == 0
+        assert jobs[0]["error"] is None
+
+
+def test_stale_job_query_is_rebuilt_from_the_listing(tmp_path: Path) -> None:
+    listing = _brzesko_listing()
+    fetcher = RecordingFetcher(_brzesko_payload())
+
+    with _database(tmp_path) as db, GeocodeStore(tmp_path / "geocode.db") as store:
+        _seed(db, listing)
+        store.enqueue(listing)
+        with store.conn:
+            store.conn.execute("UPDATE job SET query = 'Partyzantów, Brzesko, malopolskie'")
+
+        counts = _worker(db, store, fetcher).run()
+
+        assert counts["geocoded"] == 1
+        row = store.conn.execute("SELECT query, address FROM job").fetchone()
+        assert row is not None
+        assert row["query"] == "Partyzantów 24, Brzesko, malopolskie"
+        assert row["address"] == row["query"]
+        assert fetcher.calls[0]["params"]["street"] == "Partyzantów 24"
+
+
+def test_geocoding_refreshes_the_canonical_key(tmp_path: Path) -> None:
+    listing = _listing()
+    fetcher = RecordingFetcher(_house_payload())
+
+    with _database(tmp_path) as db, GeocodeStore(tmp_path / "geocode.db") as store:
+        _seed(db, listing)
+        store.enqueue(listing)
+        before = db.conn.execute("SELECT canonical_key FROM listing").fetchone()
+        assert before is not None
+        assert before["canonical_key"].startswith("addr:")
+
+        _worker(db, store, fetcher).run()
+
+        after = db.conn.execute("SELECT canonical_key FROM listing").fetchone()
+        assert after is not None
+        assert after["canonical_key"] == "geo:50.0614:19.9366:-:-:sale:flat"
+
+
+def test_store_migrates_an_existing_queue(tmp_path: Path) -> None:
+    path = tmp_path / "geocode.db"
+    connection = sqlite3.connect(path)
+    connection.executescript(
+        """
+        CREATE TABLE cache (
+            query TEXT PRIMARY KEY,
+            lat REAL,
+            lng REAL,
+            provider TEXT,
+            precision TEXT,
+            display_name TEXT,
+            result_json TEXT,
+            created_at INT,
+            updated_at INT
+        );
+        CREATE TABLE job (
+            id INTEGER PRIMARY KEY,
+            source_id TEXT,
+            external_id TEXT,
+            address TEXT,
+            query TEXT,
+            status TEXT,
+            attempts INT DEFAULT 0,
+            error TEXT,
+            created_at INT,
+            updated_at INT,
+            UNIQUE(source_id, external_id)
+        );
+        """,
+    )
+    connection.execute(
+        """
+        INSERT INTO job (source_id, external_id, address, query, status)
+        VALUES ('otodom', '123', 'ul. Długa 5, Kraków, malopolskie', 'stale', 'pending')
+        """,
+    )
+    connection.commit()
+    connection.close()
+
+    with GeocodeStore(path) as store:
+        columns = {row["name"] for row in store.conn.execute("PRAGMA table_info(job)")}
+        assert "auction_date" in columns
+
+        # Re-enqueueing backfills the priority of jobs queued before the column.
+        assert store.enqueue(_listing(auction_date=1_234)) is False
+        jobs = store.pending(1)
+        assert jobs[0]["auction_date"] == 1_234
+        assert jobs[0]["query"] == "stale"

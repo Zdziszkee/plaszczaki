@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from plaszczaki_scraper.config import (
-    load_adapters_config,
     load_regions_config,
     load_source_urls,
     load_sources_config,
@@ -17,6 +16,7 @@ def test_source_inventory() -> None:
 
 def test_sources_catalog() -> None:
     catalog = load_sources_config()
+    assert catalog.defaults_rps == 1.0
     assert len(catalog.sources) == 154
     assert len(catalog.urls()) == 161
 
@@ -35,32 +35,55 @@ def test_sources_catalog() -> None:
     )
 
 
-def test_adapters_cover_catalog() -> None:
+def test_implemented_sources_have_adapters() -> None:
     catalog = load_sources_config()
-    adapters = load_adapters_config()
 
-    for source_id, adapter in adapters.sources.items():
-        assert source_id in catalog.sources
-        assert catalog.sources[source_id].status == "implemented"
-        if adapter.enabled:
-            assert catalog.sources[source_id].enabled
+    implemented = catalog.implemented()
+    assert len(implemented) == 48
+    for source in implemented:
+        assert source.adapter is not None, f"{source.id} has no adapter"
 
-    for source in catalog.implemented():
-        assert source.id in adapters.sources, f"{source.id} has no adapter config"
+    for source in catalog.sources.values():
+        if source.status != "implemented":
+            assert source.adapter is None, f"{source.id} is not implemented but has an adapter"
 
 
-def test_adapters_config() -> None:
-    config = load_adapters_config()
+def test_adapter_settings() -> None:
+    config = load_sources_config()
     assert config.defaults_rps == 1.0
     assert "otodom" in config.sources
     otodom = config.sources["otodom"]
     assert otodom.adapter == "otodom"
     assert otodom.enabled is True
     assert otodom.rps == 1.0
-    assert otodom.poll_minutes == 10
+    assert otodom.refresh_minutes == 10
     assert otodom.incremental is True
     assert otodom.incremental_pages == 2
+    assert otodom.hydrate_details is True
+    assert otodom.fetch_mode == "http"
+    assert otodom.crawl_delay_mode == "sleep"
+
+    gdom = config.sources["gdom"]
+    assert gdom.enabled is True
+    assert gdom.incremental is True
+    assert gdom.hydrate_details is False
+    assert gdom.crawl_delay_mode == "defer"
+    assert gdom.refresh_minutes == 1440
     assert sum(1 for source in config.sources.values() if source.incremental) >= 15
+
+
+def test_enabled_adapters() -> None:
+    config = load_sources_config()
+    adapters = config.enabled_adapters()
+
+    assert adapters
+    assert [source.id for source in adapters] == sorted(source.id for source in adapters)
+    for source in adapters:
+        assert source.enabled is True
+        assert source.adapter is not None
+
+    enabled = {source.id for source in config.sources.values() if source.enabled}
+    assert {source.id for source in adapters} == enabled
 
 
 def test_regions_config() -> None:

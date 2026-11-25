@@ -22,6 +22,7 @@ import json
 import re
 from collections.abc import Sequence
 from dataclasses import replace
+from datetime import date
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -132,10 +133,14 @@ class GdomAdapter:
 
     def queries(self, regions: Sequence[str]) -> list[Query]:
         # Gdom serves nationwide category pages only, so each category is crawled
-        # once regardless of how many regions were requested.
+        # once regardless of how many regions were requested. With the 20-minute
+        # robots delay only the first query runs per pass, so rotate the order
+        # daily to cover every category over time.
         region = next((item for item in regions if self.regions.has_region(item)), None)
         if region is None:
             return []
+        offset = date.today().toordinal() % len(CATEGORIES)
+        categories = (*CATEGORIES[offset:], *CATEGORIES[:offset])
         return [
             Query(
                 key=f"{region}:{category}",
@@ -144,7 +149,7 @@ class GdomAdapter:
                 offer_type=offer_type,
                 property_type=property_type,
             )
-            for category, offer_type, property_type in CATEGORIES
+            for category, offer_type, property_type in categories
         ]
 
     def newest(self, query: Query) -> Query:

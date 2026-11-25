@@ -7,17 +7,20 @@ sidecar, sharing one repo-level workspace and runtime data directory.
 
 ```text
 web/        TanStack Start app (routes, UI, Drizzle/SQLite, Better Auth)
-scraper/    Python sidecar (scraping + source list in scraper/config/sources.json)
+scraper/    Python sidecar (scraping + sources/adapter config in scraper/config/sources.json)
 deploy/     Containerfiles and Podman quadlets
 data/       Runtime only: SQLite DB + scraper output (gitignored)
 ```
 
-`scraper/config/sources.json` is the single source of truth for the portal list. It
-is a catalog of 154 sources (160 URLs), each with an id, label, kind, tier,
-implementation status and one or more URLs:
+`scraper/config/sources.json` is the single source of truth for both the portal
+list and the scraper settings: a `defaults` block plus 154 sources (161 URLs).
+Every entry carries catalog fields — `id`, `label`, `kind`, `tier`, `status`,
+`enabled`, `urls`, `notes`, `last_verified`, `recheck_days`, `refresh_minutes` —
+and `implemented` entries add their adapter fields in the same object:
 
 ```json
 {
+  "defaults": { "rps": 1.0 },
   "sources": [
     {
       "id": "otodom",
@@ -26,14 +29,24 @@ implementation status and one or more URLs:
       "tier": 1,
       "status": "implemented",
       "enabled": true,
-      "urls": ["https://www.otodom.pl"]
+      "urls": ["https://www.otodom.pl"],
+      "refresh_minutes": 10,
+      "adapter": "otodom",
+      "rps": 1.0,
+      "incremental": true,
+      "incremental_pages": 2,
+      "hydrate_details": true,
+      "fetch_mode": "http",
+      "crawl_delay_mode": "sleep"
     }
   ]
 }
 ```
 
-It is loaded and validated by `scraper/src/plaszczaki_scraper/config.py`. The web app
-does not read it.
+Parked sources keep only catalog fields. `defaults.rps` is the rate fallback and
+`refresh_minutes` is the per-source refresh cadence. The file is loaded and
+validated by `scraper/src/plaszczaki_scraper/config.py`; the geographic scope is
+separate in `scraper/config/regions.json`, and the web app does not read any of it.
 
 ## Requirements
 
@@ -152,10 +165,12 @@ uv run --directory scraper python -m plaszczaki_scraper run --source otodom --mo
 uv run --directory scraper python -m plaszczaki_scraper run --source otodom --mode backfill
 uv run --directory scraper python -m plaszczaki_scraper watch --once
 uv run --directory scraper python -m plaszczaki_scraper geocode --limit 100 --enqueue-existing
-uv run --directory scraper python -m plaszczaki_scraper coverage
-uv run --directory scraper python -m plaszczaki_scraper coverage --missing
-uv run --directory scraper python -m plaszczaki_scraper coverage --region slaskie --offer-type rent --cells
+uv run --directory scraper python -m plaszczaki_scraper geocode --limit 100 --requeue-rejected
+uv run --directory scraper python -m plaszczaki_scraper list-sources
 uv run --directory scraper python -m plaszczaki_scraper audit
+uv run --directory scraper python -m plaszczaki_scraper review-sources --due
+uv run --directory scraper python -m plaszczaki_scraper dedupe --backfill
+uv run --directory scraper python -m plaszczaki_scraper verify-schema
 uv run --directory scraper python -m plaszczaki_scraper llm models
 uv run --directory scraper python -m plaszczaki_scraper llm check
 bun run py:test
@@ -165,11 +180,17 @@ bun run py:typecheck
 bun run py:check
 ```
 
-The source config lives at `scraper/config/sources.json`; adapter settings are in
-`scraper/config/adapters.json`, the declared per-source scrape matrix (voivodeship
-× sale/rent × property type) is in `scraper/config/coverage.json`, and the
-Małopolskie/Śląskie scope is in `scraper/config/regions.json`. `load_source_urls()`
-validates the inventory (https only, no unknown keys, no normalized duplicates).
+`scraper/config/sources.json` holds the whole catalog and each implemented
+source's adapter settings in one entry — RPS, incremental mode, newest-sort
+parameters, detail hydration, fetch mode and crawl-delay mode — with
+`defaults.rps` as the fallback. `refresh_minutes` in the same file is the `watch`
+cadence. The Małopolskie/Śląskie scope is in `scraper/config/regions.json`.
+`load_sources_config()` validates the inventory (https only, no unknown keys,
+adapter fields only on `implemented` sources, no normalized duplicates).
+
+PDF-only sources go through `scraper/src/plaszczaki_scraper/pdf.py`
+(`pdfplumber`, cached under `data/cache/pdf/`); the first adapter using it is
+`zgm-gliwice`.
 
 `run` accepts `--region` and `--offer-type`, so each voivodeship and each
 transaction is its own job with its own limit and checkpoint. Do not backfill
@@ -179,7 +200,8 @@ cuts śląskie entirely. For example:
 ```bash
 uv run --directory scraper python -m plaszczaki_scraper run --source otodom \
   --region slaskie --offer-type rent --mode backfill
-uv run --directory scraper python -m plaszczaki_scraper coverage --missing --region slaskie
+uv run --directory scraper python -m plaszczaki_scraper run --source otodom \
+  --region malopolskie --offer-type sale --mode backfill
 ```
 
 The scraper writes directly to `data/plaszczaki.db`. The listing schema is owned
@@ -190,7 +212,7 @@ never runs DDL itself.
 `run --mode backfill` is a long, resumable job (Otodom is roughly 60k listings in
 these two voivodeships). Each search page is hydrated immediately and the parsed
 offers are upserted as a batch; unparsed search summaries are never stored. The
-systemd timer only runs the incremental job.
+systemd timer runs the incremental `watch --once` job, not a backfill.
 
 ## Deploy (Podman + Quadlet)
 
@@ -216,9 +238,11 @@ The script is a thin wrapper over the manual steps, which are:
 podman build -f deploy/containers/web.Containerfile -t localhost/plaszczaki-web:0.1.0 .
 podman build -f deploy/containers/scraper.Containerfile -t localhost/plaszczaki-scraper:0.1.0 scraper/
 
-cp deploy/quadlet/*.container deploy/quadlet/*.timer ~/.config/containers/systemd/
+cp deploy/quadlet/*.container ~/.config/containers/systemd/
+cp deploy/quadlet/*.timer ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user start plaszczaki-web plaszczaki-scraper
+systemctl --user enable --now plaszczaki-scraper.timer plaszczaki-review.timer
 ```
 
 Environment files expected by the quadlets live outside the repo (created on the
@@ -232,8 +256,19 @@ first `bun run deploy`, mode 0600):
 Images are fully qualified (`docker.io/...`); Quadlets are generated into
 `/run/user/$UID/systemd/generator` and autostart at login via their
 `WantedBy=default.target`. The scraper is a one-shot job — starting it runs once
-and exits. `plaszczaki-scraper.timer` is installed but disabled until the pilot is
-validated; the backfill is run manually because it takes many hours.
+and exits. Deploy enables two timers: `plaszczaki-scraper.timer` runs
+`watch --once --limit 200` every five minutes, and `plaszczaki-review.timer`
+runs the monthly parked-source review. Backfills are still run manually because
+they take many hours; there is no separate gdom unit.
+
+Refresh cadence lives in `scraper/config/sources.json` (`refresh_minutes`) and
+`watch` reads it directly. `gdom` is not a separate service or quadlet: it runs
+inside `watch` with `crawl_delay_mode: "defer"` and `hydrate_details: false`.
+Because its robots.txt asks for a 20-minute crawl delay, the client records the
+last request time per host, makes at most one request per pass, and stops with a
+`deferred` stat until the delay elapses. It rotates one category per pass
+(`refresh_minutes: 1440`) and skips detail hydration because its search cards
+already carry coordinates and the address.
 
 ## Checks
 

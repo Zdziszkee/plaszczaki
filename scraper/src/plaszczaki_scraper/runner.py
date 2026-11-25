@@ -10,10 +10,9 @@ from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
 from plaszczaki_scraper.adapters.base import Adapter, ParseError, Query
-from plaszczaki_scraper.config import AdapterConfig
-from plaszczaki_scraper.coverage import filter_queries
+from plaszczaki_scraper.config import SourceConfig
 from plaszczaki_scraper.db import Database
-from plaszczaki_scraper.http import FetchError, HttpClient, RobotsDenied
+from plaszczaki_scraper.http import CrawlDeferred, FetchError, HttpClient, RobotsDenied
 from plaszczaki_scraper.models import Listing
 from plaszczaki_scraper.regions import RegionMatch, RegionRegistry
 
@@ -43,6 +42,8 @@ class RunStats:
     unchanged: int = 0
     details_ok: int = 0
     details_failed: int = 0
+    details_skipped: int = 0
+    deferred: int = 0
     known: int = 0
     pages_scanned: int = 0
     skipped_region: int = 0
@@ -69,7 +70,7 @@ class Runner:
         db: Database,
         client: HttpClient,
         regions: RegionRegistry,
-        source_config: AdapterConfig | None = None,
+        source_config: SourceConfig | None = None,
         on_saved: Callable[[Sequence[Listing]], None] | None = None,
     ) -> None:
         self.options = options
@@ -119,10 +120,10 @@ class Runner:
         return self.options.limit is not None and self._discovery_count >= self.options.limit
 
     def _discover(self) -> None:
-        queries = filter_queries(
-            self.adapter.queries(self.options.regions),
-            self.options.offer_types,
-        )
+        queries = self.adapter.queries(self.options.regions)
+        if self.options.offer_types:
+            wanted = set(self.options.offer_types)
+            queries = [query for query in queries if query.offer_type in wanted]
         if self.options.offer_types and not queries:
             logger.warning(
                 "source %s emits no queries for offer types %s",
@@ -135,6 +136,10 @@ class Runner:
             if self.options.newest_only:
                 query = self._newest_query(query)
             self._discover_query(query)
+            if self.stats.deferred:
+                # A crawl-delay deferral means the whole source is done for now;
+                # the next scheduled run resumes at the rotated query.
+                break
 
     def _newest_query(self, query: Query) -> Query:
         """Apply the adapter's newest-first URL, or the generic config parameter."""
@@ -175,6 +180,14 @@ class Runner:
             except RobotsDenied:
                 self.stats.skipped_robots += 1
                 logger.warning("robots.txt disallows %s", page_query.url)
+                return
+            except CrawlDeferred as exc:
+                self.stats.deferred += 1
+                logger.info(
+                    "deferring %s until the robots crawl delay elapses (%.0fs left)",
+                    page_query.url,
+                    exc.remaining,
+                )
                 return
             except FetchError as exc:
                 self.stats.http_errors += 1
@@ -222,11 +235,15 @@ class Runner:
                         print(json.dumps(item.to_json_dict(), ensure_ascii=False))
                     continue
 
-                detail = self._fetch_detail(item)
-                if detail is None:
-                    self.stats.details_failed += 1
-                    continue
-                self.stats.details_ok += 1
+                detail = item
+                if self._hydrates_details():
+                    detail = self._fetch_detail(item)
+                    if detail is None:
+                        self.stats.details_failed += 1
+                        continue
+                    self.stats.details_ok += 1
+                else:
+                    self.stats.details_skipped += 1
                 if self.options.dry_run:
                     print(json.dumps(detail.to_json_dict(), ensure_ascii=False))
                 else:
@@ -245,13 +262,15 @@ class Runner:
 
             if page == 1 or page % 10 == 0 or page >= total_pages:
                 logger.info(
-                    "page %s %s/%s batch=%s hydrated=%s known=%s failed=%s inserted=%s updated=%s",
+                    "page %s %s/%s batch=%s hydrated=%s skipped=%s known=%s failed=%s "
+                    "inserted=%s updated=%s",
                     query.key,
                     page,
                     total_pages,
                     len(parsed.items),
                     len(batch),
                     len(known_ids),
+                    self.stats.details_skipped,
                     self.stats.details_failed,
                     self.stats.inserted,
                     self.stats.updated,
@@ -268,6 +287,10 @@ class Runner:
         item.city = item.city or match.city
         return True
 
+    def _hydrates_details(self) -> bool:
+        config = self.source_config
+        return config is None or config.hydrate_details
+
     def _fetch_detail(self, summary: Listing) -> Listing | None:
         url = summary.url
         resolver = getattr(self.adapter, "detail_url", None)
@@ -278,6 +301,14 @@ class Runner:
         except RobotsDenied:
             self.stats.skipped_robots += 1
             logger.warning("robots.txt disallows detail %s", url)
+            return None
+        except CrawlDeferred as exc:
+            self.stats.deferred += 1
+            logger.info(
+                "deferring detail %s until the robots crawl delay elapses (%.0fs left)",
+                url,
+                exc.remaining,
+            )
             return None
         except FetchError as exc:
             self.stats.http_errors += 1

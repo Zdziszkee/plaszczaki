@@ -2,7 +2,7 @@
 
 ## Layout
 - `web/` — TanStack Start app (routes, components, db, auth).
-- `scraper/` — Python sidecar; the portal inventory is `scraper/config/sources.json`, adapter settings are `scraper/config/adapters.json`, and the geographic scope is `scraper/config/regions.json`. It writes listings directly to `data/plaszczaki.db`; the schema is owned by Drizzle.
+- `scraper/` — Python sidecar; `scraper/config/sources.json` is the single config (catalog fields plus adapter settings for implemented sources, with `defaults.rps` and `refresh_minutes`), and the geographic scope is `scraper/config/regions.json`. It writes listings directly to `data/plaszczaki.db`; the schema is owned by Drizzle.
 - `deploy/` — Containerfiles and Podman quadlets; install them to `~/.config/containers/systemd`.
 - `data/` — runtime only (SQLite DB, scraper output); gitignored.
 

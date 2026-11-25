@@ -342,16 +342,22 @@ def _case_number(raw: dict[str, Any], title: str | None) -> str | None:
     return None
 
 
-def _address_text(
-    street: str | None, building: str | None, flat: str | None, zip_code: str | None
+def _street_line(
+    street: str | None,
+    building: str | None,
+    flat: str | None,
 ) -> str | None:
+    """Street with its building and flat number: ``"Partyzantów 24/59"``."""
     number = building or ""
     if building and flat:
         number = f"{building}/{flat}"
     elif flat:
         number = flat
-    line = " ".join(part for part in (street, number) if part) or None
-    return ", ".join(part for part in (line, zip_code) if part) or None
+    return " ".join(part for part in (street, number) if part) or None
+
+
+def _address_text(street_line: str | None, zip_code: str | None) -> str | None:
+    return ", ".join(part for part in (street_line, zip_code) if part) or None
 
 
 def _property_type(raw: dict[str, Any], title: str | None) -> PropertyType:
@@ -445,11 +451,15 @@ class KomornikAdapter:
             return None
 
         address = _dict(raw.get("address"))
-        street = " ".join((_text(address.get("street")) or "").split()) or None
+        street_name = " ".join((_text(address.get("street")) or "").split()) or None
         building = _text(address.get("buildingNo"))
         flat = _text(address.get("flatNo"))
         zip_code = _text(address.get("zipCode"))
         city = _text(address.get("city"))
+        # Keep the building/flat number in ``street``: it is what makes the
+        # address geocodable and what distinguishes the auction's canonical key.
+        address_line = _street_line(street_name, building, flat)
+        street = address_line if street_name is not None else None
 
         province = _text(raw.get("province")) or _text(address.get("province"))
         voivodeship = self.regions.canonical_voivodeship(province) or province
@@ -498,7 +508,7 @@ class KomornikAdapter:
             voivodeship=voivodeship,
             city=city,
             street=street,
-            address_text=_address_text(street, building, flat, zip_code),
+            address_text=_address_text(address_line, zip_code),
             lat=lat,
             lng=lng,
             geo_source="source" if lat is not None and lng is not None else None,

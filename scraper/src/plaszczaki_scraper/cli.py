@@ -6,10 +6,10 @@ import argparse
 import fcntl
 import json
 import logging
+import os
 import sys
 from collections.abc import Generator
 from contextlib import contextmanager
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -18,25 +18,12 @@ import httpx
 from plaszczaki_scraper.adapters.registry import build_adapter
 from plaszczaki_scraper.audit import audit_sources
 from plaszczaki_scraper.config import (
-    AdapterConfig,
-    AdaptersConfig,
     ConfigError,
     RegionsConfig,
     SourceConfig,
     SourcesConfig,
-    load_adapters_config,
-    load_coverage_config,
     load_regions_config,
     load_sources_config,
-)
-from plaszczaki_scraper.coverage import (
-    OFFER_FILTERS,
-    collect_cells,
-    missing_cells,
-    render_cells,
-    render_matrix,
-    summarize,
-    validate_coverage,
 )
 from plaszczaki_scraper.db import Database, SchemaError, default_database_path
 from plaszczaki_scraper.geocode import GeocodeStore, GeocodeWorker
@@ -51,6 +38,9 @@ from plaszczaki_scraper.watch import run_watch_once, watch_loop
 
 logger = logging.getLogger(__name__)
 
+# Transactions accepted by ``--offer-type``; the adapters emit these labels.
+OFFER_FILTERS = ("sale", "rent", "lease", "auction", "other")
+
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -62,7 +52,7 @@ def _parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     run = subparsers.add_parser("run", help="discover and hydrate listings")
-    run.add_argument("--source", help="source id from adapters.json")
+    run.add_argument("--source", help="source id from config/sources.json")
     run.add_argument(
         "--mode",
         choices=("discover", "run", "backfill"),
@@ -91,6 +81,10 @@ def _parser() -> argparse.ArgumentParser:
         "--incremental-pages",
         type=int,
         help="newest pages per query in incremental mode (default: source config)",
+    )
+    run.add_argument(
+        "--lock-file",
+        help="override the scraper lock path (env: PLASZCZAKI_LOCK_FILE)",
     )
 
     run_all = subparsers.add_parser(
@@ -122,6 +116,10 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="only read the newest pages and skip listings already in the database",
     )
+    run_all.add_argument(
+        "--lock-file",
+        help="override the scraper lock path (env: PLASZCZAKI_LOCK_FILE)",
+    )
 
     watch = subparsers.add_parser(
         "watch",
@@ -135,7 +133,7 @@ def _parser() -> argparse.ArgumentParser:
         "--region",
         help="comma-separated voivodeship ids (default: regions.json 'default')",
     )
-    watch.add_argument("--force", action="store_true", help="ignore poll_minutes")
+    watch.add_argument("--force", action="store_true", help="ignore the refresh schedule")
     watch.add_argument(
         "--offer-type",
         type=_offer_type_filter,
@@ -174,6 +172,11 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="queue stored listings that still have no coordinates",
     )
+    geocode.add_argument(
+        "--requeue-rejected",
+        action="store_true",
+        help="re-open rejected jobs so the improved address matcher can retry them",
+    )
 
     subparsers.add_parser("verify-schema", help="check the SQLite schema")
     subparsers.add_parser("list-sources", help="show configured adapters and inventory")
@@ -200,43 +203,6 @@ def _parser() -> argparse.ArgumentParser:
         "--backfill",
         action="store_true",
         help="recompute keys for every stored listing",
-    )
-
-    coverage = subparsers.add_parser(
-        "coverage",
-        help="declared-vs-actual scrape coverage per source, region and transaction",
-    )
-    coverage.add_argument("--source", help="comma-separated source ids")
-    coverage.add_argument(
-        "--region",
-        help="comma-separated voivodeship ids (default: regions.json 'default')",
-    )
-    coverage.add_argument(
-        "--offer-type",
-        type=_offer_type_filter,
-        default=(),
-        help="comma-separated transactions to report: sale,rent,lease,auction,other",
-    )
-    coverage.add_argument(
-        "--cells",
-        action="store_true",
-        help="one line per property type instead of the per-transaction matrix",
-    )
-    coverage.add_argument(
-        "--missing",
-        action="store_true",
-        help="only cells with no query, no stored rows or undeclared drift",
-    )
-    coverage.add_argument(
-        "--all",
-        action="store_true",
-        help="include disabled adapters",
-    )
-    coverage.add_argument("--json", action="store_true", help="machine-readable output")
-    coverage.add_argument(
-        "--strict",
-        action="store_true",
-        help="exit 2 when any reported cell needs work",
     )
 
     llm = subparsers.add_parser("llm", help="inspect and test the OpenCode inference lane")
@@ -279,8 +245,6 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_review_sources(args)
         if args.command == "dedupe":
             return _cmd_dedupe(args)
-        if args.command == "coverage":
-            return _cmd_coverage(args)
         if args.command == "llm":
             return _cmd_llm(args)
     except ConfigError as exc:
@@ -296,16 +260,22 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
-    adapters = load_adapters_config()
+    catalog = load_sources_config()
     regions_config = load_regions_config()
-    source = _select_source(adapters, args.source)
+    source = _select_source(catalog, args.source)
     regions = _select_regions(regions_config, args.region)
     _warn_limit_without_region(args.limit, regions)
     registry = RegionRegistry(regions_config)
     adapter = build_adapter(source, regions=registry)
 
     rps = args.rps if args.rps is not None else source.rps
-    client = HttpClient(rps=rps, robots=None, ua=user_agent())
+    client = HttpClient(
+        rps=rps,
+        robots=None,
+        ua=user_agent(),
+        fetch_mode=source.fetch_mode,
+        crawl_delay_mode=source.crawl_delay_mode,
+    )
     options = RunOptions(
         source_id=source.id,
         mode=args.mode,
@@ -331,11 +301,11 @@ def _cmd_run(args: argparse.Namespace) -> int:
             db.upsert_source(
                 source_id=source.id,
                 label=source.label,
-                homepage_url=source.homepage,
-                adapter=source.adapter,
+                homepage_url=source.urls[0],
+                adapter=_adapter_name(source),
                 enabled=source.enabled,
             )
-        with file_lock(default_cache_dir().parent / "scraper.lock") as acquired:
+        with file_lock(_lock_path(args.lock_file)) as acquired:
             if not acquired:
                 print("another scraper run is already active; skipping", file=sys.stderr)
                 return 0
@@ -422,7 +392,6 @@ def _select_probe_sources(catalog: SourcesConfig, args: argparse.Namespace) -> l
 
 
 def _cmd_run_all(args: argparse.Namespace) -> int:
-    adapters = load_adapters_config()
     catalog = load_sources_config()
     regions_config = load_regions_config()
     regions = _select_regions(regions_config, args.region)
@@ -431,9 +400,8 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
 
     selected = [
         source
-        for source in adapters.enabled()
-        if args.tier is None
-        or (source.id in catalog.sources and catalog.sources[source.id].tier == args.tier)
+        for source in catalog.enabled_adapters()
+        if args.tier is None or source.tier == args.tier
     ]
     if not selected:
         raise ConfigError("no enabled adapters match the requested tier")
@@ -454,12 +422,12 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
                 db.upsert_source(
                     source_id=source.id,
                     label=source.label,
-                    homepage_url=source.homepage,
-                    adapter=source.adapter,
+                    homepage_url=source.urls[0],
+                    adapter=_adapter_name(source),
                     enabled=source.enabled,
                 )
 
-        with file_lock(default_cache_dir().parent / "scraper.lock") as acquired:
+        with file_lock(_lock_path(args.lock_file)) as acquired:
             if not acquired:
                 print("another scraper run is already active; skipping", file=sys.stderr)
                 return 0
@@ -468,7 +436,13 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
                 logger.info("run-all source=%s", source.id)
                 try:
                     adapter = build_adapter(source, regions=registry)
-                    client = HttpClient(rps=source.rps, robots=None, ua=user_agent())
+                    client = HttpClient(
+                        rps=source.rps,
+                        robots=None,
+                        ua=user_agent(),
+                        fetch_mode=source.fetch_mode,
+                        crawl_delay_mode=source.crawl_delay_mode,
+                    )
                     options = RunOptions(
                         source_id=source.id,
                         mode=args.mode,
@@ -518,7 +492,7 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
 
 
 def _cmd_watch(args: argparse.Namespace) -> int:
-    adapters = load_adapters_config()
+    catalog = load_sources_config()
     regions_config = load_regions_config()
     registry = RegionRegistry(regions_config)
     regions = _select_regions(regions_config, args.region) if args.region else None
@@ -540,7 +514,7 @@ def _cmd_watch(args: argparse.Namespace) -> int:
         if args.once:
             report = run_watch_once(
                 db=db,
-                adapters=adapters,
+                catalog=catalog,
                 regions=registry,
                 sources=sources,
                 force=args.force,
@@ -554,7 +528,7 @@ def _cmd_watch(args: argparse.Namespace) -> int:
             report = {
                 "cycles": watch_loop(
                     db=db,
-                    adapters=adapters,
+                    catalog=catalog,
                     regions=registry,
                     interval=args.interval,
                     max_cycles=args.max_cycles,
@@ -596,6 +570,9 @@ def _cmd_geocode(args: argparse.Namespace) -> int:
     store = GeocodeStore()
     try:
         db.verify_schema()
+        requeued = 0
+        if args.requeue_rejected and not args.dry_run:
+            requeued = store.requeue_rejected()
         if args.enqueue_existing and not args.dry_run:
             for listing in db.iter_listings_missing_geo(limit=args.limit * 5):
                 store.enqueue(listing)
@@ -605,6 +582,7 @@ def _cmd_geocode(args: argparse.Namespace) -> int:
             regions=registry,
             rps=args.rps,
         ).run(limit=args.limit, dry_run=args.dry_run)
+        result["requeued"] = requeued
     finally:
         store.close()
         db.close()
@@ -671,80 +649,6 @@ def _cmd_dedupe(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_coverage(args: argparse.Namespace) -> int:
-    adapters = load_adapters_config()
-    regions_config = load_regions_config()
-    coverage = load_coverage_config()
-    regions = _select_regions(regions_config, args.region)
-
-    problems = validate_coverage(
-        coverage=coverage,
-        adapters=adapters,
-        regions=regions_config,
-    )
-    if problems:
-        raise ConfigError("coverage config is inconsistent: " + "; ".join(problems))
-
-    if args.source:
-        wanted = [item.strip() for item in args.source.split(",") if item.strip()]
-        unknown = [source_id for source_id in wanted if source_id not in adapters.sources]
-        if unknown:
-            raise ConfigError(f"unknown sources: {unknown}")
-        adapters = AdaptersConfig(
-            defaults_rps=adapters.defaults_rps,
-            sources={source_id: adapters.sources[source_id] for source_id in wanted},
-        )
-
-    db = Database(default_database_path())
-    try:
-        db.verify_schema()
-        stored = db.count_by_axes()
-    finally:
-        db.close()
-
-    rows = collect_cells(
-        coverage=coverage,
-        adapters=adapters,
-        regions=regions,
-        stored=stored,
-        include_disabled=args.all,
-    )
-    if args.offer_type:
-        wanted_offers = set(args.offer_type)
-        rows = [cell for cell in rows if cell.offer_type in wanted_offers]
-    if args.missing:
-        rows = missing_cells(rows)
-
-    summary = summarize(rows)
-    if args.json:
-        print(
-            json.dumps(
-                {
-                    "summary": summary,
-                    "cells": [
-                        {**asdict(cell), "state": cell.state, "ok": cell.ok} for cell in rows
-                    ],
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-    else:
-        if args.cells or args.missing:
-            print(render_cells(rows))
-        else:
-            print(render_matrix(rows))
-        print(
-            f"summary: cells={summary['cells']} ok={summary['ok']} "
-            f"empty={summary['empty']} missing_query={summary['missing_query']} "
-            f"undeclared={summary['undeclared']} stored={summary['stored']}",
-        )
-
-    if args.strict and any(not cell.ok for cell in rows):
-        return 2
-    return 0
-
-
 def _cmd_verify_schema() -> int:
     db = Database(default_database_path())
     try:
@@ -756,7 +660,6 @@ def _cmd_verify_schema() -> int:
 
 
 def _cmd_list_sources() -> int:
-    adapters = load_adapters_config()
     catalog = load_sources_config()
     inventory = catalog.urls()
     counts = {status: 0 for status in ("implemented", "planned", "blocked", "excluded")}
@@ -773,24 +676,22 @@ def _cmd_list_sources() -> int:
         catalog.sources.values(),
         key=lambda item: (item.tier, item.status != "implemented", item.id),
     ):
-        adapter = adapters.sources.get(source.id)
-        if adapter is not None:
-            state = "enabled" if adapter.enabled else "disabled"
-            mode = "incremental" if adapter.incremental else "manual"
+        if source.adapter is not None:
+            state = "enabled" if source.enabled else "disabled"
+            mode = "incremental" if source.incremental else "manual"
+            refresh = f"{source.refresh_minutes}m" if source.refresh_minutes is not None else "-"
             print(
                 f"- {source.id}: tier={source.tier} {source.status} {state} "
-                f"adapter={adapter.adapter} rps={adapter.rps:g} "
-                f"poll={adapter.poll_minutes}m {mode} ({source.label})",
+                f"adapter={source.adapter} rps={source.rps:g} "
+                f"refresh={refresh} {mode} ({source.label})",
             )
-            note = adapter.notes or source.notes
         else:
             print(
                 f"- {source.id}: tier={source.tier} {source.status} "
                 f"kind={source.kind} ({source.label})",
             )
-            note = source.notes
-        if note:
-            print(f"  note: {note}")
+        if source.notes:
+            print(f"  note: {source.notes}")
     return 0
 
 
@@ -806,19 +707,26 @@ def _cmd_llm(args: argparse.Namespace) -> int:
     return 0 if report["working"] else 2
 
 
-def _select_source(adapters: AdaptersConfig, source_id: str | None) -> AdapterConfig:
+def _select_source(catalog: SourcesConfig, source_id: str | None) -> SourceConfig:
     if source_id is not None:
-        source = adapters.sources.get(source_id)
+        source = catalog.sources.get(source_id)
         if source is None:
-            available = ", ".join(sorted(adapters.sources))
+            available = ", ".join(sorted(catalog.sources))
             raise ConfigError(f"unknown source '{source_id}'; available: {available}")
         return source
 
-    enabled = adapters.enabled()
+    enabled = catalog.enabled_adapters()
     if len(enabled) == 1:
         return enabled[0]
     available = ", ".join(source.id for source in enabled) or "(none)"
     raise ConfigError(f"--source is required; enabled sources: {available}")
+
+
+def _adapter_name(source: SourceConfig) -> str:
+    """The registered adapter name; sources without one cannot be run."""
+    if source.adapter is None:
+        raise ConfigError(f"source '{source.id}' has no adapter in config/sources.json")
+    return source.adapter
 
 
 def _select_regions(config: RegionsConfig, value: str | None) -> tuple[str, ...]:
@@ -850,6 +758,18 @@ def _warn_limit_without_region(limit: int | None, region_ids: tuple[str, ...]) -
             "to avoid leaving later voivodeships unscraped",
             ",".join(region_ids),
         )
+
+
+def _lock_path(override: str | None) -> Path:
+    """Return the lock path, allowing a per-job override for slow crawls.
+
+    ``gdom`` runs for hours because of its 20-minute crawl delay; a shared lock
+    would skip every watch cycle meanwhile, so the slow lane gets its own file.
+    """
+    raw = override or os.environ.get("PLASZCZAKI_LOCK_FILE")
+    if raw:
+        return Path(raw).expanduser()
+    return default_cache_dir().parent / "scraper.lock"
 
 
 @contextmanager

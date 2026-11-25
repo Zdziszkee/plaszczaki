@@ -1,8 +1,8 @@
 """Scheduled incremental runs ("watch" mode).
 
 The watcher polls only the sources that opted into ``incremental`` in
-``config/adapters.json``. Each pass runs the sources whose ``poll_minutes`` have
-elapsed since their last ``incremental`` run; an incremental run reads the
+``config/sources.json``. Each pass runs the sources whose ``refresh_minutes``
+have elapsed since their last ``incremental`` run; an incremental run reads the
 newest search pages, skips listings already stored and hydrates only new detail
 pages.
 
@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from plaszczaki_scraper.adapters.registry import build_adapter
-from plaszczaki_scraper.config import AdapterConfig, AdaptersConfig, ConfigError
+from plaszczaki_scraper.config import ConfigError, SourceConfig, SourcesConfig
 from plaszczaki_scraper.db import Database
 from plaszczaki_scraper.http import HttpClient
 from plaszczaki_scraper.models import Listing
@@ -86,7 +86,12 @@ def file_lock(path: Path) -> Generator[bool]:
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
-def is_due(source: AdapterConfig, last_run_ms: int | None, now_ms: int) -> bool:
+def _refresh_minutes(source: SourceConfig) -> int:
+    """The poll interval; adapter sources default to one hour."""
+    return source.refresh_minutes or 60
+
+
+def is_due(source: SourceConfig, last_run_ms: int | None, now_ms: int) -> bool:
     """Whether ``source`` should run at ``now_ms``.
 
     A source never run before is always due. A timestamp in the future (clock
@@ -94,25 +99,25 @@ def is_due(source: AdapterConfig, last_run_ms: int | None, now_ms: int) -> bool:
     """
     if last_run_ms is None:
         return True
-    return now_ms - last_run_ms >= source.poll_minutes * MINUTE_MS
+    return now_ms - last_run_ms >= _refresh_minutes(source) * MINUTE_MS
 
 
-def _watchable(adapters: AdaptersConfig) -> list[AdapterConfig]:
-    """Enabled, incremental sources in a stable order."""
+def _watchable(catalog: SourcesConfig) -> list[SourceConfig]:
+    """Enabled, incremental adapter sources in a stable order."""
     return sorted(
-        (source for source in adapters.sources.values() if source.enabled and source.incremental),
-        key=lambda source: (source.poll_minutes, source.id),
+        (source for source in catalog.enabled_adapters() if source.incremental),
+        key=lambda source: (_refresh_minutes(source), source.id),
     )
 
 
 def due_sources(
-    adapters: AdaptersConfig,
+    catalog: SourcesConfig,
     db: Database,
     now_ms: int,
     *,
     offer_types: Sequence[str] = (),
     region_ids: Sequence[str] | None = None,
-) -> list[AdapterConfig]:
+) -> list[SourceConfig]:
     """Watchable sources whose poll interval has elapsed, sorted by id.
 
     The run mode matches :func:`run_watch_once`, so a rent/śląskie job is due
@@ -121,22 +126,22 @@ def due_sources(
     mode = watch_mode(offer_types, region_ids or ())
     return [
         source
-        for source in _watchable(adapters)
+        for source in _watchable(catalog)
         if is_due(source, db.last_run_at(source.id, mode), now_ms)
     ]
 
 
 def _select_sources(
-    adapters: AdaptersConfig,
+    catalog: SourcesConfig,
     sources: list[str] | None,
-) -> list[AdapterConfig]:
+) -> list[SourceConfig]:
     """Apply the optional ``--source`` filter to the watchable set."""
-    watchable = _watchable(adapters)
+    watchable = _watchable(catalog)
     if sources is None:
         return watchable
 
     wanted = set(sources)
-    unknown = sorted(wanted - set(adapters.sources))
+    unknown = sorted(wanted - set(catalog.sources))
     if unknown:
         raise ConfigError(f"unknown sources: {unknown}")
 
@@ -144,7 +149,7 @@ def _select_sources(
     unwatchable = sorted(wanted - watchable_ids)
     if unwatchable:
         raise ConfigError(
-            "sources are not enabled+incremental in adapters.json: " + ", ".join(unwatchable),
+            "sources are not enabled+incremental in config/sources.json: " + ", ".join(unwatchable),
         )
     return [source for source in watchable if source.id in wanted]
 
@@ -152,7 +157,7 @@ def _select_sources(
 def run_watch_once(
     *,
     db: Database,
-    adapters: AdaptersConfig,
+    catalog: SourcesConfig,
     regions: RegionRegistry,
     sources: list[str] | None = None,
     force: bool = False,
@@ -177,7 +182,7 @@ def run_watch_once(
     selected_regions = tuple(region_ids) if region_ids else regions.default_regions
     results: list[dict[str, Any]] = []
 
-    for source in _select_sources(adapters, sources):
+    for source in _select_sources(catalog, sources):
         last_run = db.last_run_at(source.id, mode)
         if not force and not is_due(source, last_run, current_ms):
             logger.debug("watch skip %s: not due", source.id)
@@ -189,7 +194,9 @@ def run_watch_once(
                     "reason": "not due",
                     "last_run_at": last_run,
                     "next_due_at": (
-                        None if last_run is None else last_run + source.poll_minutes * MINUTE_MS
+                        None
+                        if last_run is None
+                        else last_run + _refresh_minutes(source) * MINUTE_MS
                     ),
                 },
             )
@@ -209,17 +216,23 @@ def run_watch_once(
                 continue
 
             if not dry_run:
+                adapter_name = source.adapter
+                assert adapter_name is not None, f"source '{source.id}' has no adapter"
                 db.upsert_source(
                     source_id=source.id,
                     label=source.label,
-                    homepage_url=source.homepage,
-                    adapter=source.adapter,
+                    homepage_url=source.urls[0],
+                    adapter=adapter_name,
                     enabled=source.enabled,
                 )
             logger.info("watch run source=%s", source.id)
             try:
                 adapter = build_adapter(source, regions=regions)
-                client = HttpClient(rps=source.rps)
+                client = HttpClient(
+                    rps=source.rps,
+                    fetch_mode=source.fetch_mode,
+                    crawl_delay_mode=source.crawl_delay_mode,
+                )
                 result = Runner(
                     options=RunOptions(
                         source_id=source.id,
@@ -253,7 +266,7 @@ def run_watch_once(
 def watch_loop(
     *,
     db: Database,
-    adapters: AdaptersConfig,
+    catalog: SourcesConfig,
     regions: RegionRegistry,
     interval: float = DEFAULT_INTERVAL_SECONDS,
     max_cycles: int | None = None,
@@ -269,7 +282,7 @@ def watch_loop(
     """Run watch passes until interrupted or ``max_cycles`` is reached.
 
     The config objects are captured once; restart the process to pick up edits
-    to ``adapters.json``/``regions.json``. Returns one pass report per cycle.
+    to ``config/sources.json``/``regions.json``. Returns one pass report per cycle.
     """
     if interval <= 0:
         raise ValueError("interval must be positive")
@@ -281,7 +294,7 @@ def watch_loop(
         while max_cycles is None or len(reports) < max_cycles:
             report = run_watch_once(
                 db=db,
-                adapters=adapters,
+                catalog=catalog,
                 regions=regions,
                 sources=sources,
                 force=force,

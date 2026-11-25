@@ -24,5 +24,11 @@ ENV PATH="/app/.venv/bin:$PATH" \
     DATABASE_URL=/data/plaszczaki.db \
     PLASZCZAKI_CACHE_DIR=/data/cache
 
+# Stealth fetching (fetch_mode="stealth") needs a browser. No adapter enables it
+# yet, so the image stays lean. To use it, install Chromium at build time:
+#   RUN python -m playwright install --with-deps chromium
+# and set PLAYWRIGHT_BROWSERS_PATH=/ms-playwright (plus SCRAPER_CHROMIUM_PATH if
+# you use a system Chromium instead).
+
 ENTRYPOINT ["python", "-m", "plaszczaki_scraper"]
 CMD ["watch", "--once", "--limit", "200"]

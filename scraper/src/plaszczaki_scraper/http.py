@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import random
+import shutil
 import time
 from email.utils import parsedate_to_datetime
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal
+from urllib.parse import urlsplit
 
 from scrapling.fetchers import Fetcher
 
 from plaszczaki_scraper.ratelimit import HostRateLimiter
-from plaszczaki_scraper.robots import RobotsCache
+from plaszczaki_scraper.robots import RobotsCache, default_cache_dir
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +33,56 @@ class RobotsDenied(FetchError):
 
 class HttpBlocked(FetchError):
     """Raised when the server actively blocks the request."""
+
+
+class CrawlDeferred(FetchError):
+    """Raised when robots.txt asks us to wait before the next request.
+
+    The slow lane records the last request time on disk, so a one-shot run can
+    return immediately and let the next scheduled run do the work instead of
+    sleeping for twenty minutes inside the watch cycle.
+    """
+
+    def __init__(self, url: str, remaining: float) -> None:
+        self.url = url
+        self.remaining = remaining
+        super().__init__(f"crawl delay not elapsed for {url}: {remaining:.0f}s left")
+
+
+class HostDelayStore:
+    """Persistent per-host last-request timestamps for robots crawl delays."""
+
+    def __init__(self, path: Path | None = None) -> None:
+        self.path = path or default_cache_dir() / "host-delays.json"
+
+    def _read(self) -> dict[str, float]:
+        try:
+            payload = json.loads(self.path.read_text(encoding="utf-8"))
+        except FileNotFoundError, json.JSONDecodeError, OSError:
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        return {
+            str(host): float(value)
+            for host, value in payload.items()
+            if isinstance(value, int | float)
+        }
+
+    def remaining(self, host: str, delay: float) -> float:
+        if delay <= 0:
+            return 0.0
+        last = self._read().get(host)
+        if last is None:
+            return 0.0
+        return max(0.0, delay - (time.time() - last))
+
+    def mark(self, host: str) -> None:
+        payload = self._read()
+        payload[host] = time.time()
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.path.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+        temporary.replace(self.path)
 
 
 def user_agent() -> str:
@@ -95,12 +149,22 @@ class HttpClient:
         max_retries: int = 3,
         robots: RobotsCache | None = None,
         ua: str | None = None,
+        fetch_mode: Literal["http", "stealth"] = "http",
+        browser_path: str | None = None,
+        crawl_delay_mode: Literal["sleep", "defer"] = "sleep",
+        delay_store: HostDelayStore | None = None,
     ) -> None:
         self.limiter = HostRateLimiter(rps)
         self.timeout = timeout
         self.max_retries = max_retries
         self.ua = ua or user_agent()
         self.robots = robots or RobotsCache(user_agent=self.ua)
+        self.fetch_mode = fetch_mode
+        self.crawl_delay_mode = crawl_delay_mode
+        self.delay_store = delay_store or HostDelayStore()
+        self.browser_path = (
+            browser_path or os.environ.get("SCRAPER_CHROMIUM_PATH") or shutil.which("chromium")
+        )
         self.headers = {
             "User-Agent": self.ua,
             "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
@@ -114,23 +178,20 @@ class HttpClient:
 
         crawl_delay = self.robots.crawl_delay(url)
         if crawl_delay and crawl_delay > 0:
-            # Respect the site's own delay in addition to our configured pace.
-            time.sleep(crawl_delay)
+            host = urlsplit(url).netloc.lower()
+            remaining = self.delay_store.remaining(host, crawl_delay)
+            if remaining > 0:
+                if self.crawl_delay_mode == "defer":
+                    raise CrawlDeferred(url, remaining)
+                # Respect the site's own delay in addition to our configured pace.
+                time.sleep(remaining)
+            self.delay_store.mark(host)
 
         last_error: Exception | None = None
         for attempt in range(self.max_retries + 1):
             self.limiter.wait(url)
             try:
-                response = Fetcher.get(
-                    url,
-                    headers=self.headers,
-                    timeout=self.timeout,
-                    retries=0,
-                    follow_redirects=True,
-                    # Do not fabricate a Google referer; some sites redirect or
-                    # serve a different page when stealthy headers are enabled.
-                    stealthy_headers=False,
-                )
+                response = self._fetch(url)
             except Exception as exc:  # Scrapling wraps several transport errors.
                 last_error = exc
                 logger.debug("fetch error for %s (attempt %s): %s", url, attempt + 1, exc)
@@ -165,6 +226,39 @@ class HttpClient:
             return response
 
         raise FetchError(f"failed to fetch {url}: {last_error}") from last_error
+
+    def _fetch(self, url: str) -> Any:
+        """Fetch with the plain HTTP client or Scrapling's browser engine."""
+        if self.fetch_mode == "stealth":
+            return self._stealth_fetch(url)
+        return Fetcher.get(
+            url,
+            headers=self.headers,
+            timeout=self.timeout,
+            retries=0,
+            follow_redirects=True,
+            # Do not fabricate a Google referer; some sites redirect or
+            # serve a different page when stealthy headers are enabled.
+            stealthy_headers=False,
+        )
+
+    def _stealth_fetch(self, url: str) -> Any:
+        """Fetch through a real browser (Playwright) for WAF-protected pages."""
+        from scrapling.fetchers import StealthyFetcher
+
+        kwargs: dict[str, Any] = {
+            "headless": True,
+            "timeout": int(self.timeout * 1000),
+            "network_idle": False,
+            "solve_cloudflare": False,
+            "extra_headers": dict(self.headers),
+        }
+        if self.browser_path:
+            kwargs["executable_path"] = self.browser_path
+        try:
+            return StealthyFetcher.fetch(url, **kwargs)
+        except Exception as exc:  # missing browser, launch failure, transport
+            raise FetchError(f"stealth fetch failed for {url}: {exc}") from exc
 
     def _retry_delay(self, attempt: int) -> float:
         base = min(30.0, 1.5 * (2**attempt))

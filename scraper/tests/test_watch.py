@@ -10,9 +10,9 @@ import pytest
 from plaszczaki_scraper import watch
 from plaszczaki_scraper.adapters.base import Query, SearchPage
 from plaszczaki_scraper.config import (
-    AdapterConfig,
-    AdaptersConfig,
     ConfigError,
+    SourceConfig,
+    SourcesConfig,
     load_regions_config,
     repo_root,
 )
@@ -45,22 +45,25 @@ def _source(
     *,
     enabled: bool = True,
     incremental: bool = True,
-    poll_minutes: int = 10,
-) -> AdapterConfig:
-    return AdapterConfig(
+    refresh_minutes: int = 10,
+) -> SourceConfig:
+    return SourceConfig(
         id=source_id,
-        adapter="fake",
         label=source_id,
-        homepage="https://example.test",
+        kind="portal",
+        tier=1,
+        status="implemented",
         enabled=enabled,
+        urls=("https://example.test",),
+        adapter="fake",
         incremental=incremental,
-        poll_minutes=poll_minutes,
+        refresh_minutes=refresh_minutes,
         incremental_pages=2,
     )
 
 
-def _adapters(*sources: AdapterConfig) -> AdaptersConfig:
-    return AdaptersConfig(defaults_rps=1.0, sources={source.id: source for source in sources})
+def _catalog(*sources: SourceConfig) -> SourcesConfig:
+    return SourcesConfig(defaults_rps=1.0, sources={source.id: source for source in sources})
 
 
 def _record_run(db: Database, source_id: str, started_at: int, mode: str = "incremental") -> None:
@@ -102,7 +105,7 @@ def _patch_build(
 ) -> list[str]:
     built: list[str] = []
 
-    def fake_build(config: AdapterConfig, *, regions: RegionRegistry) -> NoopAdapter:
+    def fake_build(config: SourceConfig, *, regions: RegionRegistry) -> NoopAdapter:
         built.append(config.id)
         if config.id in fail:
             raise ValueError(f"adapter {config.id} is broken")
@@ -117,7 +120,7 @@ def test_is_due_without_history() -> None:
 
 
 def test_is_due_uses_poll_interval() -> None:
-    source = _source("fake", poll_minutes=10)
+    source = _source("fake", refresh_minutes=10)
     interval = 10 * MINUTE_MS
 
     assert watch.is_due(source, NOW - interval, NOW) is True
@@ -128,7 +131,7 @@ def test_is_due_uses_poll_interval() -> None:
 
 def test_due_sources_filters_and_sorts_by_id(tmp_path: Path) -> None:
     with _database(tmp_path) as db:
-        adapters = _adapters(
+        adapters = _catalog(
             _source("zeta-due"),
             _source("alpha-due"),
             _source("beta-fresh"),
@@ -157,11 +160,11 @@ def test_run_watch_once_runs_due_source_then_skips(
     lock = tmp_path / "watch.lock"
 
     with _database(tmp_path) as db:
-        adapters = _adapters(_source("fake", poll_minutes=10))
+        adapters = _catalog(_source("fake", refresh_minutes=10))
 
         first = watch.run_watch_once(
             db=db,
-            adapters=adapters,
+            catalog=adapters,
             regions=_regions(),
             now_ms=NOW,
             lock_path=lock,
@@ -183,7 +186,7 @@ def test_run_watch_once_runs_due_source_then_skips(
 
         second = watch.run_watch_once(
             db=db,
-            adapters=adapters,
+            catalog=adapters,
             regions=_regions(),
             now_ms=last + 9 * MINUTE_MS,
             lock_path=lock,
@@ -194,7 +197,7 @@ def test_run_watch_once_runs_due_source_then_skips(
 
         forced = watch.run_watch_once(
             db=db,
-            adapters=adapters,
+            catalog=adapters,
             regions=_regions(),
             now_ms=last + 9 * MINUTE_MS,
             force=True,
@@ -219,7 +222,7 @@ def test_run_watch_once_dry_run_writes_no_listings(
     with _database(tmp_path) as db:
         report = watch.run_watch_once(
             db=db,
-            adapters=_adapters(_source("fake")),
+            catalog=_catalog(_source("fake")),
             regions=_regions(),
             dry_run=True,
             now_ms=NOW,
@@ -241,7 +244,7 @@ def test_run_watch_once_isolates_source_failures(
     with _database(tmp_path) as db:
         report = watch.run_watch_once(
             db=db,
-            adapters=_adapters(_source("broken"), _source("fine")),
+            catalog=_catalog(_source("broken"), _source("fine")),
             regions=_regions(),
             now_ms=NOW,
             lock_path=tmp_path / "watch.lock",
@@ -267,7 +270,7 @@ def test_run_watch_once_skips_when_lock_is_held(
         assert acquired
         report = watch.run_watch_once(
             db=db,
-            adapters=_adapters(_source("fake")),
+            catalog=_catalog(_source("fake")),
             regions=_regions(),
             now_ms=NOW,
             lock_path=lock,
@@ -288,7 +291,7 @@ def test_run_watch_once_rejects_unknown_or_unwatchable_sources(
         with pytest.raises(ConfigError, match="unknown sources"):
             watch.run_watch_once(
                 db=db,
-                adapters=_adapters(_source("fake")),
+                catalog=_catalog(_source("fake")),
                 regions=_regions(),
                 sources=["nope"],
                 now_ms=NOW,
@@ -298,7 +301,7 @@ def test_run_watch_once_rejects_unknown_or_unwatchable_sources(
         with pytest.raises(ConfigError, match=r"not enabled\+incremental"):
             watch.run_watch_once(
                 db=db,
-                adapters=_adapters(_source("full", incremental=False)),
+                catalog=_catalog(_source("full", incremental=False)),
                 regions=_regions(),
                 sources=["full"],
                 now_ms=NOW,
@@ -317,7 +320,7 @@ def test_watch_loop_stops_after_max_cycles(
     with _database(tmp_path) as db:
         reports = watch.watch_loop(
             db=db,
-            adapters=_adapters(),
+            catalog=_catalog(),
             regions=_regions(),
             interval=30,
             max_cycles=2,
@@ -325,7 +328,7 @@ def test_watch_loop_stops_after_max_cycles(
         )
         empty = watch.watch_loop(
             db=db,
-            adapters=_adapters(),
+            catalog=_catalog(),
             regions=_regions(),
             max_cycles=0,
             lock_path=tmp_path / "watch.lock",
@@ -350,7 +353,7 @@ def test_watch_loop_exits_cleanly_on_keyboard_interrupt(
     with _database(tmp_path) as db:
         reports = watch.watch_loop(
             db=db,
-            adapters=_adapters(),
+            catalog=_catalog(),
             regions=_regions(),
             interval=5,
             lock_path=tmp_path / "watch.lock",

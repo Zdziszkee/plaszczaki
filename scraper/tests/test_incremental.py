@@ -7,7 +7,7 @@ from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
 from plaszczaki_scraper.adapters.base import Adapter, Query, SearchPage
-from plaszczaki_scraper.config import AdapterConfig, load_regions_config, repo_root
+from plaszczaki_scraper.config import SourceConfig, load_regions_config, repo_root
 from plaszczaki_scraper.db import Database
 from plaszczaki_scraper.http import HttpClient
 from plaszczaki_scraper.models import Listing
@@ -94,12 +94,16 @@ def _database(tmp_path: Path) -> Database:
     return Database(path)
 
 
-def _source_config() -> AdapterConfig:
-    return AdapterConfig(
+def _source_config() -> SourceConfig:
+    return SourceConfig(
         id="fake",
-        adapter="fake",
         label="Fake",
-        homepage="https://example.test",
+        kind="portal",
+        tier=1,
+        status="implemented",
+        enabled=True,
+        urls=("https://example.test",),
+        adapter="fake",
         incremental=True,
         newest_param="sort",
         newest_value="newest",
@@ -161,3 +165,31 @@ def test_incremental_reads_two_newest_pages_and_skips_known(tmp_path: Path) -> N
         assert db.count_listings("fake") == 5
         checkpoints = db.conn.execute("SELECT COUNT(*) AS count FROM scraper_checkpoint")
         assert checkpoints.fetchone()["count"] == 0
+
+
+def test_hydrate_details_false_saves_search_cards(tmp_path: Path) -> None:
+    adapter = FakeAdapter()
+    client = FakeClient()
+    config = replace(_source_config(), hydrate_details=False, incremental=False)
+    with _database(tmp_path) as db:
+        db.upsert_source(
+            source_id="fake",
+            label="Fake",
+            homepage_url="https://example.test",
+            adapter="fake",
+        )
+
+        result = Runner(
+            options=RunOptions(source_id="fake", mode="run", limit=2),
+            adapter=cast(Adapter, adapter),
+            db=db,
+            client=cast(HttpClient, client),
+            regions=RegionRegistry(load_regions_config()),
+            source_config=config,
+        ).run()
+
+        assert result["status"] == "ok"
+        assert adapter.detail_calls == []
+        assert result["details_skipped"] == 2
+        assert result["details_ok"] == 0
+        assert db.count_listings("fake") == 2
