@@ -62,6 +62,31 @@ function hashString(value: string): number {
 	return hash;
 }
 
+function hslToHex(hue: number, saturation: number, lightness: number): string {
+	const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+	const segment = hue / 60;
+	const secondary = chroma * (1 - Math.abs((segment % 2) - 1));
+	const offset = lightness - chroma / 2;
+	let red = 0;
+	let green = 0;
+	let blue = 0;
+
+	if (segment < 1) [red, green] = [chroma, secondary];
+	else if (segment < 2) [red, green] = [secondary, chroma];
+	else if (segment < 3) [green, blue] = [chroma, secondary];
+	else if (segment < 4) [green, blue] = [secondary, chroma];
+	else if (segment < 5) [red, blue] = [secondary, chroma];
+	else [red, blue] = [chroma, secondary];
+
+	return `#${[red, green, blue]
+		.map((channel) =>
+			Math.round((channel + offset) * 255)
+				.toString(16)
+				.padStart(2, "0"),
+		)
+		.join("")}`;
+}
+
 /**
  * Color for a source id. Curated ids get a hand-picked hue; anything else
  * (a new portal added to `sources.json`) gets a stable, deterministic hue so
@@ -71,5 +96,5 @@ function hashString(value: string): number {
 export function sourceColor(sourceId: string): string {
 	const known = (SOURCE_COLORS as Record<string, string>)[sourceId];
 	if (known) return known;
-	return `hsl(${hashString(sourceId)} 72% 66%)`;
+	return hslToHex(hashString(sourceId), 0.72, 0.66);
 }
