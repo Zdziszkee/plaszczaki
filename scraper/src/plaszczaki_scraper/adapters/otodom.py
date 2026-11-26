@@ -237,6 +237,7 @@ class OtodomAdapter:
         )
         commune = levels.get("commune")
         city = _first(levels.get("city_or_village"), target.get("City"))
+        district = _text(levels.get("district"))
 
         address = _dict(location.get("address"))
         street_data = _dict(address.get("street"))
@@ -310,6 +311,7 @@ class OtodomAdapter:
                     for key, value in target.items()
                     if key not in {"Photo", "Title", "PriceRange", "AreaRange"}
                 },
+                "location_levels": levels,
             },
         )
         extra["otodom"] = otodom_extra
@@ -336,6 +338,7 @@ class OtodomAdapter:
             county=_text(county),
             commune=_text(commune),
             city=_text(city),
+            district=district,
             street=street,
             address_text=address_text,
             lat=lat,
@@ -372,6 +375,7 @@ class OtodomAdapter:
         rent = None if hide_price else parse_price(rent_price.get("value"))
 
         city = _text(levels.get("city_or_village"))
+        district = _text(levels.get("district"))
         county = _text(levels.get("county"))
         street_data = _dict(_dict(location.get("address")).get("street"))
         street = _text(street_data.get("name"))
@@ -404,6 +408,7 @@ class OtodomAdapter:
             county=county,
             commune=_text(levels.get("commune")),
             city=city,
+            district=district,
             street=street,
             address_text=address_text,
             images=self._images(item.get("images")),
@@ -418,6 +423,7 @@ class OtodomAdapter:
                     "transaction": item.get("transaction"),
                     "development_title": item.get("developmentTitle"),
                     "source": item.get("source"),
+                    "location_levels": levels,
                 },
             },
         )

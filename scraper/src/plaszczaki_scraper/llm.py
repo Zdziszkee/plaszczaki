@@ -21,10 +21,15 @@ DEFAULT_BASE_URL = "https://opencode.ai/inference"
 DEFAULT_TIMEOUT = 60.0
 
 ZERO_RETENTION_FREE = {"hy4-flash-free", "deepseek-v4.1-flash-free"}
-NO_TRAINING_FREE = {"beam-free"}
+# User-approved OpenCode Go free models: model output can be retained according
+# to the provider's terms, but extraction only uses public listing text.
+NO_TRAINING_FREE = {"beam-free", "hungerg-free", "iceman-contributor-free"}
 
 PREFERRED_FREE_ORDER = (
+    "hungerg-free",
     "hy4-flash-free",
+    "beam-free",
+    "iceman-contributor-free",
     "deepseek-v4.1-flash-free",
     "beam-free",
     "flint-40b-free",

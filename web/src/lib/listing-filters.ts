@@ -80,6 +80,14 @@ export function buildListingConditions(
 	if (filters.maxPrice !== undefined && !skip.has("maxPrice")) {
 		conditions.push(lte(listing.pricePln, filters.maxPrice));
 	}
+	if (filters.minScore !== undefined && !skip.has("minScore")) {
+		conditions.push(gte(listing.score, filters.minScore));
+	}
+	if (filters.scoreProfile && !skip.has("scoreProfile")) {
+		conditions.push(
+			sql`json_extract(${listing.scores}, '$."${filters.scoreProfile}"') IS NOT NULL`,
+		);
+	}
 
 	return conditions;
 }

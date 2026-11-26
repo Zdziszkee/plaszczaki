@@ -34,7 +34,8 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 			},
 			{
 				name: "description",
-				content: "Plaszczaki is a modern web app built with TanStack Start.",
+				content:
+					"Plaszczaki — ogłoszenia nieruchomości, mapa ofert i warstwy kolejowe dla Małopolski i Śląska.",
 			},
 			{
 				name: "theme-color",
@@ -55,13 +56,13 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
 	return (
-		<html lang="en" className="dark" suppressHydrationWarning>
+		<html lang="pl" className="dark" suppressHydrationWarning>
 			<head>
 				{/* biome-ignore lint/security/noDangerouslySetInnerHtml: static theme bootstrap */}
 				<script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
 				<HeadContent />
 			</head>
-			<body className="min-h-full bg-background font-sans text-foreground antialiased [overflow-wrap:anywhere]">
+			<body className="min-h-full font-sans text-foreground antialiased [overflow-wrap:anywhere]">
 				<Header />
 				{children}
 				<Footer />

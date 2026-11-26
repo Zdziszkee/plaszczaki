@@ -144,6 +144,31 @@ export const listing = sqliteTable(
 		floorLabel: text("floor_label"),
 		buildYear: integer("build_year"),
 
+		condition: text("condition"),
+		buildingType: text("building_type"),
+		buildingMaterial: text("building_material"),
+		heating: text("heating"),
+		windowsType: text("windows_type"),
+		ownership: text("ownership"),
+		energyCertificate: text("energy_certificate"),
+		ceilingHeightM: real("ceiling_height_m"),
+		buildingFloors: integer("building_floors"),
+		elevator: integer("elevator", { mode: "boolean" }),
+		parking: text("parking"),
+		parkingSpaces: integer("parking_spaces"),
+		balcony: integer("balcony", { mode: "boolean" }),
+		terrace: integer("terrace", { mode: "boolean" }),
+		garden: integer("garden", { mode: "boolean" }),
+		furnished: integer("furnished", { mode: "boolean" }),
+		petsAllowed: integer("pets_allowed", { mode: "boolean" }),
+		airConditioning: integer("air_conditioning", { mode: "boolean" }),
+		security: text("security"),
+		internet: integer("internet", { mode: "boolean" }),
+		fenced: integer("fenced", { mode: "boolean" }),
+		administrativeRentPln: integer("administrative_rent_pln"),
+		estimatePln: integer("estimate_pln"),
+		availableFrom: integer("available_from", { mode: "timestamp_ms" }),
+
 		voivodeship: text("voivodeship"),
 		county: text("county"),
 		commune: text("commune"),
@@ -177,6 +202,16 @@ export const listing = sqliteTable(
 			.notNull(),
 
 		canonicalKey: text("canonical_key"),
+
+		// Attractiveness scoring, owned by the scraper's `score` command.
+		score: integer("score"),
+		scoreProfile: text("score_profile"),
+		scores: text("scores", { mode: "json" }).$type<Record<string, number>>(),
+		scoreReasons: text("score_reasons", { mode: "json" }).$type<
+			Array<{ code: string; label: string; points: number }>
+		>(),
+		scoredAt: integer("scored_at", { mode: "timestamp_ms" }),
+		scoreVersion: text("score_version"),
 	},
 	(table) => [
 		uniqueIndex("listing_source_external_idx").on(
@@ -190,6 +225,8 @@ export const listing = sqliteTable(
 			table.offerType,
 		),
 		index("listing_geo_idx").on(table.lat, table.lng),
+		index("listing_score_idx").on(table.propertyType, table.score),
+		index("listing_first_seen_idx").on(table.firstSeenAt),
 	],
 );
 

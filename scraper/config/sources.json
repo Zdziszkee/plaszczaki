@@ -713,28 +713,6 @@
 			"last_verified": "2026-11-25"
 		},
 		{
-			"id": "txo",
-			"label": "TXO",
-			"kind": "portal",
-			"tier": 1,
-			"status": "implemented",
-			"enabled": true,
-			"urls": [
-				"https://txo.pl"
-			],
-			"notes": "Inertia JSON payload + RealEstateListing JSON-LD; coords on search and detail. Aggregates several other portals.",
-			"refresh_minutes": 30,
-			"adapter": "txo",
-			"rps": 1.0,
-			"incremental": false,
-			"incremental_pages": 2,
-			"newest_param": null,
-			"newest_value": null,
-			"hydrate_details": true,
-			"fetch_mode": "http",
-			"crawl_delay_mode": "sleep"
-		},
-		{
 			"id": "wynajem24",
 			"label": "Wynajem24",
 			"kind": "rental",

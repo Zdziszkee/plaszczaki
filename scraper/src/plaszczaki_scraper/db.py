@@ -16,6 +16,11 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from plaszczaki_scraper.attributes import (
+    ATTRIBUTE_COLUMNS,
+    BOOLEAN_ATTRIBUTE_COLUMNS,
+    normalize_attributes,
+)
 from plaszczaki_scraper.canonical import canonical_key
 from plaszczaki_scraper.config import repo_root
 from plaszczaki_scraper.models import Listing
@@ -41,6 +46,7 @@ LISTING_COLUMNS = (
     "floor",
     "floor_label",
     "build_year",
+    *ATTRIBUTE_COLUMNS,
     "voivodeship",
     "county",
     "commune",
@@ -76,6 +82,12 @@ EXPECTED_SCHEMA: dict[str, set[str]] = {
         *LISTING_COLUMNS,
         "first_seen_at",
         "last_seen_at",
+        "score",
+        "score_profile",
+        "scores",
+        "score_reasons",
+        "scored_at",
+        "score_version",
     },
     "listing_snapshot": {
         "id",
@@ -161,7 +173,8 @@ def _json(value: Any) -> str:
 
 
 def _listing_values(listing: Listing) -> dict[str, Any]:
-    return {
+    normalize_attributes(listing)
+    values = {
         "source_id": listing.source_id,
         "external_id": listing.external_id,
         "canonical_key": canonical_key(listing),
@@ -205,6 +218,18 @@ def _listing_values(listing: Listing) -> dict[str, Any]:
         "extraction_model": listing.extraction_model,
         "extra": _json(listing.extra),
     }
+    values.update({column: getattr(listing, column) for column in ATTRIBUTE_COLUMNS})
+    return values
+
+
+def _attribute_row_values(row: sqlite3.Row) -> dict[str, Any]:
+    values: dict[str, Any] = {}
+    for column in ATTRIBUTE_COLUMNS:
+        value = row[column]
+        if column in BOOLEAN_ATTRIBUTE_COLUMNS and value is not None:
+            value = bool(value)
+        values[column] = value
+    return values
 
 
 def _row_to_listing(row: sqlite3.Row) -> Listing:
@@ -231,6 +256,7 @@ def _row_to_listing(row: sqlite3.Row) -> Listing:
         floor=row["floor"],
         floor_label=row["floor_label"],
         build_year=row["build_year"],
+        **_attribute_row_values(row),
         voivodeship=row["voivodeship"],
         county=row["county"],
         commune=row["commune"],
@@ -328,6 +354,66 @@ class Database:
             (source_id, external_id),
         ).fetchone()
         return _row_to_listing(row) if row is not None else None
+
+    def iter_listings(
+        self,
+        *,
+        source_id: str | None = None,
+        missing_district: bool = False,
+    ) -> Iterable[Listing]:
+        """Read stored listings for maintenance commands without touching run state."""
+        conditions: list[str] = []
+        params: list[Any] = []
+        if source_id is not None:
+            conditions.append("source_id = ?")
+            params.append(source_id)
+        if missing_district:
+            conditions.append("nullif(trim(district), '') IS NULL")
+        where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+        rows = self.conn.execute(f"SELECT * FROM listing{where} ORDER BY id", params).fetchall()
+        for row in rows:
+            yield _row_to_listing(row)
+
+    def update_listing_backfill(
+        self,
+        listing: Listing,
+        *,
+        include_extra: bool = False,
+        dry_run: bool = False,
+    ) -> bool:
+        """Update normalized attributes without faking a scrape observation."""
+        normalize_attributes(listing, overwrite_attributes=True)
+        columns = [
+            *ATTRIBUTE_COLUMNS,
+            "market",
+            "price_per_m2_pln",
+            "rent_pln",
+            "deposit_pln",
+            "district",
+        ]
+        if include_extra:
+            columns.append("extra")
+        values: list[Any] = []
+        for column in columns:
+            value = _json(listing.extra) if column == "extra" else getattr(listing, column)
+            values.append(value)
+        current = self.conn.execute(
+            f"SELECT {', '.join(columns)} FROM listing WHERE source_id = ? AND external_id = ?",
+            (listing.source_id, listing.external_id),
+        ).fetchone()
+        if current is None:
+            return False
+        if all(current[column] == value for column, value in zip(columns, values, strict=True)):
+            return False
+        if dry_run:
+            return True
+        assignments = ", ".join(f"{column} = ?" for column in columns)
+        with self.conn:
+            self.conn.execute(
+                f"UPDATE listing SET {assignments} WHERE source_id = ? AND external_id = ?",
+                (*values, listing.source_id, listing.external_id),
+            )
+        return True
 
     def existing_external_ids(self, source_id: str, external_ids: Iterable[str]) -> set[str]:
         """Return which of the given external ids are already stored for a source."""
@@ -586,14 +672,6 @@ class Database:
                 (source_id, query_key, cursor, etag, _now_ms()),
             )
 
-    def iter_listings(self, source_id: str) -> Iterable[Listing]:
-        rows = self.conn.execute(
-            "SELECT * FROM listing WHERE source_id = ? ORDER BY id",
-            (source_id,),
-        ).fetchall()
-        for row in rows:
-            yield _row_to_listing(row)
-
     def iter_listings_missing_geo(self, limit: int = 500) -> Iterable[Listing]:
         rows = self.conn.execute(
             """
@@ -606,3 +684,76 @@ class Database:
         ).fetchall()
         for row in rows:
             yield _row_to_listing(row)
+
+    def iter_score_rows(
+        self,
+        *,
+        source_id: str | None = None,
+        limit: int | None = None,
+        pending_only: bool = False,
+    ) -> Iterable[sqlite3.Row]:
+        """Raw rows (with id and bookkeeping) for the scoring command."""
+        conditions: list[str] = []
+        params: list[Any] = []
+        if source_id is not None:
+            conditions.append("source_id = ?")
+            params.append(source_id)
+        if pending_only:
+            conditions.append("(scored_at IS NULL OR last_seen_at > scored_at)")
+        where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+        sql = f"SELECT * FROM listing{where} ORDER BY id"
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(limit)
+        yield from self.conn.execute(sql, params).fetchall()
+
+    def update_scores(self, updates: list[tuple[Any, ...]]) -> int:
+        """Persist (score, profile, scores_json, reasons_json, scored_at, version, id)."""
+        if not updates:
+            return 0
+        with self.conn:
+            self.conn.executemany(
+                """
+                UPDATE listing
+                SET score = ?, score_profile = ?, scores = ?, score_reasons = ?,
+                    scored_at = ?, score_version = ?
+                WHERE id = ?
+                """,
+                updates,
+            )
+        return len(updates)
+
+    def invalidate_scores(self, listing_ids: list[int]) -> int:
+        """Mark listings for rescoring after enrichment changes their input."""
+        if not listing_ids:
+            return 0
+        placeholders = ",".join("?" for _ in listing_ids)
+        with self.conn:
+            cursor = self.conn.execute(
+                f"UPDATE listing SET scored_at = NULL WHERE id IN ({placeholders})",
+                listing_ids,
+            )
+        return cursor.rowcount
+
+    def price_history_stats(self) -> dict[int, dict[str, Any]]:
+        """Per-listing peak price and drop count from snapshot observations."""
+        rows = self.conn.execute(
+            """
+            SELECT listing_id, price_pln, observed_at
+            FROM listing_snapshot
+            WHERE price_pln IS NOT NULL
+            ORDER BY listing_id, observed_at
+            """,
+        ).fetchall()
+        stats: dict[int, dict[str, Any]] = {}
+        for row in rows:
+            entry = stats.setdefault(
+                int(row["listing_id"]),
+                {"peak": 0, "drops": 0, "last": None},
+            )
+            price = int(row["price_pln"])
+            entry["peak"] = max(entry["peak"], price)
+            if entry["last"] is not None and price < entry["last"]:
+                entry["drops"] += 1
+            entry["last"] = price
+        return stats

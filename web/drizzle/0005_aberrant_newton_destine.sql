@@ -1,0 +1,24 @@
+ALTER TABLE `listing` ADD `condition` text;--> statement-breakpoint
+ALTER TABLE `listing` ADD `building_type` text;--> statement-breakpoint
+ALTER TABLE `listing` ADD `building_material` text;--> statement-breakpoint
+ALTER TABLE `listing` ADD `heating` text;--> statement-breakpoint
+ALTER TABLE `listing` ADD `windows_type` text;--> statement-breakpoint
+ALTER TABLE `listing` ADD `ownership` text;--> statement-breakpoint
+ALTER TABLE `listing` ADD `energy_certificate` text;--> statement-breakpoint
+ALTER TABLE `listing` ADD `ceiling_height_m` real;--> statement-breakpoint
+ALTER TABLE `listing` ADD `building_floors` integer;--> statement-breakpoint
+ALTER TABLE `listing` ADD `elevator` integer;--> statement-breakpoint
+ALTER TABLE `listing` ADD `parking` text;--> statement-breakpoint
+ALTER TABLE `listing` ADD `parking_spaces` integer;--> statement-breakpoint
+ALTER TABLE `listing` ADD `balcony` integer;--> statement-breakpoint
+ALTER TABLE `listing` ADD `terrace` integer;--> statement-breakpoint
+ALTER TABLE `listing` ADD `garden` integer;--> statement-breakpoint
+ALTER TABLE `listing` ADD `furnished` integer;--> statement-breakpoint
+ALTER TABLE `listing` ADD `pets_allowed` integer;--> statement-breakpoint
+ALTER TABLE `listing` ADD `air_conditioning` integer;--> statement-breakpoint
+ALTER TABLE `listing` ADD `security` text;--> statement-breakpoint
+ALTER TABLE `listing` ADD `internet` integer;--> statement-breakpoint
+ALTER TABLE `listing` ADD `fenced` integer;--> statement-breakpoint
+ALTER TABLE `listing` ADD `administrative_rent_pln` integer;--> statement-breakpoint
+ALTER TABLE `listing` ADD `estimate_pln` integer;--> statement-breakpoint
+ALTER TABLE `listing` ADD `available_from` integer;

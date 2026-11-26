@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from plaszczaki_scraper.attributes import normalize_attributes
+
 OfferType = Literal["sale", "rent", "auction", "lease", "other"]
 PropertyType = Literal["flat", "house", "plot", "commercial", "garage", "room", "other"]
 Market = Literal["primary", "secondary", "unknown"]
@@ -41,6 +43,31 @@ class Listing:
     floor_label: str | None = None
     build_year: int | None = None
 
+    condition: str | None = None
+    building_type: str | None = None
+    building_material: str | None = None
+    heating: str | None = None
+    windows_type: str | None = None
+    ownership: str | None = None
+    energy_certificate: str | None = None
+    ceiling_height_m: float | None = None
+    building_floors: int | None = None
+    elevator: bool | None = None
+    parking: str | None = None
+    parking_spaces: int | None = None
+    balcony: bool | None = None
+    terrace: bool | None = None
+    garden: bool | None = None
+    furnished: bool | None = None
+    pets_allowed: bool | None = None
+    air_conditioning: bool | None = None
+    security: str | None = None
+    internet: bool | None = None
+    fenced: bool | None = None
+    administrative_rent_pln: int | None = None
+    estimate_pln: int | None = None
+    available_from: int | None = None
+
     voivodeship: str | None = None
     county: str | None = None
     commune: str | None = None
@@ -67,6 +94,9 @@ class Listing:
     extraction_model: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        normalize_attributes(self)
+
     def to_json_dict(self) -> dict[str, Any]:
         """Return a JSON-serialisable representation (without DB bookkeeping)."""
         return {
@@ -90,6 +120,30 @@ class Listing:
             "floor": self.floor,
             "floor_label": self.floor_label,
             "build_year": self.build_year,
+            "condition": self.condition,
+            "building_type": self.building_type,
+            "building_material": self.building_material,
+            "heating": self.heating,
+            "windows_type": self.windows_type,
+            "ownership": self.ownership,
+            "energy_certificate": self.energy_certificate,
+            "ceiling_height_m": self.ceiling_height_m,
+            "building_floors": self.building_floors,
+            "elevator": self.elevator,
+            "parking": self.parking,
+            "parking_spaces": self.parking_spaces,
+            "balcony": self.balcony,
+            "terrace": self.terrace,
+            "garden": self.garden,
+            "furnished": self.furnished,
+            "pets_allowed": self.pets_allowed,
+            "air_conditioning": self.air_conditioning,
+            "security": self.security,
+            "internet": self.internet,
+            "fenced": self.fenced,
+            "administrative_rent_pln": self.administrative_rent_pln,
+            "estimate_pln": self.estimate_pln,
+            "available_from": self.available_from,
             "voivodeship": self.voivodeship,
             "county": self.county,
             "commune": self.commune,

@@ -137,11 +137,41 @@ body {
     @apply bg-background;
   }
   body {
-    @apply bg-background text-foreground;
+    /* Background lives on html (painted on the canvas) so fixed -z-10
+       backdrops, e.g. SkylineBackground, stay visible above it. */
+    @apply text-foreground;
   }
   code {
     @apply rounded-md bg-muted px-1.5 py-0.5 font-mono text-[0.9em] text-foreground;
   }
+}
+
+/* ASCII Magic sets --ascii-size inline from its size attribute. The skyline
+   needs viewport-relative sizing instead: 104 columns * 0.6em and 36 rows. */
+.ascii-skyline > ascii-art {
+  --ascii-size: max(1.6vw, 2.78vh) !important;
+}
+
+.ascii-backdrop-fade {
+  background: linear-gradient(
+    to bottom,
+    var(--background) 0%,
+    transparent 20%,
+    transparent 72%,
+    var(--background) 100%
+  );
+}
+
+/* Quiet the top and bottom of decorative ASCII panels so their edge labels do
+   not compete with the shadcn content laid over them. */
+.art-vignette {
+  background: linear-gradient(
+    to bottom,
+    var(--card) 0%,
+    transparent 32%,
+    transparent 68%,
+    var(--card) 100%
+  );
 }
 
 /* Mapbox popups follow the shadcn popover tokens instead of Mapbox's white default. */

@@ -67,6 +67,12 @@ uv run python -m plaszczaki_scraper list-sources
 uv run python -m plaszczaki_scraper probe --source otodom
 uv run python -m plaszczaki_scraper probe --tier 1
 uv run python -m plaszczaki_scraper audit
+uv run python -m plaszczaki_scraper field-audit
+uv run python -m plaszczaki_scraper field-audit --source otodom --top 20
+uv run python -m plaszczaki_scraper backfill-attributes --dry-run
+uv run python -m plaszczaki_scraper backfill-attributes
+uv run python -m plaszczaki_scraper backfill-attributes --source otodom --rehydrate-district
+uv run python -m plaszczaki_scraper probe --source otodom --fields
 uv run python -m plaszczaki_scraper review-sources --due
 uv run python -m plaszczaki_scraper dedupe --backfill
 uv run python -m plaszczaki_scraper llm models
@@ -99,7 +105,7 @@ independent lanes and runs one pass over each:
 `--region malopolskie` on `watch` remain available for one-off jobs; the mode key
 includes the filters.
 
-Sources that only offer city pages (Flats, Okolica, TXO, Rentumo, Rentola) have
+Sources that only offer city pages (Flats, Okolica, Rentumo, Rentola) have
 no voivodeship-level URL. They crawl every configured city in each region, not
 just Kraków/Katowice, and rotate the city order hourly so a per-lane limit
 cannot starve the same towns every pass. Flats uses its allowed listings
@@ -111,8 +117,8 @@ poll (the `incremental: false` ones) in one full pass. The nightly
 from the newest pages instead of being left to a manual backfill. Sources are
 ordered by their last attempt (never run first, then oldest), with query count
 as the tie-breaker, so a short pass cannot starve the same big aggregators every
-night; `okolica` and `txo` still need several nightly passes to backfill their
-full city × category matrix.
+night; `okolica` still needs several nightly passes to backfill its full
+city × category matrix.
 
 `--newest` always reads only the two newest pages per query, whatever the
 source. A source that has never been backfilled therefore needs one full
@@ -168,6 +174,30 @@ links, JSON-LD, coordinates and street addresses, so a source that starts
 publishing properties is noticed instead of staying parked forever. `--due` only
 checks sources past `last_verified + recheck_days`; the monthly
 `plaszczaki-review.timer` runs it in the container.
+
+`field-audit` reads the local database without network requests. It reports
+per-source coverage for core, attribute, rental, auction and temporal fields,
+weights gaps by analytics impact, and inventories raw keys preserved in
+`listing.extra`. The JSON report is written to `data/out/field-audit.json`.
+`probe --fields` is the optional network counterpart: it parses the first search
+page, inventories raw structured keys/labels, and reports canonical field
+coverage from the adapter. It does not maintain a generic field-alias registry.
+
+Adapters preserve source-specific parameter payloads in `extra`; the shared
+normalizer in `attributes.py` maps them to dedicated columns for condition,
+building type/material, heating, windows, ownership, energy certificate,
+ceiling height, building floors, elevator, parking, balcony/terrace/garden,
+furnishing, pets, air conditioning, security, internet, fencing, administrative
+rent, availability and auction appraisal. Fresh writes and maintenance use the
+same mapping.
+
+After applying the schema migration, run `backfill-attributes --dry-run` and then
+`backfill-attributes`. It is idempotent, supports `--source`/`--limit`, fills
+attributes plus missing market, deposit and derived price-per-m² values, and
+does not change `first_seen_at`/`last_seen_at` or create scrape observations.
+Historical Otodom rows did not store reverse-geocoded districts, so
+`--rehydrate-district` refetches stored detail URLs only for rows still missing
+a district. Rehydration is opt-in, rate-limited and uses the normal scraper lock.
 
 `dedupe --backfill` recomputes `listing.canonical_key` for stored rows. The key is
 derived from the case number and auction date, coordinates, or the normalized

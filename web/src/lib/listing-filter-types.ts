@@ -20,6 +20,17 @@ export const PROPERTY_TYPES = [
 ] as const;
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 
+export const SCORE_PROFILES = [
+	"kamienica",
+	"nowe_mieszkanie",
+	"dzialka_kolej",
+	"dom_airbnb",
+	"dzialka_airbnb",
+] as const;
+export type ScoreProfile = (typeof SCORE_PROFILES)[number];
+export const LISTING_SORTS = ["newest", "score"] as const;
+export type ListingSort = (typeof LISTING_SORTS)[number];
+
 /** Newest-publication windows for the offer filters. */
 export const POSTED_WITHIN_VALUES = ["today", "week", "month"] as const;
 export type PostedWithin = (typeof POSTED_WITHIN_VALUES)[number];
@@ -32,6 +43,9 @@ export type ListingFilters = {
 	postedWithin?: PostedWithin;
 	minPrice?: number;
 	maxPrice?: number;
+	minScore?: number;
+	scoreProfile?: ScoreProfile;
+	sort?: ListingSort;
 };
 
 export type BBox = {
@@ -44,6 +58,8 @@ export type BBox = {
 const OFFER_TYPE_SET = new Set<string>(OFFER_TYPES);
 const PROPERTY_TYPE_SET = new Set<string>(PROPERTY_TYPES);
 const POSTED_WITHIN_SET = new Set<string>(POSTED_WITHIN_VALUES);
+const SCORE_PROFILE_SET = new Set<string>(SCORE_PROFILES);
+const LISTING_SORT_SET = new Set<string>(LISTING_SORTS);
 
 function nonEmptyString(value: unknown): string | undefined {
 	if (typeof value !== "string") return undefined;
@@ -89,6 +105,18 @@ export function sanitizeListingFilters(value: unknown): ListingFilters {
 
 	filters.minPrice = positiveInt(input.minPrice);
 	filters.maxPrice = positiveInt(input.maxPrice);
+	const minScore = numberValue(input.minScore);
+	if (minScore !== undefined) {
+		filters.minScore = Math.max(0, Math.min(100, Math.trunc(minScore)));
+	}
+	const scoreProfile = nonEmptyString(input.scoreProfile);
+	if (scoreProfile && SCORE_PROFILE_SET.has(scoreProfile)) {
+		filters.scoreProfile = scoreProfile as ScoreProfile;
+	}
+	const sort = nonEmptyString(input.sort);
+	if (sort && LISTING_SORT_SET.has(sort)) {
+		filters.sort = sort as ListingSort;
+	}
 	if (
 		filters.minPrice !== undefined &&
 		filters.maxPrice !== undefined &&
@@ -111,6 +139,9 @@ export function parseListingFilters(search: URLSearchParams): ListingFilters {
 		postedWithin: search.get("postedWithin"),
 		minPrice: search.get("minPrice"),
 		maxPrice: search.get("maxPrice"),
+		minScore: search.get("minScore"),
+		scoreProfile: search.get("scoreProfile"),
+		sort: search.get("sort"),
 	});
 }
 
@@ -159,5 +190,10 @@ export function filtersToSearchParams(
 	if (filters.maxPrice !== undefined) {
 		params.set("maxPrice", String(filters.maxPrice));
 	}
+	if (filters.minScore !== undefined) {
+		params.set("minScore", String(filters.minScore));
+	}
+	if (filters.scoreProfile) params.set("scoreProfile", filters.scoreProfile);
+	if (filters.sort) params.set("sort", filters.sort);
 	return params;
 }

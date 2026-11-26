@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as MapRouteImport } from './routes/map'
+import { Route as OfertyRouteImport } from './routes/oferty'
 import { Route as ApiListingsRouteImport } from './routes/api/listings'
 import { Route as ApiSourcesRouteImport } from './routes/api/sources'
 import { Route as DemoBetterAuthRouteImport } from './routes/demo/better-auth'
@@ -34,6 +35,11 @@ const AboutRoute = AboutRouteImport.update({
 const MapRoute = MapRouteImport.update({
   id: '/map',
   path: '/map',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OfertyRoute = OfertyRouteImport.update({
+  id: '/oferty',
+  path: '/oferty',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiListingsRoute = ApiListingsRouteImport.update({
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/map': typeof MapRoute
+  '/oferty': typeof OfertyRoute
   '/api/listings': typeof ApiListingsRouteWithChildren
   '/api/sources': typeof ApiSourcesRoute
   '/demo/better-auth': typeof DemoBetterAuthRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/map': typeof MapRoute
+  '/oferty': typeof OfertyRoute
   '/api/listings': typeof ApiListingsRouteWithChildren
   '/api/sources': typeof ApiSourcesRoute
   '/demo/better-auth': typeof DemoBetterAuthRoute
@@ -108,6 +116,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/map': typeof MapRoute
+  '/oferty': typeof OfertyRoute
   '/api/listings': typeof ApiListingsRouteWithChildren
   '/api/sources': typeof ApiSourcesRoute
   '/demo/better-auth': typeof DemoBetterAuthRoute
@@ -123,6 +132,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/map'
+    | '/oferty'
     | '/api/listings'
     | '/api/sources'
     | '/demo/better-auth'
@@ -136,6 +146,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/map'
+    | '/oferty'
     | '/api/listings'
     | '/api/sources'
     | '/demo/better-auth'
@@ -149,6 +160,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/map'
+    | '/oferty'
     | '/api/listings'
     | '/api/sources'
     | '/demo/better-auth'
@@ -163,6 +175,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   MapRoute: typeof MapRoute
+  OfertyRoute: typeof OfertyRoute
   ApiListingsRoute: typeof ApiListingsRouteWithChildren
   ApiSourcesRoute: typeof ApiSourcesRoute
   DemoBetterAuthRoute: typeof DemoBetterAuthRoute
@@ -192,6 +205,13 @@ declare module '@tanstack/react-router' {
       path: '/map'
       fullPath: '/map'
       preLoaderRoute: typeof MapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oferty': {
+      id: '/oferty'
+      path: '/oferty'
+      fullPath: '/oferty'
+      preLoaderRoute: typeof OfertyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/listings': {
@@ -271,6 +291,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   MapRoute: MapRoute,
+  OfertyRoute: OfertyRoute,
   ApiListingsRoute: ApiListingsRouteWithChildren,
   ApiSourcesRoute: ApiSourcesRoute,
   DemoBetterAuthRoute: DemoBetterAuthRoute,

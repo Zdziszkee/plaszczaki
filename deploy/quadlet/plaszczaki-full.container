@@ -22,7 +22,7 @@ Memory=4g
 Network=default
 
 [Service]
-# Large aggregators (okolica, txo) can need several nightly passes to backfill.
+# Large sources can need several nightly passes to backfill.
 TimeoutStartSec=43200
 Restart=no
 

@@ -47,7 +47,6 @@ const SOURCE_COLORS = {
 	terenyprzemyslowe: "#99f6e4",
 	"magazyny-online": "#a5f3fc",
 	szybkokomercyjne: "#bae6fd",
-	txo: "#c7d2fe",
 	vilea: "#ddd6fe",
 	nieruchomosciowi: "#e9d5ff",
 } as const satisfies Record<string, string>;

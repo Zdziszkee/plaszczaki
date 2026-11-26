@@ -58,11 +58,23 @@ export const Route = createFileRoute("/api/listings")({
 						images: listing.images,
 						publishedAt: listing.publishedAt,
 						firstSeenAt: listing.firstSeenAt,
+						score: listing.score,
+						scoreProfile: listing.scoreProfile,
+						scores: listing.scores,
+						scoreReasons: listing.scoreReasons,
+						buildingType: listing.buildingType,
+						buildYear: listing.buildYear,
+						heating: listing.heating,
+						windowsType: listing.windowsType,
 					})
 					.from(listing)
 					.innerJoin(source, eq(source.id, listing.sourceId))
 					.where(where)
-					.orderBy(desc(listing.lastSeenAt))
+					.orderBy(
+						filters.sort === "score"
+							? desc(listing.score)
+							: desc(listing.lastSeenAt),
+					)
 					.limit(limit);
 
 				const features = rows.flatMap((row) => {
@@ -97,6 +109,14 @@ export const Route = createFileRoute("/api/listings")({
 								image: row.images?.[0] ?? null,
 								publishedAt:
 									row.publishedAt?.getTime() ?? row.firstSeenAt.getTime(),
+								score: row.score,
+								scoreProfile: row.scoreProfile,
+								scores: row.scores,
+								scoreReasons: row.scoreReasons,
+								buildingType: row.buildingType,
+								buildYear: row.buildYear,
+								heating: row.heating,
+								windowsType: row.windowsType,
 							},
 						},
 					];

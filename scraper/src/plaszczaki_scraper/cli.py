@@ -17,6 +17,7 @@ import httpx
 
 from plaszczaki_scraper.adapters.registry import build_adapter
 from plaszczaki_scraper.audit import audit_sources
+from plaszczaki_scraper.backfill import backfill_attributes, rehydrate_missing_districts
 from plaszczaki_scraper.config import (
     ConfigError,
     RegionsConfig,
@@ -26,14 +27,18 @@ from plaszczaki_scraper.config import (
     load_sources_config,
 )
 from plaszczaki_scraper.db import Database, SchemaError, default_database_path
+from plaszczaki_scraper.field_audit import audit_fields
 from plaszczaki_scraper.geocode import GeocodeStore, GeocodeWorker
+from plaszczaki_scraper.geodata import fetch_elevation, fetch_gtfs_stations, fetch_nature, fetch_poi
 from plaszczaki_scraper.http import FetchError, HttpClient, user_agent
 from plaszczaki_scraper.llm import LLMConfigError, check_models, models_report
+from plaszczaki_scraper.llm_features import enrich_listings, rerank_top
 from plaszczaki_scraper.probe import probe_sources
 from plaszczaki_scraper.regions import RegionRegistry
 from plaszczaki_scraper.review import review_sources
 from plaszczaki_scraper.robots import default_cache_dir
 from plaszczaki_scraper.runner import Runner, RunOptions
+from plaszczaki_scraper.scoring import score_database
 from plaszczaki_scraper.watch import run_watch_lanes, run_watch_once, watch_loop
 
 logger = logging.getLogger(__name__)
@@ -185,10 +190,38 @@ def _parser() -> argparse.ArgumentParser:
     audit.add_argument("--limit", type=int)
     audit.add_argument("--rps", type=float, default=1.0)
 
+    field_audit = subparsers.add_parser(
+        "field-audit",
+        help="report canonical field coverage and raw attributes in extra",
+    )
+    field_audit.add_argument("--source", help="only audit one source id")
+    field_audit.add_argument("--output", type=Path, help="report path")
+    field_audit.add_argument("--top", type=int, default=20, help="ranked gaps to print")
+
+    backfill = subparsers.add_parser(
+        "backfill-attributes",
+        help="normalize attributes in stored listing.extra payloads",
+    )
+    backfill.add_argument("--source", help="only backfill one source id")
+    backfill.add_argument("--limit", type=int, help="maximum stored listings to process")
+    backfill.add_argument("--dry-run", action="store_true", help="report changes without writing")
+    backfill.add_argument(
+        "--rehydrate-district",
+        action="store_true",
+        help="refetch detail pages for rows still missing district (network requests)",
+    )
+    backfill.add_argument("--rps", type=float, help="override rehydration request rate")
+    backfill.add_argument("--lock-file", help="override the scraper lock path")
+
     probe = subparsers.add_parser("probe", help="fetch one page per source and report structure")
     probe.add_argument("--source", help="comma-separated source ids from sources.json")
     probe.add_argument("--tier", type=int, help="probe one tier")
     probe.add_argument("--all", action="store_true", help="probe every non-excluded source")
+    probe.add_argument(
+        "--fields",
+        action="store_true",
+        help="inventory raw page fields and report parsed canonical coverage",
+    )
     probe.add_argument("--limit", type=int)
     probe.add_argument("--rps", type=float, default=1.0)
 
@@ -209,6 +242,21 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="re-open rejected jobs so the improved address matcher can retry them",
     )
+
+    score = subparsers.add_parser("score", help="score stored offers for attractiveness and value")
+    score.add_argument("--source", help="only score one source id")
+    score.add_argument("--limit", type=int, help="maximum stored offers to process")
+    score.add_argument("--pending", action="store_true", help="only new or changed offers")
+    score.add_argument("--dry-run", action="store_true", help="calculate without writing")
+
+    geodata = subparsers.add_parser("geodata", help="refresh open-data inputs for scoring")
+    geodata.add_argument(
+        "--part",
+        choices=("all", "gtfs", "nature", "poi", "elevation"),
+        default="all",
+    )
+    geodata.add_argument("--force", action="store_true", help="ignore cached downloads")
+    geodata.add_argument("--rps", type=float, default=1.0)
 
     subparsers.add_parser("verify-schema", help="check the SQLite schema")
     subparsers.add_parser("list-sources", help="show configured adapters and inventory")
@@ -243,6 +291,13 @@ def _parser() -> argparse.ArgumentParser:
     check = llm_sub.add_parser("check", help="try free models with a tiny JSON request")
     check.add_argument("--limit", type=int, default=10)
     check.add_argument("--timeout", type=float, default=60.0)
+    enrich = llm_sub.add_parser("enrich", help="extract scoring facts from listing descriptions")
+    enrich.add_argument("--limit", type=int, default=50)
+    enrich.add_argument("--dry-run", action="store_true")
+    rerank = llm_sub.add_parser("rerank", help="LLM re-rank the deterministic top-offer shortlist")
+    rerank.add_argument("--limit", type=int, default=20)
+    rerank.add_argument("--candidates", type=int, default=50)
+    rerank.add_argument("--dry-run", action="store_true")
 
     return parser
 
@@ -268,10 +323,18 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_cycle(args)
         if args.command == "audit":
             return _cmd_audit(args)
+        if args.command == "field-audit":
+            return _cmd_field_audit(args)
+        if args.command == "backfill-attributes":
+            return _cmd_backfill_attributes(args)
         if args.command == "probe":
             return _cmd_probe(args)
         if args.command == "geocode":
             return _cmd_geocode(args)
+        if args.command == "score":
+            return _cmd_score(args)
+        if args.command == "geodata":
+            return _cmd_geodata(args)
         if args.command == "verify-schema":
             return _cmd_verify_schema()
         if args.command == "list-sources":
@@ -356,6 +419,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
                 source_config=source,
                 on_saved=hook,
             ).run()
+            if not args.dry_run:
+                result["scoring"] = score_database(db, source_id=source.id, pending_only=True)
     finally:
         client.close()
         store.close()
@@ -369,13 +434,90 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_field_audit(args: argparse.Namespace) -> int:
+    catalog = load_sources_config()
+    if args.source is not None and args.source not in catalog.sources:
+        raise ConfigError(f"unknown source: {args.source}")
+    db = Database(default_database_path())
+    try:
+        db.verify_schema()
+        report = audit_fields(db, source_id=args.source, output_path=args.output)
+    finally:
+        db.close()
+    print(
+        json.dumps(
+            {
+                "total": report["total"],
+                "sources": len(report["sources"]),
+                "gaps": len(report["gaps"]),
+                "output": report["output"],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    for gap in report["gaps"][: args.top]:
+        coverage = gap["coverage"]
+        percentage = "n/a" if coverage is None else f"{coverage:.0%}"
+        print(
+            f"{gap['source_id']:<28} {gap['field']:<26} "
+            f"{gap['filled']:>6}/{gap['applicable']:<6} {percentage:>4} "
+            f"missing={gap['missing']} impact={gap['impact']}"
+        )
+    return 0
+
+
+def _cmd_backfill_attributes(args: argparse.Namespace) -> int:
+    catalog = load_sources_config()
+    if args.source is not None and args.source not in catalog.sources:
+        raise ConfigError(f"unknown source: {args.source}")
+    db = Database(default_database_path())
+    try:
+        db.verify_schema()
+        if args.rehydrate_district:
+            with file_lock(_lock_path(args.lock_file)) as acquired:
+                if not acquired:
+                    print("another scraper run is already active; skipping", file=sys.stderr)
+                    return 0
+                attributes = backfill_attributes(
+                    db,
+                    source_id=args.source,
+                    limit=args.limit,
+                    dry_run=args.dry_run,
+                )
+                rehydration = rehydrate_missing_districts(
+                    db,
+                    source_id=args.source,
+                    limit=args.limit,
+                    rps=args.rps,
+                    dry_run=args.dry_run,
+                )
+        else:
+            attributes = backfill_attributes(
+                db,
+                source_id=args.source,
+                limit=args.limit,
+                dry_run=args.dry_run,
+            )
+            rehydration = None
+    finally:
+        db.close()
+    report: dict[str, Any] = {"attributes": attributes}
+    if rehydration is not None:
+        report["rehydration"] = rehydration
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    return 0
+
+
 def _cmd_probe(args: argparse.Namespace) -> int:
     catalog = load_sources_config()
     sources = _select_probe_sources(catalog, args)
+    if args.fields:
+        sources = [source for source in sources if source.status == "implemented"]
     if not sources:
         raise ConfigError("no sources selected for probe")
 
-    report = probe_sources(sources, rps=args.rps)
+    report = probe_sources(sources, rps=args.rps, inspect_fields=args.fields)
     for entry in report["entries"]:
         status = entry["http_status"] if entry["http_status"] is not None else "---"
         flags = []
@@ -387,6 +529,11 @@ def _cmd_probe(args: argparse.Namespace) -> int:
             flags.append("ld+json")
         if entry["error"]:
             flags.append(f"error={entry['error']}")
+        if entry["field_error"]:
+            flags.append(f"fields-error={entry['field_error']}")
+        if entry["listings_found"] is not None:
+            flags.append(f"listings={entry['listings_found']}")
+            flags.append(f"raw-fields={len(entry['available_field_keys'] or [])}")
         print(
             f"{entry['source_id']:<28} {status!s:>3} "
             f"{entry['bytes']:>7}B links={entry['link_count']:<4} "
@@ -484,6 +631,7 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
             for source in selected:
                 logger.info("run-all source=%s", source.id)
                 client: HttpClient | None = None
+                result: dict[str, Any]
                 try:
                     adapter = build_adapter(source, regions=registry)
                     client = HttpClient(
@@ -530,6 +678,8 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
                 finally:
                     if client is not None:
                         client.close()
+                if not args.dry_run:
+                    result["scoring"] = score_database(db, source_id=source.id, pending_only=True)
                 results.append(result)
                 if result["status"] == "failed":
                     failed = True
@@ -692,6 +842,51 @@ def _cmd_geocode(args: argparse.Namespace) -> int:
     return 0 if result["failed"] == 0 else 2
 
 
+def _cmd_score(args: argparse.Namespace) -> int:
+    db = Database(default_database_path())
+    try:
+        db.verify_schema()
+        report = score_database(
+            db,
+            source_id=args.source,
+            limit=args.limit,
+            pending_only=args.pending,
+            dry_run=args.dry_run,
+        )
+    finally:
+        db.close()
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _cmd_geodata(args: argparse.Namespace) -> int:
+    report: dict[str, Any] = {}
+    if args.part in {"all", "gtfs"}:
+        report["gtfs"] = fetch_gtfs_stations(force=args.force)
+    if args.part in {"all", "nature"}:
+        report["nature"] = fetch_nature(force=args.force)
+    if args.part in {"all", "poi"}:
+        report["poi"] = fetch_poi(force=args.force)
+    if args.part in {"all", "elevation"}:
+        db = Database(default_database_path())
+        try:
+            points = [
+                (float(row["lat"]), float(row["lng"]))
+                for row in db.conn.execute(
+                    """
+                    SELECT lat, lng FROM listing
+                    WHERE property_type IN ('house', 'plot')
+                      AND lat IS NOT NULL AND lng IS NOT NULL
+                    """
+                ).fetchall()
+            ]
+        finally:
+            db.close()
+        report["elevation"] = fetch_elevation(points, rps=args.rps)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    return 0
+
+
 def _cmd_audit(args: argparse.Namespace) -> int:
     report = audit_sources(limit=args.limit, rps=args.rps)
     summary = {
@@ -800,6 +995,29 @@ def _cmd_llm(args: argparse.Namespace) -> int:
     if args.llm_command == "models":
         print(json.dumps(models_report(), ensure_ascii=False, indent=2))
         return 0
+    if args.llm_command == "enrich":
+        db = Database(default_database_path())
+        try:
+            db.verify_schema()
+            report = enrich_listings(db, limit=args.limit, dry_run=args.dry_run)
+        finally:
+            db.close()
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report["failed"] == 0 else 2
+    if args.llm_command == "rerank":
+        db = Database(default_database_path())
+        try:
+            db.verify_schema()
+            report = rerank_top(
+                db,
+                limit=args.limit,
+                candidate_limit=args.candidates,
+                dry_run=args.dry_run,
+            )
+        finally:
+            db.close()
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report.get("recommendations") or report.get("dry_run") else 2
 
     report = check_models(limit=args.limit, timeout=args.timeout)
     print(json.dumps(report, ensure_ascii=False, indent=2))

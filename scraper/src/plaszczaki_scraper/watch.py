@@ -28,6 +28,7 @@ from plaszczaki_scraper.models import Listing
 from plaszczaki_scraper.regions import RegionRegistry
 from plaszczaki_scraper.robots import default_cache_dir
 from plaszczaki_scraper.runner import RunMode, Runner, RunOptions
+from plaszczaki_scraper.scoring import score_database
 
 logger = logging.getLogger(__name__)
 
@@ -276,7 +277,10 @@ def run_watch_once(
 
         results.append({"source_id": source.id, "mode": mode, **result})
 
-    return {"sources": len(results), "results": results}
+    scoring = None
+    if not dry_run:
+        scoring = score_database(db, pending_only=True)
+    return {"sources": len(results), "results": results, "scoring": scoring}
 
 
 def plan_watch_lanes(

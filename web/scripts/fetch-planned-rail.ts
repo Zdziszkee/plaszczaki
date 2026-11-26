@@ -104,6 +104,9 @@ function railSubtype(tags: Record<string, string>): string | null {
 const PORT_POLSKA_NAME =
 	/Katowice\s*-\s*Ostrawa|Wodzisław Śląski - Jastrzębie Zdrój|Bohumin-Wodzisław Śląski/i;
 
+/** PKP PLK KPO project: Podłęże–Piekiełko, lines 622/623/627 and upgrades on 104. */
+const PODLEZE_PIEKIELKO_REFS = new Set(["622", "623", "627", "104"]);
+
 const PORT_POLSKA_APPROACH_REFS = new Set(["139", "140", "656"]);
 const PORT_POLSKA_APPROACH_BOX = {
 	minLon: 18.93,
@@ -137,13 +140,23 @@ function curatedProject(
 	geometry: OsmGeometryPoint[],
 ) {
 	const project = matchKolejPlusProject(tags, geometry);
-	if (!project) return null;
-	return {
-		program: "kolej-plus",
-		project: project.name,
-		target: project.target,
-		stage: project.stage,
-	};
+	if (project) {
+		return {
+			program: "kolej-plus",
+			project: project.name,
+			target: project.target,
+			stage: project.stage,
+		};
+	}
+	if (tags.ref && PODLEZE_PIEKIELKO_REFS.has(tags.ref)) {
+		return {
+			program: "pkp-plk",
+			project: "Podłęże–Piekiełko",
+			target: null,
+			stage: "w budowie",
+		};
+	}
+	return null;
 }
 
 /** Round to ~1 m and drop consecutive duplicate nodes. */

@@ -36,6 +36,20 @@
       "when": 1795631641557,
       "tag": "0004_hesitant_black_cat",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1795717836060,
+      "tag": "0005_aberrant_newton_destine",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795724759148,
+      "tag": "0006_foamy_falcon",
+      "breakpoints": true
     }
   ]
 }

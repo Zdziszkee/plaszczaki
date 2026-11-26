@@ -125,7 +125,6 @@ _ADAPTERS: dict[str, tuple[str, str]] = {
         "TerenyPrzemysloweAdapter",
     ),
     "tabelaofert": ("plaszczaki_scraper.adapters.tabelaofert", "TabelaofertAdapter"),
-    "txo": ("plaszczaki_scraper.adapters.txo", "TxoAdapter"),
     "vilea": ("plaszczaki_scraper.adapters.vilea", "VileaAdapter"),
     "wybierzdewelopera": (
         "plaszczaki_scraper.adapters.wybierzdewelopera",
