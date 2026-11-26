@@ -17,6 +17,10 @@ def test_canonical_voivodeship() -> None:
     assert registry.canonical_voivodeship("małopolskie") == "malopolskie"
     assert registry.canonical_voivodeship("śląskie") == "slaskie"
     assert registry.canonical_voivodeship("malopolskie/krakow/krakow") == "malopolskie"
+    # Out-of-scope voivodeships keep their national id so the runner can reject
+    # them instead of matching a same-named county from another voivodeship.
+    assert registry.canonical_voivodeship("opolskie") == "opolskie"
+    assert registry.canonical_voivodeship("kujawsko-pomorskie") == "kujawsko-pomorskie"
     assert registry.canonical_voivodeship("POWIAT KRAKOWSKI") is None
 
 
@@ -36,6 +40,26 @@ def test_resolve_by_source_hierarchy() -> None:
     assert match.voivodeship == "malopolskie"
     assert match.county == "krakowski"
     assert match.city == "Rząska"
+
+
+def test_is_known_voivodeship_covers_the_whole_country() -> None:
+    registry = _registry()
+    assert registry.is_known_voivodeship("małopolskie")
+    assert registry.is_known_voivodeship("opolskie")
+    assert registry.is_known_voivodeship("kujawsko-pomorskie")
+    assert not registry.is_known_voivodeship("powiat krakowski")
+    assert not registry.is_known_voivodeship(None)
+
+
+def test_out_of_scope_voivodeship_does_not_fall_back_to_a_shared_county() -> None:
+    registry = _registry()
+    # Brzeg is in opolskie; "brzeski" also exists in małopolskie (Brzesko).
+    assert registry.resolve(province="opolskie", county="brzeski", city="Brzeg") is None
+    assert registry.scoped_voivodeship("opolskie", "malopolskie") == "opolskie"
+    # The in-scope names still resolve.
+    match = registry.resolve(province="małopolskie", county="brzeski")
+    assert match is not None
+    assert match.voivodeship == "malopolskie"
 
 
 def test_resolve_by_city() -> None:

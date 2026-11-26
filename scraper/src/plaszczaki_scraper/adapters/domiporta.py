@@ -450,14 +450,10 @@ class DomiportaAdapter:
         rooms = parse_rooms(offered.get("numberOfRooms")) or summary.rooms
         build_year = safe_int(offered.get("yearBuilt"))
 
-        voivodeship = (
-            self.regions.canonical_voivodeship(
-                _text(address.get("addressRegion")),
-            )
-            or summary.voivodeship
+        voivodeship = self.regions.scoped_voivodeship(
+            _text(address.get("addressRegion")),
+            summary.voivodeship or self.regions.region_for_point(lat, lng),
         )
-        if voivodeship is None:
-            voivodeship = self.regions.region_for_point(lat, lng)
 
         city = _text(address.get("addressLocality")) or summary.city
         street = _text(address.get("streetAddress")) or summary.street

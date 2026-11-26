@@ -243,6 +243,7 @@ def run_watch_once(
                     fetch_mode=source.fetch_mode,
                     browser_headless=source.browser_headless,
                     browser_solve_cloudflare=source.browser_solve_cloudflare,
+                    browser_wait_ms=source.browser_wait_ms,
                     crawl_delay_mode=source.crawl_delay_mode,
                 )
                 result = Runner(

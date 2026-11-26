@@ -7,6 +7,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import replace
 from typing import Any
+from urllib.parse import urlsplit
 
 from lxml import html as lxml_html
 
@@ -26,12 +27,11 @@ from plaszczaki_scraper.regions import RegionRegistry
 BASE_URL = "https://flats.pl"
 IMAGE_BASE = "https://d1yl0ebouq9os5.cloudfront.net"
 
-# Flats.pl only publishes flats and rooms. City pages are the only supported
-# regional search; the list page has no working page parameter.
-CITY_SLUGS: dict[str, tuple[str, ...]] = {
-    "malopolskie": ("krakow", "tarnow"),
-    "slaskie": ("katowice", "gliwice", "czestochowa", "bielsko-biala"),
-}
+# The city HTML page only embeds the first 16 cards (Kraków has 33 active
+# offers), and /api/ is disallowed by robots.txt. The allowed listings sitemap
+# carries the complete active inventory, so discovery reads it and the runner
+# hydrates each detail page.
+SITEMAP_URL = f"{BASE_URL}/sitemaps/sitemap/listings.xml"
 
 _NEXT_PUSH_RE = re.compile(
     r'self\.__next_f\.push\(\[1,("(?:[^"\\]|\\.)*")\]\)',
@@ -62,26 +62,38 @@ class FlatsAdapter:
     def __init__(self, *, source_id: str, regions: RegionRegistry) -> None:
         self.source_id = source_id
         self.regions = regions
+        # Use every configured city in both voivodeships, not just the largest
+        # few, so smaller towns are not dropped from the national sitemap.
+        self._city_region: dict[str, str] = {}
+        self._city_names: dict[str, str] = {}
+        for region in regions.config.regions.values():
+            for city in region.cities:
+                slug = normalize_text(city).replace(" ", "-")
+                if slug:
+                    self._city_region[slug] = region.id
+                    self._city_names[slug] = city
 
     def queries(self, regions: Sequence[str]) -> list[Query]:
-        queries: list[Query] = []
-        for region in regions:
-            for city in CITY_SLUGS.get(region, ()):
-                queries.append(
-                    Query(
-                        key=f"{region}:wynajem:{city}",
-                        url=f"{BASE_URL}/pl/wynajem/{city}",
-                        region=region,
-                        offer_type="rent",
-                        property_type="flat",
-                    ),
-                )
-        return queries
+        # One national sitemap; parse_search keeps only the configured cities.
+        return [
+            Query(
+                key="sitemap:wynajem",
+                url=SITEMAP_URL,
+                region=",".join(regions) or "national",
+                offer_type="rent",
+                property_type="flat",
+            ),
+        ]
 
     def with_page(self, query: Query, page: int) -> Query:
-        return query.with_page(page)
+        # The sitemap is a single unpaginated document.
+        return replace(query, page=1)
 
     def parse_search(self, html: str, query: Query) -> SearchPage:
+        sitemap_items = self._sitemap_listings(html, query)
+        if sitemap_items is not None:
+            return sitemap_items
+
         objects = _listing_objects(html)
         if not objects:
             item_list = _json_ld_item_list(html)
@@ -104,6 +116,58 @@ class FlatsAdapter:
 
         return SearchPage(items=items, current_page=query.page, total_pages=query.page)
 
+    def _url_city(self, url: str) -> str | None:
+        """Match a listing URL to the closest configured city slug."""
+        path = urlsplit(url).path
+        matches = [
+            (path.rfind(f"-{city}-"), city) for city in self._city_region if f"-{city}-" in path
+        ]
+        if not matches:
+            return None
+        return max(matches)[1]
+
+    def _sitemap_listings(self, html: str, query: Query) -> SearchPage | None:
+        if "<urlset" not in html and "<loc>" not in html:
+            return None
+
+        wanted = set(query.region.split(","))
+        items: list[Listing] = []
+        seen: set[str] = set()
+        for url in re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", html):
+            if "/pl/ogloszenia/" not in url or url in seen:
+                continue
+            city = self._url_city(url)
+            if city is None or self._city_region.get(city) not in wanted:
+                continue
+            seen.add(url)
+            items.append(
+                Listing(
+                    source_id=self.source_id,
+                    external_id=url.rstrip("/").rsplit("-", 1)[-1],
+                    url=url,
+                    title=None,
+                    offer_type="rent",
+                    property_type="room" if "/pokoj-" in url else "flat",
+                    price_kind="call",
+                    price_unit="monthly",
+                    price_pln=None,
+                    voivodeship=self._city_region.get(city),
+                    city=self._city_names.get(city),
+                    lat=None,
+                    lng=None,
+                    images=[],
+                    seller_type=None,
+                    extra={"flats": {"sitemap": True}},
+                ),
+            )
+
+        return SearchPage(
+            items=items,
+            current_page=1,
+            total_pages=1,
+            total_items=len(items),
+        )
+
     def parse_detail(self, html: str, summary: Listing) -> Listing:
         data = _detail_object(html)
         if data is None:
@@ -120,16 +184,19 @@ class FlatsAdapter:
             lat = summary.lat
             lng = summary.lng
 
-        province = _text(data.get("addressRegion")) or _address_region(data)
-        voivodeship = self.regions.canonical_voivodeship(_clean_province(province))
+        province = _clean_province(_text(data.get("addressRegion")) or _address_region(data))
+        voivodeship = self.regions.canonical_voivodeship(province)
         if voivodeship is None:
-            match = self.regions.resolve(
-                city=city,
-                county=summary.county,
-                lat=lat,
-                lng=lng,
-            )
-            voivodeship = match.voivodeship if match else summary.voivodeship
+            if self.regions.is_known_voivodeship(province):
+                voivodeship = self.regions.scoped_voivodeship(province)
+            else:
+                match = self.regions.resolve(
+                    city=city,
+                    county=summary.county,
+                    lat=lat,
+                    lng=lng,
+                )
+                voivodeship = match.voivodeship if match else summary.voivodeship
 
         price = parse_price(data.get("price")) or summary.price_pln
         description = strip_html(_text(data.get("description")))

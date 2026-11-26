@@ -45,6 +45,7 @@ ADAPTER_FIELDS = {
     "fetch_mode",
     "browser_headless",
     "browser_solve_cloudflare",
+    "browser_wait_ms",
     "crawl_delay_mode",
 }
 
@@ -83,6 +84,7 @@ class SourceConfig:
     # Scrapling stealth options; ignored for fetch_mode="http".
     browser_headless: bool = True
     browser_solve_cloudflare: bool = False
+    browser_wait_ms: int = 0
     # "defer" makes a run stop when robots.txt crawl delay has not elapsed
     # instead of sleeping inside the process (used by the gdom slow lane).
     crawl_delay_mode: Literal["sleep", "defer"] = "sleep"
@@ -352,6 +354,12 @@ def load_sources_config(path: Path | None = None) -> SourcesConfig:
             if not isinstance(browser_solve_cloudflare, bool):
                 raise ConfigError(f"{context}.browser_solve_cloudflare must be a boolean")
 
+            browser_wait_ms = raw.get("browser_wait_ms", 0)
+            if not isinstance(browser_wait_ms, int) or isinstance(browser_wait_ms, bool):
+                raise ConfigError(f"{context}.browser_wait_ms must be an integer")
+            if browser_wait_ms < 0:
+                raise ConfigError(f"{context}.browser_wait_ms must be zero or positive")
+
             crawl_delay_mode = raw.get("crawl_delay_mode", "sleep")
             if crawl_delay_mode not in {"sleep", "defer"}:
                 raise ConfigError(f"{context}.crawl_delay_mode must be 'sleep' or 'defer'")
@@ -371,6 +379,7 @@ def load_sources_config(path: Path | None = None) -> SourcesConfig:
             fetch_mode = "http"
             browser_headless = True
             browser_solve_cloudflare = False
+            browser_wait_ms = 0
             crawl_delay_mode = "sleep"
 
         refresh_minutes = raw.get("refresh_minutes")
@@ -427,6 +436,7 @@ def load_sources_config(path: Path | None = None) -> SourcesConfig:
             fetch_mode=fetch_mode,
             browser_headless=browser_headless,
             browser_solve_cloudflare=browser_solve_cloudflare,
+            browser_wait_ms=browser_wait_ms,
             crawl_delay_mode=crawl_delay_mode,
         )
 

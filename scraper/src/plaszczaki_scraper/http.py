@@ -9,6 +9,7 @@ import random
 import shutil
 import time
 from contextlib import suppress
+from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -48,6 +49,17 @@ class CrawlDeferred(FetchError):
         self.url = url
         self.remaining = remaining
         super().__init__(f"crawl delay not elapsed for {url}: {remaining:.0f}s left")
+
+
+@dataclass(slots=True)
+class JsonResponse:
+    """The subset of a response the runner needs, for browser POST responses."""
+
+    status: int
+    headers: dict[str, str]
+    body: bytes
+    html_content: str
+    encoding: str = "utf-8"
 
 
 class HostDelayStore:
@@ -154,6 +166,7 @@ class HttpClient:
         browser_path: str | None = None,
         browser_headless: bool = True,
         browser_solve_cloudflare: bool = False,
+        browser_wait_ms: int = 0,
         crawl_delay_mode: Literal["sleep", "defer"] = "sleep",
         delay_store: HostDelayStore | None = None,
     ) -> None:
@@ -165,12 +178,15 @@ class HttpClient:
         self.fetch_mode = fetch_mode
         self.browser_headless = browser_headless
         self.browser_solve_cloudflare = browser_solve_cloudflare
+        self.browser_wait_ms = browser_wait_ms
         self.crawl_delay_mode = crawl_delay_mode
         self.delay_store = delay_store or HostDelayStore()
         self.browser_path = (
             browser_path or os.environ.get("SCRAPER_CHROMIUM_PATH") or shutil.which("chromium")
         )
         self._stealth: StealthySession | None = None
+        self._stealth_warmed = False
+        self._stealth_requests = 0
         self.headers = {
             "User-Agent": self.ua,
             "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
@@ -178,7 +194,22 @@ class HttpClient:
         }
 
     def get(self, url: str, *, check_robots: bool = True) -> Any:
-        """Fetch a URL, returning a Scrapling response."""
+        """Fetch a URL with GET and the configured politeness rules."""
+        return self._request("GET", url, None, check_robots=check_robots)
+
+    def post(self, url: str, body: str, *, check_robots: bool = True) -> Any:
+        """Fetch a URL with POST (JSON body) and the configured politeness rules."""
+        return self._request("POST", url, body, check_robots=check_robots)
+
+    def _request(
+        self,
+        method: str,
+        url: str,
+        body: str | None,
+        *,
+        check_robots: bool = True,
+    ) -> Any:
+        """Execute one request through the same retry and challenge pipeline."""
         if check_robots and not self.robots.can_fetch(url):
             raise RobotsDenied(f"robots.txt disallows {url}")
 
@@ -197,7 +228,7 @@ class HttpClient:
         for attempt in range(self.max_retries + 1):
             self.limiter.wait(url)
             try:
-                response = self._fetch(url)
+                response = self._fetch(url, method=method, body=body)
             except Exception as exc:  # Scrapling wraps several transport errors.
                 last_error = exc
                 logger.debug("fetch error for %s (attempt %s): %s", url, attempt + 1, exc)
@@ -233,8 +264,20 @@ class HttpClient:
 
         raise FetchError(f"failed to fetch {url}: {last_error}") from last_error
 
-    def _fetch(self, url: str) -> Any:
+    def _fetch(self, url: str, *, method: str = "GET", body: str | None = None) -> Any:
         """Fetch with the plain HTTP client or Scrapling's browser engine."""
+        if method == "POST":
+            if self.fetch_mode == "stealth":
+                return self._stealth_post(url, body or "{}")
+            return Fetcher.post(
+                url,
+                data=body or "{}",
+                headers={**self.headers, "Content-Type": "application/json"},
+                timeout=self.timeout,
+                retries=0,
+                follow_redirects=True,
+                stealthy_headers=False,
+            )
         if self.fetch_mode == "stealth":
             return self._stealth_fetch(url)
         return Fetcher.get(
@@ -265,12 +308,56 @@ class HttpClient:
             self._stealth = session
         return self._stealth
 
+    def _warm_stealth(self, url: str) -> None:
+        """Load the site root once so Imperva can issue its challenge cookies."""
+        if self._stealth_warmed or self.browser_wait_ms <= 0:
+            return
+        parts = urlsplit(url)
+        root = f"{parts.scheme}://{parts.netloc}/"
+        try:
+            self._stealth_session().fetch(root, wait=self.browser_wait_ms)
+        except Exception as exc:  # the target request will report the real error
+            logger.debug("stealth warm-up failed for %s: %s", root, exc)
+        self._stealth_warmed = True
+
     def _stealth_fetch(self, url: str) -> Any:
         """Fetch through a real Patchright Chromium session for WAF-protected pages."""
         try:
-            return self._stealth_session().fetch(url)
+            self._warm_stealth(url)
+            session = self._stealth_session()
+            first = self._stealth_requests == 0
+            wait = self.browser_wait_ms if first else min(1_000, self.browser_wait_ms)
+            response = session.fetch(url, wait=wait)
+            self._stealth_requests += 1
+            if self.browser_wait_ms > 0 and challenge_vendor(response) is not None:
+                # The challenge cookie was just issued; reload with the full wait.
+                response = session.fetch(url, wait=self.browser_wait_ms)
+            return response
         except Exception as exc:  # missing browser, launch failure, transport
             raise FetchError(f"stealth fetch failed for {url}: {exc}") from exc
+
+    def _stealth_post(self, url: str, body: str) -> JsonResponse:
+        """POST JSON through the browser context, sharing its challenge cookies."""
+        self._warm_stealth(url)
+        session = self._stealth_session()
+        context = session.context
+        if context is None:
+            raise FetchError("stealth session has no browser context")
+        try:
+            response = context.request.post(
+                url,
+                data=body,
+                headers={**self.headers, "Content-Type": "application/json"},
+            )
+        except Exception as exc:
+            raise FetchError(f"stealth POST failed for {url}: {exc}") from exc
+        payload = response.body()
+        return JsonResponse(
+            status=response.status,
+            headers={str(name).lower(): str(value) for name, value in response.headers.items()},
+            body=payload,
+            html_content=payload.decode("utf-8", "replace"),
+        )
 
     def close(self) -> None:
         """Close the browser session, if one was started."""
@@ -278,6 +365,8 @@ class HttpClient:
             with suppress(Exception):
                 self._stealth.close()
             self._stealth = None
+        self._stealth_warmed = False
+        self._stealth_requests = 0
 
     def _retry_delay(self, attempt: int) -> float:
         base = min(30.0, 1.5 * (2**attempt))

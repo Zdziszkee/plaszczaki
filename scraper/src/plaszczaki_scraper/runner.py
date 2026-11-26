@@ -154,8 +154,9 @@ class Runner:
             return query.with_param(config.newest_param, config.newest_value)
 
         logger.warning(
-            "source %s has no newest sort available; scanning page 1-2 as-is",
+            "source %s has no newest sort available; scanning up to %s page(s) as-is",
             self.options.source_id,
+            self.options.incremental_pages,
         )
         return query
 
@@ -176,7 +177,10 @@ class Runner:
 
             page_query = self.adapter.with_page(query, page)
             try:
-                response = self.client.get(page_query.url)
+                if page_query.method == "POST":
+                    response = self.client.post(page_query.url, page_query.body or "{}")
+                else:
+                    response = self.client.get(page_query.url)
             except RobotsDenied:
                 self.stats.skipped_robots += 1
                 logger.warning("robots.txt disallows %s", page_query.url)
@@ -355,6 +359,12 @@ class Runner:
 
 
 def _html(response: Any) -> str:
+    headers = getattr(response, "headers", {}) or {}
+    content_type = str(headers.get("content-type", "")).lower()
+    if "json" in content_type:
+        body = getattr(response, "body", b"")
+        if isinstance(body, bytes):
+            return body.decode(getattr(response, "encoding", None) or "utf-8", "replace")
     html = getattr(response, "html_content", None)
     if isinstance(html, str):
         return html

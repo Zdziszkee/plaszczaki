@@ -78,8 +78,8 @@ def test_parse_search_fixture() -> None:
     assert first.price_pln == 759_000
     assert first.offer_type == "sale"
     assert first.property_type == "flat"
-    # Out-of-scope listing: the address names Mazowieckie, so no voivodeship is assigned.
-    assert first.voivodeship is None
+    # Out-of-scope listing: the national id is kept so the runner rejects it.
+    assert first.voivodeship == "mazowieckie"
     assert first.city == "Warszawa"
     assert first.lat == 52.23072
     assert first.lng == 21.016317

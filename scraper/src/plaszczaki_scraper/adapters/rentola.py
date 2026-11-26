@@ -11,7 +11,7 @@ from urllib.parse import urljoin
 
 from lxml import html as lxml_html
 
-from plaszczaki_scraper.adapters.base import ParseError, Query, SearchPage
+from plaszczaki_scraper.adapters.base import ParseError, Query, SearchPage, rotated
 from plaszczaki_scraper.models import Listing, PropertyType
 from plaszczaki_scraper.normalize import (
     normalize_text,
@@ -26,12 +26,6 @@ from plaszczaki_scraper.normalize import (
 from plaszczaki_scraper.regions import RegionRegistry
 
 BASE_URL = "https://rentola.pl"
-
-# City landing pages per voivodeship. Rentola has no voivodeship search URL.
-CITY_SLUGS: dict[str, tuple[str, ...]] = {
-    "malopolskie": ("krakow", "tarnow", "nowy-sacz", "zakopane"),
-    "slaskie": ("katowice", "gliwice", "czestochowa", "bielsko-biala"),
-}
 
 CATEGORIES: tuple[tuple[str, PropertyType], ...] = (
     ("mieszkanie", "flat"),
@@ -64,14 +58,21 @@ class RentolaAdapter:
         self.regions = regions
 
     def queries(self, regions: Sequence[str]) -> list[Query]:
+        # Rentola has no voivodeship-level search URL, so cover every city in
+        # the configured region rather than only the largest few.
         queries: list[Query] = []
         for region in regions:
-            for city in CITY_SLUGS.get(region, ()):
+            if not self.regions.has_region(region):
+                continue
+            for city in rotated(list(dict.fromkeys(self.regions.region(region).cities))):
+                slug = normalize_text(city).replace(" ", "-")
+                if not slug:
+                    continue
                 for category, property_type in CATEGORIES:
                     queries.append(
                         Query(
-                            key=f"{region}:wynajem:{category}:{city}",
-                            url=f"{BASE_URL}/wynajem/{category}/{city}",
+                            key=f"{region}:wynajem:{category}:{slug}",
+                            url=f"{BASE_URL}/wynajem/{category}/{slug}",
                             region=region,
                             offer_type="rent",
                             property_type=property_type,
@@ -123,13 +124,16 @@ class RentolaAdapter:
 
         voivodeship = self.regions.canonical_voivodeship(province)
         if voivodeship is None:
-            match = self.regions.resolve(
-                city=city,
-                county=summary.county,
-                lat=lat,
-                lng=lng,
-            )
-            voivodeship = match.voivodeship if match else summary.voivodeship
+            if self.regions.is_known_voivodeship(province):
+                voivodeship = self.regions.scoped_voivodeship(province)
+            else:
+                match = self.regions.resolve(
+                    city=city,
+                    county=summary.county,
+                    lat=lat,
+                    lng=lng,
+                )
+                voivodeship = match.voivodeship if match else summary.voivodeship
 
         price = parse_price(offers.get("price")) or summary.price_pln
         area = parse_area(floor_size.get("value")) or summary.area_m2

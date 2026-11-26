@@ -138,6 +138,10 @@ class SprzedajemyAdapter:
                 )
         return queries
 
+    def newest(self, query: Query) -> Query:
+        """Sprzedajemy's date-descending sort parameter."""
+        return query.with_param("sort", "inp_srt_date_d")
+
     def with_page(self, query: Query, page: int) -> Query:
         return replace(query, url=_page_url(query.url, page), page=page)
 

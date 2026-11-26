@@ -422,6 +422,10 @@ class GratkaAdapter:
                 )
         return queries
 
+    def newest(self, query: Query) -> Query:
+        """Gratka's date-descending sort parameter."""
+        return query.with_param("sort", "newest")
+
     def with_page(self, query: Query, page: int) -> Query:
         page = max(1, min(page, MAX_PAGES))
         if page == 1:

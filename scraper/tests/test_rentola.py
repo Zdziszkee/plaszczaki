@@ -16,13 +16,16 @@ def _adapter() -> RentolaAdapter:
     )
 
 
-def test_queries_cover_both_regions_and_categories() -> None:
+def test_queries_cover_every_configured_city_and_category() -> None:
     queries = _adapter().queries(("malopolskie", "slaskie"))
-    assert len(queries) == 16
+
+    assert len(queries) == len({query.url for query in queries})
     assert {query.region for query in queries} == {"malopolskie", "slaskie"}
     assert {query.property_type for query in queries} == {"flat", "house"}
     assert any(query.url == "https://rentola.pl/wynajem/mieszkanie/krakow" for query in queries)
     assert any(query.url == "https://rentola.pl/wynajem/dom/katowice" for query in queries)
+    assert any(query.url == "https://rentola.pl/wynajem/mieszkanie/wieliczka" for query in queries)
+    assert any(query.url == "https://rentola.pl/wynajem/dom/tychy" for query in queries)
 
 
 def test_with_page_adds_page_parameter() -> None:

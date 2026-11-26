@@ -229,3 +229,15 @@ def test_parse_detail_rent_fixture() -> None:
     assert detail.lng == 19.9288559
     assert detail.geo_source == "source"
     assert detail.description
+
+
+def test_newest_inserts_the_najnowsze_path_segment() -> None:
+    adapter = _adapter()
+    queries = adapter.queries(("malopolskie",))
+    sale = next(query for query in queries if "do-wynajecia" not in query.url)
+    rent = next(query for query in queries if "do-wynajecia" in query.url)
+
+    assert adapter.newest(sale).url == ("https://www.morizon.pl/mieszkania/najnowsze/malopolskie/")
+    assert adapter.newest(rent).url == (
+        "https://www.morizon.pl/do-wynajecia/mieszkania/najnowsze/malopolskie/"
+    )

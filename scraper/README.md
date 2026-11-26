@@ -88,7 +88,9 @@ independent lanes and runs one pass over each:
   pass never masks a sale pass and a śląskie pass never masks a małopolskie one.
 - `other` — auction/lease/mixed queries (`offer_type` not sale/rent).
 - `national` — sources whose search URLs are identical for both voivodeships
-  (Gdom, Poczta Polska, AMW, Nieruchomościowi), so they run once, not twice.
+  (Gdom, AMW, Nieruchomościowi), so they run once, not twice. Poczta Polska is
+  not in this lane: it is non-incremental and its adapter now asks the site for
+  each region separately with `?locationId=`.
 - `stealth` — sources with `fetch_mode: "stealth"`; they run through the
   Patchright Chromium session and are kept out of the HTTP lanes so a browser
   launch cannot delay the sale/rent passes.
@@ -97,13 +99,38 @@ independent lanes and runs one pass over each:
 `--region malopolskie` on `watch` remain available for one-off jobs; the mode key
 includes the filters.
 
+Sources that only offer city pages (Flats, Okolica, TXO, Rentumo, Rentola) have
+no voivodeship-level URL. They crawl every configured city in each region, not
+just Kraków/Katowice, and rotate the city order hourly so a per-lane limit
+cannot starve the same towns every pass. Flats uses its allowed listings
+sitemap because the city page embeds only the first 16 cards.
+
 `run-all --only-non-incremental` runs the enabled adapters that `watch` does not
 poll (the `incremental: false` ones) in one full pass. The nightly
 `plaszczaki-full.timer` calls it with `--newest`, so those sources are refreshed
 from the newest pages instead of being left to a manual backfill. Sources are
-ordered by query count, with the large aggregators last, so a timeout cannot
-starve the rest of the catalog; `okolica` and `txo` may need several nightly
-passes to backfill their full city × category matrix.
+ordered by their last attempt (never run first, then oldest), with query count
+as the tie-breaker, so a short pass cannot starve the same big aggregators every
+night; `okolica` and `txo` still need several nightly passes to backfill their
+full city × category matrix.
+
+`--newest` always reads only the two newest pages per query, whatever the
+source. A source that has never been backfilled therefore needs one full
+`run --source <id>` (no `--newest`) before the incremental passes can keep it
+current; the nightly full lane only refreshes those first pages.
+
+`elicytacje-mf` (KAS eLicytacje) runs on the stealth lane. Its search endpoint is
+a JSON `POST` issued through the browser context, so the Imperva cookies are
+reused; `browser_wait_ms: 15000` lets the challenge clear before the first
+request. Details are rendered `/auction/announcements/{uuid}` pages.
+
+`kowr` uses the same stealth lane: its list is filtered with `location=88`
+(małopolskie) or `location=94` (śląskie), then details are parsed for price,
+area, location and auction date. `pge` reads the public
+`datahub.gkpge.pl/api/geo/property` feed with `voivodeshipCode=12/24`; the feed
+already contains coordinates, address, price and area, so no detail hydration
+is needed. The DGLP Lasów Państwowych PDF index is catalogued as `planned` and
+still needs the PDF lane.
 
 `geocode` drains the street-level geocoding queue in
 `data/cache/geocode.db` with Nominatim at 1 req/s. Queries are structured
@@ -162,7 +189,8 @@ query, and `--dry-run` prints records without writing.
   object: `adapter`, `rps`, `incremental`, `incremental_pages`, `newest_param`,
   `newest_value`, `hydrate_details`, `fetch_mode` (`http`, or `stealth` for
   Scrapling's Patchright Chromium session), `browser_headless` (default `true`),
-  `browser_solve_cloudflare` (default `false`) and `crawl_delay_mode` (`sleep`,
+  `browser_solve_cloudflare` (default `false`), `browser_wait_ms` (default `0`,
+  used to wait out Imperva/JS challenges) and `crawl_delay_mode` (`sleep`,
   or `defer` to stop instead of sleeping). Parked sources keep only the catalog
   fields.
 - `config/regions.json` — Małopolskie/Śląskie, TERYT codes, bboxes and place lists.

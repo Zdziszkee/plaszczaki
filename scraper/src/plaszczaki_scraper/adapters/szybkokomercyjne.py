@@ -206,11 +206,10 @@ class SzybkokomercyjneAdapter:
             raise ParseError("Szybko Komercyjne detail page is missing map coordinates")
         city, district, province, commune = self._location(tree)
 
-        voivodeship = self.regions.canonical_voivodeship(province)
-        if voivodeship is None:
-            voivodeship = self.regions.region_for_point(lat, lng)
-        if voivodeship is None:
-            voivodeship = summary.voivodeship
+        voivodeship = self.regions.scoped_voivodeship(
+            province,
+            self.regions.region_for_point(lat, lng) or summary.voivodeship,
+        )
 
         offer_type = self._offer_type(body) or summary.offer_type
         images = self._images(product, tree)

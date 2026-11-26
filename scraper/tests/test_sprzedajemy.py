@@ -178,3 +178,10 @@ def test_parse_detail_plot_uses_land_area() -> None:
     assert detail.geo_source == "source"
     assert detail.description is not None
     assert detail.published_at == 1795542900000
+
+
+def test_newest_requests_the_date_descending_sort() -> None:
+    adapter = _adapter()
+    query = adapter.queries(("malopolskie",))[0]
+
+    assert adapter.newest(query).url.endswith("?sort=inp_srt_date_d")

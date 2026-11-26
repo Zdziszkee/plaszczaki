@@ -297,7 +297,7 @@ def _state_name(voivodeship: str | None, regions: RegionRegistry | None = None) 
     registry = regions if regions is not None else _default_registry()
     if registry is not None:
         region_id = registry.canonical_voivodeship(voivodeship)
-        if region_id is not None:
+        if region_id is not None and registry.has_region(region_id):
             return registry.region(region_id).name
     return voivodeship
 

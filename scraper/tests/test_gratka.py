@@ -238,3 +238,10 @@ def test_parse_detail_rent_fixture() -> None:
     assert detail.lng == 19.9288559
     assert detail.geo_source == "source"
     assert detail.description
+
+
+def test_newest_requests_the_date_descending_sort() -> None:
+    adapter = _adapter()
+    query = adapter.queries(("malopolskie",))[0]
+
+    assert adapter.newest(query).url.endswith("?sort=newest")

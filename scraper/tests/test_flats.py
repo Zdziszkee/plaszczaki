@@ -16,21 +16,55 @@ def _adapter() -> FlatsAdapter:
     )
 
 
-def test_queries_cover_both_regions() -> None:
+def test_queries_use_the_listings_sitemap() -> None:
     queries = _adapter().queries(("malopolskie", "slaskie"))
-    assert len(queries) == 6
-    assert {query.region for query in queries} == {"malopolskie", "slaskie"}
-    assert any(query.url == "https://flats.pl/pl/wynajem/krakow" for query in queries)
-    assert any(query.url == "https://flats.pl/pl/wynajem/katowice" for query in queries)
-    assert all(query.offer_type == "rent" for query in queries)
-    assert all(query.property_type == "flat" for query in queries)
+
+    assert len(queries) == 1
+    assert queries[0].url == "https://flats.pl/sitemaps/sitemap/listings.xml"
+    assert queries[0].region == "malopolskie,slaskie"
+    assert queries[0].offer_type == "rent"
+    assert queries[0].property_type == "flat"
 
 
-def test_with_page_adds_page_parameter() -> None:
+def test_sitemap_keeps_configured_cities_and_drops_other_voivodeships() -> None:
+    sitemap = """
+    <urlset>
+      <url><loc>https://flats.pl/pl/ogloszenia/mieszkanie-2-pokojowe-43-m2-krakow-pradnik-bialy-1kuvwf88fe</loc></url>
+      <url><loc>https://flats.pl/pl/ogloszenia/mieszkanie-30-m2-warszawa-srodmiescie-3z3uun482l</loc></url>
+      <url><loc>https://flats.pl/pl/ogloszenia/pokoj-10-m2-katowice-centrum-abcdef1234</loc></url>
+    </urlset>
+    """
     query = _adapter().queries(("malopolskie",))[0]
-    paged = _adapter().with_page(query, 2)
-    assert paged.url.endswith("?page=2")
-    assert paged.page == 2
+
+    page = _adapter().parse_search(sitemap, query)
+
+    assert [item.external_id for item in page.items] == ["1kuvwf88fe"]
+    assert page.items[0].voivodeship == "malopolskie"
+    assert page.items[0].city == "Kraków"
+    assert page.items[0].url == (
+        "https://flats.pl/pl/ogloszenia/mieszkanie-2-pokojowe-43-m2-krakow-pradnik-bialy-1kuvwf88fe"
+    )
+
+
+def test_sitemap_includes_every_configured_city_in_the_region() -> None:
+    sitemap = """
+    <urlset>
+      <url><loc>https://flats.pl/pl/ogloszenia/pokoj-10-m2-wieliczka-centrum-aaa111</loc></url>
+      <url><loc>https://flats.pl/pl/ogloszenia/pokoj-12-m2-zakopane-centrum-bbb222</loc></url>
+    </urlset>
+    """
+    query = _adapter().queries(("malopolskie",))[0]
+
+    page = _adapter().parse_search(sitemap, query)
+
+    assert [item.city for item in page.items] == ["Wieliczka", "Zakopane"]
+    assert all(item.voivodeship == "malopolskie" for item in page.items)
+
+
+def test_with_page_keeps_the_single_sitemap_document() -> None:
+    query = _adapter().queries(("malopolskie",))[0]
+
+    assert _adapter().with_page(query, 2).page == 1
 
 
 def test_parse_search_fixture() -> None:

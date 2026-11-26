@@ -16,6 +16,29 @@ _PLACE_PREFIXES = (
     "gmina miejska ",
 )
 
+# Every Polish voivodeship, normalized -> canonical id. A source that names an
+# out-of-scope voivodeship must be rejected even when a county or city name also
+# exists in a configured region: Brzeg (opolskie, powiat brzeski) would
+# otherwise be pulled into małopolskie through the shared "brzeski" county name.
+_NATIONAL_VOIVODESHIPS: dict[str, str] = {
+    "dolnoslaskie": "dolnoslaskie",
+    "kujawsko pomorskie": "kujawsko-pomorskie",
+    "lubelskie": "lubelskie",
+    "lubuskie": "lubuskie",
+    "lodzkie": "lodzkie",
+    "malopolskie": "malopolskie",
+    "mazowieckie": "mazowieckie",
+    "opolskie": "opolskie",
+    "podkarpackie": "podkarpackie",
+    "podlaskie": "podlaskie",
+    "pomorskie": "pomorskie",
+    "slaskie": "slaskie",
+    "swietokrzyskie": "swietokrzyskie",
+    "warminsko mazurskie": "warminsko-mazurskie",
+    "wielkopolskie": "wielkopolskie",
+    "zachodniopomorskie": "zachodniopomorskie",
+}
+
 
 def _normalize_place(value: str) -> str:
     normalized = normalize_text(value)
@@ -24,6 +47,22 @@ def _normalize_place(value: str) -> str:
             normalized = normalized[len(prefix) :]
             break
     return normalized.strip()
+
+
+def _national_voivodeship(value: str | None) -> str | None:
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    # Some feeds pass "malopolskie/krakow/krakow" or "powiat ...".
+    if "/" in text:
+        text = text.split("/", 1)[0]
+    return _NATIONAL_VOIVODESHIPS.get(_normalize_place(text))
+
+
+def _is_national_voivodeship(value: str | None) -> bool:
+    return _national_voivodeship(value) is not None
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +102,28 @@ class RegionRegistry:
     def has_region(self, region_id: str) -> bool:
         return region_id in self.config.regions
 
+    def is_known_voivodeship(self, value: str | None) -> bool:
+        """True for any of the 16 Polish voivodeships, in or out of scope."""
+        return _is_national_voivodeship(value)
+
+    def scoped_voivodeship(
+        self,
+        province: str | None,
+        fallback: str | None = None,
+    ) -> str | None:
+        """Map a source province to a configured region.
+
+        A known out-of-scope voivodeship is returned as its normalized name so
+        the runner can reject it, instead of falling back to a query region or
+        a same-named county/city from another voivodeship.
+        """
+        canonical = self.canonical_voivodeship(province)
+        if canonical is not None and canonical in self.config.regions:
+            return canonical
+        if self.is_known_voivodeship(province):
+            return normalize_text(province or "") or None
+        return fallback
+
     def region(self, region_id: str) -> RegionConfig:
         return self.config.regions[region_id]
 
@@ -83,7 +144,12 @@ class RegionRegistry:
 
         # Handle "powiat krakowski" and similar prefixes.
         stripped = _normalize_place(normalized)
-        return self._alias_to_region.get(stripped)
+        if stripped in self._alias_to_region:
+            return self._alias_to_region[stripped]
+
+        # Keep the national id for out-of-scope voivodeships so ``resolve`` can
+        # reject them instead of falling back to a shared county or city name.
+        return _NATIONAL_VOIVODESHIPS.get(stripped)
 
     def match_county(self, value: str | None) -> str | None:
         if not value:
@@ -128,8 +194,12 @@ class RegionRegistry:
         lng: float | None = None,
     ) -> RegionMatch | None:
         """Resolve a location using the most specific available signal."""
-        region_id = self.canonical_voivodeship(province)
-        if region_id is not None:
+        if self.is_known_voivodeship(province):
+            region_id = self.canonical_voivodeship(province)
+            if region_id is None or region_id not in self.config.regions:
+                # A known Polish voivodeship outside the configured scope wins
+                # over any same-named county or city inside it.
+                return None
             return RegionMatch(
                 voivodeship=region_id,
                 county=county,

@@ -33,30 +33,45 @@ def _item(page: SearchPage, external_id: str) -> Listing:
     return next(item for item in page.items if item.external_id == external_id)
 
 
-def test_queries_cover_sale_and_rent_lists() -> None:
+def test_queries_cover_each_region_sale_and_rent_lists() -> None:
     queries = _adapter().queries(("malopolskie", "slaskie"))
 
-    assert len(queries) == 2
-    assert {query.key for query in queries} == {"national:sprzedaz", "national:wynajem"}
+    assert len(queries) == 4
+    assert {query.key for query in queries} == {
+        "malopolskie:sprzedaz",
+        "malopolskie:wynajem",
+        "slaskie:sprzedaz",
+        "slaskie:wynajem",
+    }
     assert {query.offer_type for query in queries} == {"sale", "rent"}
-    sale = next(query for query in queries if query.key == "national:sprzedaz")
-    assert sale.url == "https://nieruchomosci.poczta-polska.pl/oferty/sprzedaz"
+    sale = next(query for query in queries if query.key == "malopolskie:sprzedaz")
+    assert sale.url == ("https://nieruchomosci.poczta-polska.pl/oferty/sprzedaz?locationId=18")
+    slaskie = next(query for query in queries if query.key == "slaskie:wynajem")
+    assert slaskie.url == ("https://nieruchomosci.poczta-polska.pl/oferty/wynajem?locationId=3")
+
+
+def test_queries_skip_regions_without_a_location_id() -> None:
+    queries = _adapter().queries(("malopolskie", "nieznane"))
+
+    assert {query.region for query in queries} == {"malopolskie"}
 
 
 def test_with_page_uses_query_param_pagination() -> None:
-    query = _queries()["national:wynajem"]
+    query = _queries()["malopolskie:wynajem"]
 
     first = _adapter().with_page(query, 1)
     second = _adapter().with_page(query, 2)
 
     assert "page=" not in first.url
+    assert "locationId=18" in first.url
     assert first.page == 1
-    assert second.url.endswith("?page=2")
+    assert second.url.endswith("&page=2")
+    assert "locationId=18" in second.url
     assert second.page == 2
 
 
 def test_parse_sale_search_fixture() -> None:
-    page = _search_page("search_sale.html", _queries()["national:sprzedaz"])
+    page = _search_page("search_sale.html", _queries()["malopolskie:sprzedaz"])
 
     assert page.current_page == 1
     assert page.total_pages == 1
@@ -83,13 +98,13 @@ def test_parse_sale_search_fixture() -> None:
     assert auction.lng is None
 
     outside = _item(page, "814-6-1")
-    assert outside.voivodeship == "warmińsko-mazurskie"
+    assert outside.voivodeship == "warminsko-mazurskie"
     assert outside.city == "Olsztyn"
     assert outside.street == "Seweryna Pieniężnego"
 
 
 def test_parse_rent_search_fixture() -> None:
-    query = _adapter().with_page(_queries()["national:wynajem"], 2)
+    query = _adapter().with_page(_queries()["malopolskie:wynajem"], 2)
     page = _search_page("search_rent.html", query)
 
     assert page.current_page == 2
@@ -127,7 +142,7 @@ def test_parse_rent_search_fixture() -> None:
 
 def test_parse_sale_detail_fixture() -> None:
     summary = _item(
-        _search_page("search_sale.html", _queries()["national:sprzedaz"]),
+        _search_page("search_sale.html", _queries()["malopolskie:sprzedaz"]),
         "431-6-1",
     )
     html = (FIXTURES / "poczta-polska" / "detail_sale.html").read_text(encoding="utf-8")
@@ -157,7 +172,7 @@ def test_parse_sale_detail_fixture() -> None:
 
 
 def test_parse_rent_detail_fixture() -> None:
-    query = _adapter().with_page(_queries()["national:wynajem"], 2)
+    query = _adapter().with_page(_queries()["malopolskie:wynajem"], 2)
     summary = _item(_search_page("search_rent.html", query), "823-2-2")
     html = (FIXTURES / "poczta-polska" / "detail_rent.html").read_text(encoding="utf-8")
 
@@ -182,5 +197,5 @@ def test_parse_rent_detail_fixture() -> None:
 def test_unrecognised_page_raises_parse_error() -> None:
     with pytest.raises(ParseError):
         _adapter().parse_search(
-            "<html><body>maintenance</body></html>", _queries()["national:wynajem"]
+            "<html><body>maintenance</body></html>", _queries()["malopolskie:wynajem"]
         )

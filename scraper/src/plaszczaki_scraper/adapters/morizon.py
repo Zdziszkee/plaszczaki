@@ -423,6 +423,16 @@ class MorizonAdapter:
                 )
         return queries
 
+    def newest(self, query: Query) -> Query:
+        """Morizon encodes the date-descending sort as a path segment."""
+        parts = urlsplit(query.url)
+        segments = [segment for segment in parts.path.split("/") if segment]
+        if segments and "najnowsze" not in segments:
+            segments.insert(len(segments) - 1, "najnowsze")
+        path = "/" + "/".join(segments) + "/"
+        url = urlunsplit((parts.scheme, parts.netloc, path, parts.query, parts.fragment))
+        return replace(query, url=url)
+
     def with_page(self, query: Query, page: int) -> Query:
         page = max(1, min(page, MAX_PAGES))
         if page == 1:

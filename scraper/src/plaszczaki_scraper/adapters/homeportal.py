@@ -223,7 +223,7 @@ class HomeportalAdapter:
                 else "private"
             )
 
-        voivodeship = self.regions.canonical_voivodeship(province) or summary.voivodeship
+        voivodeship = self.regions.scoped_voivodeship(province, summary.voivodeship)
         description = _first_text(tree.xpath('//div[@id="offerDescription"]'))
 
         extra = dict(summary.extra)

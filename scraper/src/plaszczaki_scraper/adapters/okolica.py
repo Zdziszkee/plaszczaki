@@ -23,7 +23,7 @@ from urllib.parse import urljoin
 
 from lxml import html as lxml_html
 
-from plaszczaki_scraper.adapters.base import ParseError, Query, SearchPage
+from plaszczaki_scraper.adapters.base import ParseError, Query, SearchPage, rotated
 from plaszczaki_scraper.models import Listing, Market, OfferType, PropertyType
 from plaszczaki_scraper.normalize import (
     normalize_text,
@@ -128,7 +128,7 @@ class OkolicaAdapter:
         for region in regions:
             if not self.regions.has_region(region):
                 continue
-            cities = dict.fromkeys(self.regions.region(region).cities)
+            cities = rotated(list(dict.fromkeys(self.regions.region(region).cities)))
             for city in cities:
                 slug = normalize_text(city).replace(" ", "-")
                 if not slug:

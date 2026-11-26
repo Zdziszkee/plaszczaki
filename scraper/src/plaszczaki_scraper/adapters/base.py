@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Protocol
@@ -10,13 +11,22 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from plaszczaki_scraper.models import Listing, OfferType, PropertyType
 
 
+def rotated(values: Sequence[str]) -> list[str]:
+    """Rotate city lists hourly so a query budget cannot starve later cities."""
+    items = list(values)
+    if not items:
+        return items
+    offset = int(time.time() // 3600) % len(items)
+    return items[offset:] + items[:offset]
+
+
 class ParseError(RuntimeError):
     """Raised when a page does not match the adapter's expected structure."""
 
 
 @dataclass(frozen=True, slots=True)
 class Query:
-    """One search URL to crawl."""
+    """One search URL (or API request) to crawl."""
 
     key: str
     url: str
@@ -24,6 +34,8 @@ class Query:
     offer_type: OfferType
     property_type: PropertyType
     page: int = 1
+    method: str = "GET"
+    body: str | None = None
 
     def with_page(self, page: int) -> Query:
         parts = urlsplit(self.url)

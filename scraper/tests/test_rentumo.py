@@ -16,13 +16,21 @@ def _adapter() -> RentumoAdapter:
     )
 
 
-def test_queries_cover_both_regions() -> None:
+def test_queries_cover_every_configured_city_in_both_regions() -> None:
     queries = _adapter().queries(("malopolskie", "slaskie"))
-    assert len(queries) == 8
+
+    assert len(queries) == len({query.url for query in queries})
     assert {query.region for query in queries} == {"malopolskie", "slaskie"}
     assert any(
         query.url == "https://rentumo.pl/wynajmij-mieszkanie/krakow-malopolskie"
         for query in queries
+    )
+    assert any(
+        query.url == "https://rentumo.pl/wynajmij-mieszkanie/wieliczka-malopolskie"
+        for query in queries
+    )
+    assert any(
+        query.url == "https://rentumo.pl/wynajmij-mieszkanie/tychy-slaskie" for query in queries
     )
     assert all(query.offer_type == "rent" for query in queries)
     assert all(query.property_type == "flat" for query in queries)
@@ -92,3 +100,10 @@ def test_parse_detail_fixture() -> None:
     assert detail.description is not None
     assert detail.description.startswith("Wynajmę od 15 listopada 2026r.")
     assert len(detail.images) == 7
+
+
+def test_newest_requests_the_date_descending_sort() -> None:
+    adapter = _adapter()
+    query = adapter.queries(("malopolskie",))[0]
+
+    assert adapter.newest(query).url.endswith("?sort_by=date_desc")

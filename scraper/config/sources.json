@@ -200,7 +200,7 @@
 			"urls": [
 				"https://flats.pl"
 			],
-			"notes": "Embedded Next.js RSC listing objects; detail lat/lng + description.",
+			"notes": "Allowed listings sitemap (the complete active inventory; city pages embed only the first 16 cards) + detail lat/lng and description; every configured city in both regions is kept.",
 			"refresh_minutes": 30,
 			"adapter": "flats",
 			"rps": 0.5,
@@ -606,7 +606,7 @@
 			"urls": [
 				"https://rentola.pl"
 			],
-			"notes": "JSON-LD SearchResultsPage/RealEstateListing; geo on search and detail.",
+			"notes": "JSON-LD SearchResultsPage/RealEstateListing; geo on search and detail. City pages only, so every configured city in each region is crawled.",
 			"refresh_minutes": 30,
 			"adapter": "rentola",
 			"rps": 0.5,
@@ -628,7 +628,7 @@
 			"urls": [
 				"https://rentumo.pl"
 			],
-			"notes": "Server-rendered cards; JSON-LD detail + map lat/lng.",
+			"notes": "Server-rendered cards; JSON-LD detail + map lat/lng. City pages only, so every configured city in each region is crawled.",
 			"refresh_minutes": 30,
 			"adapter": "rentumo",
 			"rps": 1.0,
@@ -982,6 +982,20 @@
 			"last_verified": "2026-11-25"
 		},
 		{
+			"id": "dglp",
+			"label": "DGLP Lasy Państwowe",
+			"kind": "government",
+			"tier": 3,
+			"status": "planned",
+			"enabled": false,
+			"urls": [
+				"https://www.gov.pl/web/dglp/nieruchomosci-przeznaczone-do-sprzedazy"
+			],
+			"notes": "DGLP publication index; year pages list PDF attachments (art. 40a wykazy) for RDLP/nadleśnictwa. Needs the PDF lane plus the RDLP Kraków/Katowice filter; there is no HTML listing feed.",
+			"blocker": "pdf",
+			"last_verified": "2026-11-26"
+		},
+		{
 			"id": "luksusowemieszkania",
 			"label": "Luksusowe Mieszkania",
 			"kind": "luxury",
@@ -1058,6 +1072,30 @@
 			"newest_value": null,
 			"hydrate_details": true,
 			"fetch_mode": "http",
+			"crawl_delay_mode": "sleep"
+		},
+		{
+			"id": "pge",
+			"label": "PGE Nieruchomości",
+			"kind": "government",
+			"tier": 3,
+			"status": "implemented",
+			"enabled": true,
+			"urls": [
+				"https://nieruchomosci.gkpge.pl/strona-glowna"
+			],
+			"notes": "PGE group property portal backed by the public datahub.gkpge.pl geo JSON feed; coordinates, address, price and area are in the feed. TLS chain on datahub is handled by the browser lane. voivodeshipCode=12/24 keeps the scope.",
+			"last_verified": "2026-11-26",
+			"refresh_minutes": 180,
+			"adapter": "pge",
+			"rps": 0.2,
+			"incremental": true,
+			"incremental_pages": 1,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": false,
+			"fetch_mode": "stealth",
+			"browser_wait_ms": 0,
 			"crawl_delay_mode": "sleep"
 		},
 		{
@@ -1259,14 +1297,24 @@
 			"label": "eLicytacje MF",
 			"kind": "auction",
 			"tier": 4,
-			"status": "blocked",
-			"enabled": false,
+			"status": "implemented",
+			"enabled": true,
 			"urls": [
 				"https://elicytacje.mf.gov.pl"
 			],
-			"notes": "Imperva JS challenge served as HTTP 200 (_Incapsula_Resource); Patchright Chromium stealth still hit the Imperva challenge on 2026-11-26.",
-			"blocker": "waf",
-			"last_verified": "2026-11-25"
+			"notes": "KAS e-auctions. Imperva challenge clears in Patchright Chromium after a page wait; the adapter POSTs the JSON announcement API through the browser context and parses rendered /auction/announcements/{uuid} details.",
+			"last_verified": "2026-11-26",
+			"refresh_minutes": 180,
+			"adapter": "elicytacje_mf",
+			"rps": 0.2,
+			"incremental": true,
+			"incremental_pages": 30,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "stealth",
+			"browser_wait_ms": 15000,
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "enea",
@@ -1407,15 +1455,25 @@
 			"label": "KOWR",
 			"kind": "government",
 			"tier": 4,
-			"status": "blocked",
-			"enabled": false,
+			"status": "implemented",
+			"enabled": true,
 			"urls": [
 				"https://www.nieruchomoscikowr.gov.pl/nieruchomosci/oferty",
 				"https://www.gov.pl/web/kowr"
 			],
-			"notes": "Property search portal nieruchomoscikowr.gov.pl has permissive robots but sits behind Imperva (HTTP 200 challenge shell); Patchright Chromium stealth still hit the Imperva challenge on 2026-11-26. gov.pl itself is a normal CMS page.",
-			"blocker": "waf",
-			"last_verified": "2026-11-25"
+			"notes": "KOWR property sales. Server-rendered list with location=88 (małopolskie) and location=94 (śląskie), page=N pagination and detail pages. Imperva clears in Patchright Chromium after a 15s page wait.",
+			"last_verified": "2026-11-26",
+			"refresh_minutes": 180,
+			"adapter": "kowr",
+			"rps": 0.2,
+			"incremental": true,
+			"incremental_pages": 30,
+			"newest_param": null,
+			"newest_value": null,
+			"hydrate_details": true,
+			"fetch_mode": "stealth",
+			"browser_wait_ms": 15000,
+			"crawl_delay_mode": "sleep"
 		},
 		{
 			"id": "kzn",
@@ -1704,7 +1762,7 @@
 			"urls": [
 				"https://nieruchomosci.poczta-polska.pl"
 			],
-			"notes": "National sale/lease lists; street address on detail, no source coordinates, geocoder required.",
+			"notes": "Sale/lease lists filtered server-side by ?locationId= for each configured region; street address on detail, no source coordinates, geocoder required.",
 			"refresh_minutes": 180,
 			"adapter": "poczta-polska",
 			"rps": 0.5,

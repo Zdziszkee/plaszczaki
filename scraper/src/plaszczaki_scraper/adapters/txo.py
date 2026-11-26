@@ -21,7 +21,7 @@ from dataclasses import replace
 from typing import Any
 from urllib.parse import quote, urljoin, urlsplit
 
-from plaszczaki_scraper.adapters.base import ParseError, Query, SearchPage
+from plaszczaki_scraper.adapters.base import ParseError, Query, SearchPage, rotated
 from plaszczaki_scraper.models import Listing, Market, OfferType, PropertyType
 from plaszczaki_scraper.normalize import (
     normalize_text,
@@ -276,7 +276,7 @@ class TxoAdapter:
         for region in regions:
             if not self.regions.has_region(region):
                 continue
-            cities = list(dict.fromkeys(self.regions.region(region).cities))
+            cities = rotated(list(dict.fromkeys(self.regions.region(region).cities)))
             for city in cities:
                 for transaction, kind, offer_type, property_type in CATEGORIES:
                     city_key = normalize_text(city).replace(" ", "-")
@@ -323,11 +323,10 @@ class TxoAdapter:
         lat = safe_float(geo.get("latitude"))
         lng = safe_float(geo.get("longitude"))
         province = _text(address.get("addressRegion"))
-        voivodeship = self.regions.canonical_voivodeship(province)
-        if voivodeship is None:
-            voivodeship = self.regions.region_for_point(lat, lng)
-        if voivodeship is None:
-            voivodeship = summary.voivodeship
+        voivodeship = self.regions.scoped_voivodeship(
+            province,
+            self.regions.region_for_point(lat, lng) or summary.voivodeship,
+        )
 
         title = _text(node.get("name")) or summary.title
         city = _text(address.get("addressLocality")) or summary.city
@@ -427,9 +426,10 @@ class TxoAdapter:
 
         lat = safe_float(item.get("latitude"))
         lng = safe_float(item.get("longitude"))
-        voivodeship = self.regions.canonical_voivodeship(_text(item.get("region")))
-        if voivodeship is None:
-            voivodeship = self.regions.region_for_point(lat, lng)
+        voivodeship = self.regions.scoped_voivodeship(
+            _text(item.get("region")),
+            self.regions.region_for_point(lat, lng),
+        )
 
         city = _text(item.get("city"))
         district = _text(item.get("district"))

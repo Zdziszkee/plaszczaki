@@ -211,11 +211,10 @@ class SprzedambiznesAdapter:
         floors = self._int_match(_FLOORS_RE, body)
 
         street, city, province = self._split_address(address)
-        voivodeship = self.regions.canonical_voivodeship(province)
-        if voivodeship is None:
-            voivodeship = self.regions.region_for_point(lat, lng)
-        if voivodeship is None:
-            voivodeship = summary.voivodeship
+        voivodeship = self.regions.scoped_voivodeship(
+            province,
+            self.regions.region_for_point(lat, lng) or summary.voivodeship,
+        )
 
         description = self._description(tree)
         if description is None:

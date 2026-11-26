@@ -10,15 +10,15 @@ from plaszczaki_scraper.config import (
 
 def test_source_inventory() -> None:
     urls = load_source_urls()
-    assert len(urls) == 161
+    assert len(urls) == 163
     assert "https://www.otodom.pl" in urls
 
 
 def test_sources_catalog() -> None:
     catalog = load_sources_config()
     assert catalog.defaults_rps == 1.0
-    assert len(catalog.sources) == 154
-    assert len(catalog.urls()) == 161
+    assert len(catalog.sources) == 156
+    assert len(catalog.urls()) == 163
 
     otodom = catalog.sources["otodom"]
     assert otodom.status == "implemented"
@@ -39,7 +39,7 @@ def test_implemented_sources_have_adapters() -> None:
     catalog = load_sources_config()
 
     implemented = catalog.implemented()
-    assert len(implemented) == 48
+    assert len(implemented) == 51
     for source in implemented:
         assert source.adapter is not None, f"{source.id} has no adapter"
 

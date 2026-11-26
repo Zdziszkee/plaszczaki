@@ -36,8 +36,9 @@ class _FakeSession:
     def start(self) -> None:
         self.started = True
 
-    def fetch(self, url: str) -> _Response:
+    def fetch(self, url: str, **kwargs: Any) -> _Response:
         self.urls.append(url)
+        self.kwargs_fetch = kwargs
         return _Response()
 
     def close(self) -> None:

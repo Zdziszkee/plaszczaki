@@ -165,11 +165,10 @@ class MagazynyOnlineAdapter:
         street = _text(address.get("streetAddress"))
         area = parse_area(floor_size.get("value")) or summary.area_m2
 
-        voivodeship = self.regions.canonical_voivodeship(province)
-        if voivodeship is None:
-            voivodeship = self.regions.region_for_point(lat, lng)
-        if voivodeship is None:
-            voivodeship = summary.voivodeship
+        voivodeship = self.regions.scoped_voivodeship(
+            province,
+            self.regions.region_for_point(lat, lng) or summary.voivodeship,
+        )
 
         description = self._description(tree)
         if description is None and listing:

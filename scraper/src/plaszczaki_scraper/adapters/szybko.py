@@ -254,7 +254,7 @@ class SzybkoAdapter:
                 elif len(parts) > 2 and not re.fullmatch(r"\d{2}-\d{3}", parts[2]):
                     street = parts[2]
 
-        voivodeship = self.regions.canonical_voivodeship(province) or summary.voivodeship
+        voivodeship = self.regions.scoped_voivodeship(province, summary.voivodeship)
         lat, lng = _coordinates(tree)
         if lat is None or lng is None:
             lat = safe_float(_first_attr(tree.xpath("//*[@data-lat]"), "data-lat"))

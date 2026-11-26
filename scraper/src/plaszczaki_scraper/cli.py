@@ -311,6 +311,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         fetch_mode=source.fetch_mode,
         browser_headless=source.browser_headless,
         browser_solve_cloudflare=source.browser_solve_cloudflare,
+        browser_wait_ms=source.browser_wait_ms,
         crawl_delay_mode=source.crawl_delay_mode,
     )
     options = RunOptions(
@@ -442,10 +443,6 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
         if (args.tier is None or source.tier == args.tier)
         and (not args.only_non_incremental or not source.incremental)
     ]
-    if args.only_non_incremental:
-        # The full lane must not let a giant aggregator starve the rest of the
-        # catalog when the nightly timeout lands: cheap sources run first.
-        selected.sort(key=lambda source: (_query_count(source, registry, regions), source.id))
     if not selected:
         raise ConfigError("no enabled adapters match the requested tier")
 
@@ -460,6 +457,15 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
 
     try:
         db.verify_schema()
+        if args.only_non_incremental:
+            # A short nightly pass must not always stop at the same cheap
+            # sources: run the least recently attempted first, then the cheapest
+            # queries, so every source gets a turn across a few nights.
+            last_runs = {source.id: db.last_run_at(source.id, args.mode) for source in selected}
+            query_counts = {
+                source.id: _query_count(source, registry, regions) for source in selected
+            }
+            selected = _full_pass_order(selected, last_runs, query_counts)
         for source in selected:
             if not args.dry_run:
                 db.upsert_source(
@@ -487,6 +493,7 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
                         fetch_mode=source.fetch_mode,
                         browser_headless=source.browser_headless,
                         browser_solve_cloudflare=source.browser_solve_cloudflare,
+                        browser_wait_ms=source.browser_wait_ms,
                         crawl_delay_mode=source.crawl_delay_mode,
                     )
                     options = RunOptions(
@@ -821,6 +828,23 @@ def _adapter_name(source: SourceConfig) -> str:
     if source.adapter is None:
         raise ConfigError(f"source '{source.id}' has no adapter in config/sources.json")
     return source.adapter
+
+
+def _full_pass_order(
+    sources: list[SourceConfig],
+    last_runs: dict[str, int | None],
+    query_counts: dict[str, int],
+) -> list[SourceConfig]:
+    """Never-run first, then least recently attempted, then cheapest queries."""
+    return sorted(
+        sources,
+        key=lambda source: (
+            last_runs.get(source.id) is not None,
+            last_runs.get(source.id) or 0,
+            query_counts.get(source.id, 0),
+            source.id,
+        ),
+    )
 
 
 def _query_count(

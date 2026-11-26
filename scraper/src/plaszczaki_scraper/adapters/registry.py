@@ -31,6 +31,10 @@ _ADAPTERS: dict[str, tuple[str, str]] = {
     "axiimmo": ("plaszczaki_scraper.adapters.axiimmo", "AxiImmoAdapter"),
     "domiporta": ("plaszczaki_scraper.adapters.domiporta", "DomiportaAdapter"),
     "domy": ("plaszczaki_scraper.adapters.domy", "DomyAdapter"),
+    "elicytacje_mf": (
+        "plaszczaki_scraper.adapters.elicytacje_mf",
+        "ElicytacjeMfAdapter",
+    ),
     "flats": ("plaszczaki_scraper.adapters.flats", "FlatsAdapter"),
     "gdom": ("plaszczaki_scraper.adapters.gdom", "GdomAdapter"),
     "gethome": ("plaszczaki_scraper.adapters.gethome", "GetHomeAdapter"),
@@ -41,6 +45,7 @@ _ADAPTERS: dict[str, tuple[str, str]] = {
         "KupbezposrednioAdapter",
     ),
     "komornik": ("plaszczaki_scraper.adapters.komornik", "KomornikAdapter"),
+    "kowr": ("plaszczaki_scraper.adapters.kowr", "KowrAdapter"),
     "luksusowemieszkania": (
         "plaszczaki_scraper.adapters.luksusowemieszkania",
         "LuksusoweMieszkaniaAdapter",
@@ -83,6 +88,7 @@ _ADAPTERS: dict[str, tuple[str, str]] = {
         "plaszczaki_scraper.adapters.partnersinternational",
         "PartnersInternationalAdapter",
     ),
+    "pge": ("plaszczaki_scraper.adapters.pge", "PgeAdapter"),
     "pkobp-nieruchomosci": (
         "plaszczaki_scraper.adapters.pkobp_nieruchomosci",
         "PkobpNieruchomosciAdapter",

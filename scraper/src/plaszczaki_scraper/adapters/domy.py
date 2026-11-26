@@ -202,7 +202,7 @@ class DomyAdapter:
 
         city = location or summary.city
         street, district = _split_title_location(title or "", city)
-        voivodeship = self.regions.canonical_voivodeship(province) or summary.voivodeship
+        voivodeship = self.regions.scoped_voivodeship(province, summary.voivodeship)
 
         lat = safe_float(_first_attr(tree.xpath('//div[@id="property-map"]'), "data-lat"))
         lng = safe_float(_first_attr(tree.xpath('//div[@id="property-map"]'), "data-lng"))

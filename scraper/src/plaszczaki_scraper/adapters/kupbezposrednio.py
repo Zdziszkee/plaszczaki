@@ -315,12 +315,16 @@ class KupbezposrednioAdapter:
         lat: float | None,
         lng: float | None,
     ) -> str | None:
-        region = self.regions.canonical_voivodeship(province)
-        if region is None:
-            region = self.regions.match_city(city)
-        if region is None:
-            region = self.regions.region_for_point(lat, lng)
-        return region
+        # ``resolve`` rejects a known out-of-scope voivodeship before falling
+        # back to a same-named city/county, so an opolskie listing cannot be
+        # pulled into małopolskie.
+        match = self.regions.resolve(
+            province=province,
+            city=city,
+            lat=lat,
+            lng=lng,
+        )
+        return match.voivodeship if match is not None else None
 
     def _in_scope(self, lat: float | None, lng: float | None) -> bool:
         if lat is None or lng is None:

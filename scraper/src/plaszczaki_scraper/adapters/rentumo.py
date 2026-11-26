@@ -11,7 +11,7 @@ from urllib.parse import urljoin
 
 from lxml import html as lxml_html
 
-from plaszczaki_scraper.adapters.base import ParseError, Query, SearchPage
+from plaszczaki_scraper.adapters.base import ParseError, Query, SearchPage, rotated
 from plaszczaki_scraper.models import Listing, PropertyType
 from plaszczaki_scraper.normalize import (
     normalize_text,
@@ -25,23 +25,6 @@ from plaszczaki_scraper.normalize import (
 from plaszczaki_scraper.regions import RegionRegistry
 
 BASE_URL = "https://rentumo.pl"
-
-# Major city landing pages per voivodeship. Rentumo has no voivodeship-level
-# search URL; these are the city pages listed in its location sitemap.
-CITY_SLUGS: dict[str, tuple[str, ...]] = {
-    "malopolskie": (
-        "krakow-malopolskie",
-        "tarnow-malopolskie",
-        "nowy-sacz-malopolskie",
-        "zakopane-malopolskie",
-    ),
-    "slaskie": (
-        "katowice-slaskie",
-        "gliwice-slaskie",
-        "czestochowa-slaskie",
-        "bielsko-biala-slaskie",
-    ),
-}
 
 _PROPERTY_TYPES: dict[str, PropertyType] = {
     "mieszkanie": "flat",
@@ -82,19 +65,31 @@ class RentumoAdapter:
         self.regions = regions
 
     def queries(self, regions: Sequence[str]) -> list[Query]:
+        # Rentumo only supports city pages, so cover every configured city in
+        # the voivodeship instead of just Kraków/Tarnów/Katowice/etc.
         queries: list[Query] = []
         for region in regions:
-            for slug in CITY_SLUGS.get(region, ()):
+            if not self.regions.has_region(region):
+                continue
+            for city in rotated(list(dict.fromkeys(self.regions.region(region).cities))):
+                slug = normalize_text(city).replace(" ", "-")
+                if not slug:
+                    continue
+                city_slug = f"{slug}-{region}"
                 queries.append(
                     Query(
                         key=f"{region}:wynajem:mieszkanie:{slug}",
-                        url=f"{BASE_URL}/wynajmij-mieszkanie/{slug}",
+                        url=f"{BASE_URL}/wynajmij-mieszkanie/{city_slug}",
                         region=region,
                         offer_type="rent",
                         property_type="flat",
                     ),
                 )
         return queries
+
+    def newest(self, query: Query) -> Query:
+        """Rentumo's date-descending sort parameter."""
+        return query.with_param("sort_by", "date_desc")
 
     def with_page(self, query: Query, page: int) -> Query:
         return query.with_page(page)
@@ -136,17 +131,19 @@ class RentumoAdapter:
         city = _text(address.get("addressLocality")) or summary.city
         street = _text(address.get("streetAddress")) or summary.street
         district = _district_from_breadcrumbs(tree) or summary.district
-        voivodeship = self.regions.canonical_voivodeship(
-            _text(address.get("addressRegion")),
-        )
+        province = _text(address.get("addressRegion"))
+        voivodeship = self.regions.canonical_voivodeship(province)
         if voivodeship is None:
-            match = self.regions.resolve(
-                city=city,
-                county=summary.county,
-                lat=safe_float(_map_value(tree, "latitude")),
-                lng=safe_float(_map_value(tree, "longitude")),
-            )
-            voivodeship = match.voivodeship if match else summary.voivodeship
+            if self.regions.is_known_voivodeship(province):
+                voivodeship = self.regions.scoped_voivodeship(province)
+            else:
+                match = self.regions.resolve(
+                    city=city,
+                    county=summary.county,
+                    lat=safe_float(_map_value(tree, "latitude")),
+                    lng=safe_float(_map_value(tree, "longitude")),
+                )
+                voivodeship = match.voivodeship if match else summary.voivodeship
 
         lat = safe_float(_map_value(tree, "latitude"))
         lng = safe_float(_map_value(tree, "longitude"))

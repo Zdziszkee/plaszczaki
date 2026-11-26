@@ -32,6 +32,28 @@ CATEGORIES: tuple[tuple[str, OfferType, str], ...] = (
     ("wynajem", "rent", "wynajem"),
 )
 
+# Site-side voivodeship filter (``?locationId=``). Using it keeps each crawl to
+# the configured regions instead of walking the whole national list; the ids
+# come from /search/location/-1/-1/?name=<voivodeship>.
+LOCATION_IDS: dict[str, str] = {
+    "dolnoslaskie": "117",
+    "kujawsko-pomorskie": "204",
+    "lubelskie": "183",
+    "lubuskie": "118",
+    "lodzkie": "36",
+    "malopolskie": "18",
+    "mazowieckie": "22",
+    "opolskie": "2",
+    "podkarpackie": "49",
+    "podlaskie": "84",
+    "pomorskie": "25",
+    "slaskie": "3",
+    "swietokrzyskie": "4",
+    "warminsko-mazurskie": "205",
+    "wielkopolskie": "37",
+    "zachodniopomorskie": "27",
+}
+
 _PAGE_RE = re.compile(r"[?&]page=(\d+)")
 _DECIMALS_RE = re.compile(r",\d{2}(?!\d)")
 _AUCTION_DATE_RE = re.compile(
@@ -179,6 +201,11 @@ def _auction_date(value: str | None) -> int | None:
     return int(parsed.timestamp() * 1000)
 
 
+def _location_id(region: str) -> str | None:
+    key = region.strip().lower().replace("_", "-").replace(" ", "-")
+    return LOCATION_IDS.get(key)
+
+
 def _drop_page_param(url: str) -> str:
     parts = urlsplit(url)
     query = [item for item in parts.query.split("&") if item and item.split("=", 1)[0] != "page"]
@@ -195,18 +222,25 @@ class PocztaPolskaAdapter:
         self.regions = regions
 
     def queries(self, regions: Sequence[str]) -> list[Query]:
-        # The list is national; the runner filters cards by ``Woj.:`` derived
-        # from the card location. One query per transaction type is enough.
-        return [
-            Query(
-                key=f"national:{key}",
-                url=f"{BASE_URL}/{path}",
-                region=",".join(regions) or "national",
-                offer_type=offer_type,
-                property_type="other",
-            )
-            for path, offer_type, key in CATEGORIES
-        ]
+        # The site filters server-side by voivodeship, so ask it for each
+        # configured region instead of crawling the national list and dropping
+        # out-of-scope cards. The runner still re-checks each card's location.
+        queries: list[Query] = []
+        for region in regions:
+            location_id = _location_id(region)
+            if location_id is None:
+                continue
+            for path, offer_type, key in CATEGORIES:
+                queries.append(
+                    Query(
+                        key=f"{region}:{key}",
+                        url=f"{BASE_URL}/{path}?locationId={location_id}",
+                        region=region,
+                        offer_type=offer_type,
+                        property_type="other",
+                    ),
+                )
+        return queries
 
     def with_page(self, query: Query, page: int) -> Query:
         if page <= 1:

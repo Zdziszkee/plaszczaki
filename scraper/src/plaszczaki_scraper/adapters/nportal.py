@@ -180,7 +180,7 @@ class NportalAdapter:
         title = _first_text(tree.xpath('//h1[@id="location"]'))
         street, district = self._split_title(title or "", city)
 
-        voivodeship = self.regions.canonical_voivodeship(province) or summary.voivodeship
+        voivodeship = self.regions.scoped_voivodeship(province, summary.voivodeship)
         lat = safe_float(_first_attr(tree.xpath('//div[@id="property-map"]'), "data-lat"))
         lng = safe_float(_first_attr(tree.xpath('//div[@id="property-map"]'), "data-lng"))
 

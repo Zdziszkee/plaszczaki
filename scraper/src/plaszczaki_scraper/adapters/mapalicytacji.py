@@ -564,6 +564,10 @@ class MapalicytacjiAdapter:
         canonical = self.regions.canonical_voivodeship(region_name)
         if canonical is not None:
             return canonical
+        if self.regions.is_known_voivodeship(region_name):
+            # A reported voivodeship wins over a same-named city/county; the
+            # runner drops it when it is outside the configured scope.
+            return normalize_text(region_name) or None
         by_city = self.regions.match_city(city) or self.regions.region_for_point(lat, lng)
         if by_city is not None:
             return by_city
