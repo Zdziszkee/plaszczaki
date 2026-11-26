@@ -421,26 +421,26 @@ function App() {
 					</div>
 				</section>
 
-				<Card className="mt-20 flex flex-col gap-6 border-border/70 bg-card/80 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
-					<CardHeader className="p-6 sm:p-8">
+				<Card className="mt-20 gap-6 border-border/70 bg-card/80 p-6 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:gap-10 sm:p-8">
+					<CardHeader className="min-w-0 flex-1 gap-3 p-0">
 						<Badge
 							variant="secondary"
-							className="font-mono text-[9px] uppercase tracking-[0.16em]"
+							className="w-fit font-mono text-[9px] uppercase tracking-[0.16em]"
 						>
 							04 / mapa
 						</Badge>
 						<CardTitle>
-							<h2 className="text-3xl tracking-tight text-balance sm:text-4xl">
+							<h2 className="text-2xl tracking-tight text-balance sm:text-3xl">
 								Znajdź swoją następną nieruchomość.
 							</h2>
 						</CardTitle>
-						<CardDescription className="max-w-2xl text-base leading-7">
+						<CardDescription className="max-w-2xl text-sm leading-6 sm:text-base sm:leading-7">
 							Przeglądaj domy, mieszkania i działki do kupna lub wynajmu w
 							Małopolsce i na Śląsku.
 						</CardDescription>
 					</CardHeader>
-					<CardFooter className="px-6 pb-6 sm:px-8 sm:pb-8">
-						<Button asChild size="lg">
+					<CardFooter className="w-full shrink-0 p-0 sm:w-auto">
+						<Button asChild size="lg" className="w-full sm:w-auto">
 							<Link to="/map">
 								Szukaj na mapie
 								<ArrowRightIcon data-icon="inline-end" />

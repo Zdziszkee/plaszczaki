@@ -410,7 +410,7 @@ class Database:
         assignments = ", ".join(f"{column} = ?" for column in columns)
         with self.conn:
             self.conn.execute(
-                f"UPDATE listing SET {assignments} WHERE source_id = ? AND external_id = ?",
+                f"UPDATE listing SET {assignments}, scored_at = NULL WHERE source_id = ? AND external_id = ?",
                 (*values, listing.source_id, listing.external_id),
             )
         return True
@@ -505,7 +505,7 @@ class Database:
                 """
                 UPDATE listing
                 SET lat = ?, lng = ?, geo_source = ?,
-                    canonical_key = coalesce(?, canonical_key)
+                    canonical_key = coalesce(?, canonical_key), scored_at = NULL
                 WHERE source_id = ? AND external_id = ?
                 """,
                 (lat, lng, geo_source, canonical_key, source_id, external_id),
@@ -556,7 +556,7 @@ class Database:
         assignments = ", ".join(f"{column} = ?" for column in values)
         params: list[Any] = [*values.values(), now, old["id"]]
         self.conn.execute(
-            f"UPDATE listing SET {assignments}, last_seen_at = ? WHERE id = ?",
+            f"UPDATE listing SET {assignments}, last_seen_at = ?, scored_at = NULL WHERE id = ?",
             params,
         )
         if old["price_pln"] != values["price_pln"]:
@@ -699,7 +699,7 @@ class Database:
             conditions.append("source_id = ?")
             params.append(source_id)
         if pending_only:
-            conditions.append("(scored_at IS NULL OR last_seen_at > scored_at)")
+            conditions.append("scored_at IS NULL")
         where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
         sql = f"SELECT * FROM listing{where} ORDER BY id"
         if limit is not None:

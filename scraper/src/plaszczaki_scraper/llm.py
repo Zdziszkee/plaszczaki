@@ -31,7 +31,6 @@ PREFERRED_FREE_ORDER = (
     "beam-free",
     "iceman-contributor-free",
     "deepseek-v4.1-flash-free",
-    "beam-free",
     "flint-40b-free",
     "nemotron-3.5-lightning-free",
     "mimo-v2.6-flash-free",
@@ -150,7 +149,12 @@ def fetch_models(*, timeout: float = DEFAULT_TIMEOUT) -> list[ModelInfo]:
 
 
 def free_models(models: list[ModelInfo]) -> list[ModelInfo]:
-    """Return free chat models in the preferred order."""
+    """Return every available ``-free`` chat model in the preferred order.
+
+    The user explicitly approved any OpenCode Go free model for public listing
+    text. Provider retention terms still apply; ``privacy`` remains visible in
+    reports, but unknown-retention free models are not silently excluded.
+    """
     by_id = {model.id: model for model in models if model.is_free}
     ordered: list[ModelInfo] = []
     for model_id in configured_chain():
@@ -158,12 +162,6 @@ def free_models(models: list[ModelInfo]) -> list[ModelInfo]:
         if model is not None:
             ordered.append(model)
     ordered.extend(sorted(by_id.values(), key=lambda model: model.id))
-    if not allow_retention_models():
-        ordered = [
-            model
-            for model in ordered
-            if model.id in ZERO_RETENTION_FREE or model.id in NO_TRAINING_FREE
-        ]
     return ordered
 
 

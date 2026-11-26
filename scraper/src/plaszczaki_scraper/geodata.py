@@ -716,11 +716,17 @@ class GeoContext:
     # -- queries ----------------------------------------------------------
 
     def nearest_station(
-        self, lat: float, lng: float, radius_km: float = 15.0
+        self,
+        lat: float,
+        lng: float,
+        radius_km: float = 15.0,
+        destinations: set[str] | None = None,
     ) -> tuple[dict[str, Any], float] | None:
         best: tuple[dict[str, Any], float] | None = None
         for index in self.station_index.query(lat, lng, radius_km):
             station = self.stations[index]
+            if destinations and not destinations.intersection(station.get("destinations", {})):
+                continue
             distance = haversine_km(lat, lng, station["lat"], station["lng"])
             if distance <= radius_km and (best is None or distance < best[1]):
                 best = (station, distance)

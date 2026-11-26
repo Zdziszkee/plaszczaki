@@ -58,6 +58,16 @@ class ScoreParts:
         return int(max(0, min(100, round(value))))
 
 
+@dataclass(frozen=True, slots=True)
+class Comparable:
+    key: str
+    lat: float
+    lng: float
+    area: float
+    ppm: float
+    building_type: str
+
+
 @dataclass(slots=True)
 class PriceBaseline:
     low: float
@@ -157,15 +167,17 @@ def _sale(row: sqlite3.Row) -> bool:
 
 
 def _building_type(row: sqlite3.Row) -> str:
-    value = normalize_text(_text(row, "building_type"))
+    value = _text(row, "building_type")
+    normalized = normalize_text(value)
     aliases = {
         "blok": "block",
-        "niski_blok": "block",
-        "blok_mieszkalny": "block",
-        "dom_wielorodzinny": "apartment_building",
+        "niski blok": "block",
+        "blok mieszkalny": "block",
+        "dom wielorodzinny": "apartment_building",
+        "apartment building": "apartment_building",
         "inny": "other",
     }
-    return aliases.get(value, value)
+    return aliases.get(normalized, value or normalized)
 
 
 def _heating(row: sqlite3.Row) -> str:
@@ -243,6 +255,8 @@ def _quantile(values: list[float], fraction: float) -> float:
 class PriceModel:
     """Hierarchical local price quantiles + training-free comparable sales."""
 
+    COMP_CELL = 0.02  # ~2.2 km; avoids scanning whole city blocks for every offer.
+
     def __init__(self, rows: list[sqlite3.Row]) -> None:
         self.groups: dict[tuple[str, str, str], list[float]] = defaultdict(list)
         self.comps: dict[str, list[sqlite3.Row]] = defaultdict(list)
@@ -276,7 +290,7 @@ class PriceModel:
             if lat is not None and lng is not None:
                 index = len(self.comps[property_type])
                 self.comps[property_type].append(row)
-                cell = (int(lat // 0.1), int(lng // 0.1))
+                cell = (int(lat // self.COMP_CELL), int(lng // self.COMP_CELL))
                 self.comp_index[property_type][cell].append(index)
 
     def baseline(self, row: sqlite3.Row) -> PriceBaseline | None:
@@ -312,11 +326,12 @@ class PriceModel:
         radius = float(config.get("radius_km", 2.5))
         ratio_low, ratio_high = config.get("area_ratio", [0.7, 1.4])
         candidates: list[tuple[float, float]] = []
-        cx, cy = int(lat // 0.1), int(lng // 0.1)
+        cx, cy = int(lat // self.COMP_CELL), int(lng // self.COMP_CELL)
         cells = self.comp_index[property_type]
         source_key = row["canonical_key"] or f"{row['source_id']}:{row['external_id']}"
-        for dx in range(-1, 2):
-            for dy in range(-1, 2):
+        span = max(1, math.ceil(radius / (self.COMP_CELL * 111.0)))
+        for dx in range(-span, span + 1):
+            for dy in range(-span, span + 1):
                 for index in cells.get((cx + dx, cy + dy), []):
                     candidate = self.comps[property_type][index]
                     other_area, other_value = _area(candidate), _ppm(candidate)
@@ -412,24 +427,28 @@ def _weighted_comparable_points(
 
 def _geo_signals(row: sqlite3.Row, config: dict[str, Any], geo: GeoContext) -> GeoSignals:
     result = GeoSignals()
+    property_type = _text(row, "property_type")
+    if property_type not in {"flat", "house", "plot"}:
+        return result
     lat, lng = _number(row, "lat"), _number(row, "lng")
     if lat is None or lng is None:
         return result
-    rail = config["rail"]
-    nearest = geo.nearest_station(lat, lng)
-    if nearest is not None:
-        station, distance = nearest
-        destinations = tuple(
-            city
-            for city in rail["destinations"]
-            if float(station.get("destinations", {}).get(city, 0.0)) > 0
-        )
-        result.station_name = station.get("name")
-        result.station_km = round(distance, 2)
-        result.station_destinations = destinations
-        result.weekly_trips = float(station.get("weekly_trips", 0.0))
-        result.station_gate = distance <= float(rail["gate_km"]) and bool(destinations)
-        if destinations:
+
+    if property_type == "plot":
+        rail = config["rail"]
+        nearest = geo.nearest_station(lat, lng, destinations=set(rail["destinations"]))
+        if nearest is not None:
+            station, distance = nearest
+            destinations = tuple(
+                city
+                for city in rail["destinations"]
+                if float(station.get("destinations", {}).get(city, 0.0)) > 0
+            )
+            result.station_name = station.get("name")
+            result.station_km = round(distance, 2)
+            result.station_destinations = destinations
+            result.weekly_trips = float(station.get("weekly_trips", 0.0))
+            result.station_gate = distance <= float(rail["gate_km"]) and bool(destinations)
             if result.station_gate:
                 result.station_points += float(rail["gate_points"])
             elif distance <= float(rail["decay_km"]):
@@ -439,38 +458,41 @@ def _geo_signals(row: sqlite3.Row, config: dict[str, Any], geo: GeoContext) -> G
             result.station_points += float(rail["frequency_points"]) * min(
                 1.0, result.weekly_trips / frequency_cap
             )
-        result.station_points = round(result.station_points, 1)
-    planned_points, planned_label = geo.planned_rail_bonus(lat, lng, config["planned_rail"])
-    result.planned_points = planned_points
-    result.planned_label = planned_label
+            result.station_points = round(result.station_points, 1)
+        planned_points, planned_label = geo.planned_rail_bonus(lat, lng, config["planned_rail"])
+        result.planned_points = planned_points
+        result.planned_label = planned_label
 
-    nature = config["nature"]
-    for kind in ("forest", "water"):
-        settings = nature[kind]
-        distance = geo.nature_distance_km(lat, lng, kind)
-        distance_attr = f"{kind}_km"
-        points_attr = f"{kind}_points"
-        setattr(result, distance_attr, round(distance, 2) if distance is not None else None)
-        if distance is not None:
-            full, zero = float(settings["full_m"]) / 1000, float(settings["zero_m"]) / 1000
-            if distance <= full:
-                points = float(settings["points"])
-            elif distance >= zero:
-                points = 0.0
-            else:
-                points = float(settings["points"]) * (1.0 - (distance - full) / (zero - full))
-            setattr(result, points_attr, round(points, 1))
+    if property_type in {"house", "plot"}:
+        nature = config["nature"]
+        for kind in ("forest", "water"):
+            settings = nature[kind]
+            distance = geo.nature_distance_km(lat, lng, kind)
+            distance_attr = f"{kind}_km"
+            points_attr = f"{kind}_points"
+            setattr(result, distance_attr, round(distance, 2) if distance is not None else None)
+            if distance is not None:
+                full, zero = float(settings["full_m"]) / 1000, float(settings["zero_m"]) / 1000
+                if distance <= full:
+                    points = float(settings["points"])
+                elif distance >= zero:
+                    points = 0.0
+                else:
+                    points = float(settings["points"]) * (1.0 - (distance - full) / (zero - full))
+                setattr(result, points_attr, round(points, 1))
 
-    for region in config["mountain_regions"]:
-        min_lng, min_lat, max_lng, max_lat = region["bbox"]
-        if min_lng <= lng <= max_lng and min_lat <= lat <= max_lat:
-            result.mountain = region["name"]
-            result.mountain_points = float(region["points"])
-            break
-    location = normalize_text(f"{_city(row)} {_district(row)} {_text(row, 'commune')}")
-    result.tourist = any(normalize_text(city) in location for city in config["tourist_cities"])
-    result.walkability = geo.walkability(lat, lng) if geo.pois else None
-    result.elevation_m = geo.elevation_m(lat, lng)
+        for region in config["mountain_regions"]:
+            min_lng, min_lat, max_lng, max_lat = region["bbox"]
+            if min_lng <= lng <= max_lng and min_lat <= lat <= max_lat:
+                result.mountain = region["name"]
+                result.mountain_points = float(region["points"])
+                break
+        location = normalize_text(f"{_city(row)} {_district(row)} {_text(row, 'commune')}")
+        result.tourist = any(normalize_text(city) in location for city in config["tourist_cities"])
+        result.elevation_m = geo.elevation_m(lat, lng)
+
+    if property_type == "flat":
+        result.walkability = geo.walkability(lat, lng) if geo.pois else None
     return result
 
 
@@ -949,6 +971,8 @@ def score_row(
 ) -> ScoredListing:
     text = _description(row)
     property_type = _text(row, "property_type")
+    if property_type not in {"flat", "house", "plot"}:
+        return ScoredListing(int(row["id"]), 0, "other", {}, [])
     signals = _geo_signals(row, config, geo)
     profiles: list[ScoreParts] = []
     if property_type == "flat":
@@ -996,8 +1020,15 @@ def score_database(
 ) -> dict[str, Any]:
     """Score all (or a subset of) stored listings and persist the results."""
     config = config or load_scoring_config()
-    geo = geo or GeoContext.load()
     rows = list(db.iter_score_rows(source_id=source_id, limit=limit, pending_only=pending_only))
+    if not rows:
+        return {
+            "processed": 0,
+            "updated": 0,
+            "dry_run": dry_run,
+            "profiles": {},
+        }
+    geo = geo or GeoContext.load()
     # Price/yield baselines are global. A pending/source subset must not train
     # (or rebuild) them on a much smaller, biased slice of the database.
     price_rows = list(db.iter_score_rows()) if pending_only or source_id is not None else rows

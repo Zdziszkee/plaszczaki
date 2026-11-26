@@ -77,6 +77,15 @@ uv run python -m plaszczaki_scraper review-sources --due
 uv run python -m plaszczaki_scraper dedupe --backfill
 uv run python -m plaszczaki_scraper llm models
 uv run python -m plaszczaki_scraper llm check
+uv run python -m plaszczaki_scraper llm enrich --limit 50
+uv run python -m plaszczaki_scraper llm rerank --limit 20 --candidates 50
+uv run python -m plaszczaki_scraper geodata --part gtfs --force
+uv run python -m plaszczaki_scraper geodata --part nature --force
+uv run python -m plaszczaki_scraper geodata --part poi --force
+uv run python -m plaszczaki_scraper geodata --part elevation
+uv run python -m plaszczaki_scraper score --dry-run
+uv run python -m plaszczaki_scraper score
+uv run python -m plaszczaki_scraper score --pending
 uv run python -m plaszczaki_scraper verify-schema
 ```
 
@@ -247,6 +256,34 @@ on the normalized street. The scraper never merges rows, so per-source provenanc
 snapshots and run stats stay intact; the map endpoints select one representative
 per key (complete data first, then newest). The scraper checks the expected tables/columns at startup and fails with
 a clear message if the migration has not been applied.
+
+## Attractiveness scoring
+
+`score` is deterministic and training-free. It writes five independent 0–100
+profiles to `listing` (`kamienica`, `nowe_mieszkanie`, `dzialka_kolej`,
+`dom_airbnb`, `dzialka_airbnb`) plus the best score and Polish explanations.
+Weights and keyword lists live in `config/scoring.json`.
+
+Inputs include canonical attributes, listing text, local price quantiles and
+distance-weighted comparable sales from this database, auction discounts,
+days on market, price cuts, gross rental yield, GTFS rail service, OSM
+forest/water/POI data, mountain regions and the map's planned-rail snapshots.
+Changed listings are invalidated automatically and rescored by `watch`, `run`
+and `run-all`; use `score --pending` for a manual catch-up.
+
+`geodata` refreshes the open-data cache under `data/cache/`. GTFS comes from
+PolishTrainsGTFS (PolRegio, PKP Intercity, Koleje Śląskie/Małopolskie and other
+operators); nature and POIs come from OpenStreetMap. Missing cache files degrade
+to neutral geo signals rather than failing the scrape.
+
+`llm enrich` extracts objective facts from public descriptions with any approved
+OpenCode Go `-free` model and caches them in `llm_job`. `llm rerank` re-ranks the
+deterministic shortlist using the user's preference profile. No model training
+is performed. Set `OPENCODE_API_KEY` to enable these optional commands.
+
+The web app exposes the score in map popups and filters, and `/oferty` shows the
+top 25 scored sale/auction offers first seen each day in three columns:
+apartments, houses and plots.
 
 ## LLM lane
 
