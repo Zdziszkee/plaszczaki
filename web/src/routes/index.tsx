@@ -25,11 +25,11 @@ import {
 export const Route = createFileRoute("/")({
 	head: () => ({
 		meta: [
-			{ title: "Plaszczaki — rynek nieruchomości w kontekście" },
+			{ title: "Plaszczaki — dom, mieszkanie lub działka" },
 			{
 				name: "description",
 				content:
-					"Oferty nieruchomości z wielu portali, mapa ofert i warstwy kolejowe dla Małopolski i Śląska.",
+					"Przeglądaj domy, mieszkania i działki do kupna lub wynajmu w Małopolsce i na Śląsku. Porównuj oferty, ceny i okolice na mapie.",
 			},
 		],
 		scripts: [
@@ -41,77 +41,80 @@ export const Route = createFileRoute("/")({
 
 const SIGNALS = [
 	{
-		value: "154",
-		label: "źródeł katalogowych",
-		detail: "portale i inne źródła",
+		value: "01",
+		label: "wszystkie oferty",
+		detail: "z wielu portali w jednym miejscu",
 	},
-	{ value: "02", label: "województwa", detail: "małopolskie i śląskie" },
-	{ value: "01", label: "wspólna baza", detail: "SQLite + Drizzle" },
+	{ value: "02", label: "formy transakcji", detail: "kupno i wynajem" },
+	{
+		value: "03",
+		label: "typy nieruchomości",
+		detail: "dom, mieszkanie, działka",
+	},
 ];
 
 const FEATURES = [
 	{
 		piece: "world-map-pings",
 		size: 7,
-		eyebrow: "MAPA / OFERTY",
+		eyebrow: "MAPA / KUPNO I WYNAJEM",
 		title: "Mapa ofert",
 		description:
-			"Klasterowanie, filtry i ceny w jednym widoku. Przybliżaj mapę, żeby przejść od regionu do konkretnych ogłoszeń.",
+			"Filtruj domy, mieszkania i działki do kupna lub wynajmu. Porównuj ceny i lokalizacje, a potem przejdź do wybranego ogłoszenia.",
 		icon: MapIcon,
-		cta: "Otwórz mapę",
+		cta: "Przeglądaj oferty",
 		to: "/map",
 	},
 	{
 		piece: "train-at-dusk",
 		size: 6,
-		eyebrow: "RANKING / DZIENNIE",
+		eyebrow: "PROPOZYCJE / CODZIENNIE",
 		title: "Top oferty",
 		description:
-			"25 najlepiej ocenionych mieszkań, domów i działek dodanych każdego dnia. Zobacz punktację i konkretne powody wyboru.",
+			"Codzienna lista mieszkań, domów i działek, które warto sprawdzić jako pierwsze. Porównaj ich zalety i zastanów się, która oferta pasuje do Twoich planów.",
 		icon: ListOrderedIcon,
-		cta: "Zobacz ranking",
+		cta: "Zobacz propozycje",
 		to: "/oferty",
 	},
 	{
 		piece: "train-at-dusk",
 		size: 6,
-		eyebrow: "KOLEJ / KONTEKST",
-		title: "Kolej w kontekście",
+		eyebrow: "KOLEJ / OKOLICA",
+		title: "Sprawdź, co jest wokół",
 		description:
-			"Linie istniejące, planowane i Kolej Plus na tej samej mapie. Oceniaj lokalizację nie tylko po cenie za metr.",
+			"Istniejące i planowane linie kolejowe na tej samej mapie. Oceniaj nieruchomość nie tylko po cenie za metr, ale też po połączeniach i otoczeniu.",
 		icon: TrainFrontIcon,
-		cta: "Zobacz warstwy",
+		cta: "Sprawdź okolice",
 		to: "/map",
 	},
 ];
 
-const PIPELINE = [
+const SEARCH_STEPS = [
 	{
-		title: "Zbieramy",
-		description: "Adaptery pobierają oferty z portali i innych źródeł.",
+		title: "Określ, czego szukasz",
+		description: "Dom, mieszkanie lub działka — do kupna lub wynajmu.",
 	},
 	{
-		title: "Porządkujemy",
-		description: "Jedna schema, walidacja, deduplikacja i geokodowanie.",
+		title: "Porównaj oferty",
+		description: "Ceny, metraż, lokalizacja i najważniejsze cechy obok siebie.",
 	},
 	{
-		title: "Pokazujemy",
-		description: "Mapa, filtry i warstwy kolejowe czytają tę samą bazę.",
+		title: "Oceń okolice",
+		description:
+			"Sprawdź dojazd, połączenia i to, co powstaje wokół nieruchomości.",
 	},
 ];
 
 const REGIONS = [
 	{
-		code: "PL-12",
+		code: "Kraków",
 		name: "Małopolskie",
 		cities: "Kraków · Tarnów · Nowy Sącz · Oświęcim · Zakopane",
-		coordinates: ["19.08–21.42° E", "49.17–50.61° N"],
 	},
 	{
-		code: "PL-24",
+		code: "Katowice",
 		name: "Śląskie",
 		cities: "Katowice · Gliwice · Częstochowa · Bielsko-Biała · Rybnik",
-		coordinates: ["17.64–20.11° E", "49.35–51.06° N"],
 	},
 ];
 
@@ -136,20 +139,21 @@ function App() {
 							id="hero-heading"
 							className="max-w-3xl text-5xl leading-[0.98] font-semibold tracking-[-0.045em] text-balance sm:text-6xl lg:text-7xl"
 						>
-							Miasto w liczbach.
+							Dom, mieszkanie czy działka?
 							<span className="block text-muted-foreground">
-								Mieszkanie w kontekście.
+								Znajdź swoje miejsce.
 							</span>
 						</h1>
 						<p className="max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">
-							Oferty z wielu portali, zebrane w jednym miejscu. Porównuj nie
-							tylko cenę i metraż — także okolice, połączenia i rytm miasta.
+							Przeglądaj oferty kupna i wynajmu z wielu portali. Porównuj ceny,
+							lokalizację, dojazd i otoczenie — bez przeskakiwania między
+							serwisami.
 						</p>
 						<div className="flex flex-wrap gap-3">
 							<Button asChild size="lg">
 								<Link to="/map">
 									<MapIcon data-icon="inline-start" />
-									Otwórz mapę
+									Szukaj na mapie
 								</Link>
 							</Button>
 							<Button asChild variant="outline" size="lg">
@@ -159,26 +163,26 @@ function App() {
 								</Link>
 							</Button>
 							<Button asChild variant="outline" size="lg">
-								<a href="#jak-to-dziala">
-									Jak to działa
+								<a href="#jak-szukac">
+									Jak szukać
 									<ArrowDownIcon data-icon="inline-end" />
 								</a>
 							</Button>
 						</div>
 						<div className="flex flex-wrap gap-x-5 gap-y-2 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-							<span>154 źródeł</span>
-							<span>2 województwa</span>
-							<span>jedna baza</span>
+							<span>kupno i wynajem</span>
+							<span>domy · mieszkania · działki</span>
+							<span>Małopolskie · Śląskie</span>
 						</div>
 					</div>
 
 					<Card className="relative gap-0 overflow-hidden border-border/70 bg-card/70 py-0 backdrop-blur-sm">
 						<CardHeader className="relative z-10 gap-1 border-b bg-card/60 px-4 py-3 backdrop-blur-sm sm:px-5">
 							<CardTitle className="font-mono text-[10px] font-normal uppercase tracking-[0.2em] text-muted-foreground">
-								Obserwatorium / 001
+								MAPA / OFERTY
 							</CardTitle>
 							<CardDescription className="font-mono text-[10px] tracking-[0.08em]">
-								50.0614° N · 19.9366° E
+								Małopolskie · Śląskie
 							</CardDescription>
 							<CardAction>
 								<Badge
@@ -186,7 +190,7 @@ function App() {
 									className="font-mono text-[9px] uppercase tracking-[0.12em]"
 								>
 									<span className="size-1.5 animate-pulse rounded-full bg-primary motion-reduce:animate-none" />
-									ASCII / 3D
+									KUPNO I WYNAJEM
 								</Badge>
 							</CardAction>
 						</CardHeader>
@@ -207,20 +211,20 @@ function App() {
 								<div className="pointer-events-none absolute top-1/2 left-1/2 h-px w-10 -translate-x-1/2 -translate-y-1/2 bg-border/70" />
 								<div className="pointer-events-none absolute right-4 bottom-4 left-4 flex justify-between gap-3 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
 									<span>Kraków ↔ Katowice</span>
-									<span>Mapbox Standard</span>
+									<span>Lokalizacje i ceny</span>
 								</div>
 							</div>
 						</CardContent>
 						<CardFooter className="flex-wrap justify-between gap-2 border-t px-4 py-3 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground sm:px-5">
-							<span>Mapa ofert</span>
-							<span>Warstwy kolejowe</span>
-							<span>SQLite</span>
+							<span>Domy i mieszkania</span>
+							<span>Działki</span>
+							<span>Kupno i wynajem</span>
 						</CardFooter>
 					</Card>
 				</section>
 
 				<section
-					aria-label="Plaszczaki w liczbach"
+					aria-label="Co możesz znaleźć"
 					className="mt-12 grid divide-y divide-border border-y border-border sm:grid-cols-3 sm:divide-x sm:divide-y-0"
 				>
 					{SIGNALS.map((signal) => (
@@ -253,8 +257,9 @@ function App() {
 							</h2>
 						</div>
 						<p className="max-w-md text-sm leading-6 text-muted-foreground">
-							Mieszkanie to metraż, ale też czas dojazdu, okolice i to, co
-							powstaje obok. Dlatego dane i mapa są tutaj jednym produktem.
+							Dom, mieszkanie lub działka to więcej niż cena za metr. Zobacz
+							ofertę razem z okolicą, połączeniami i planami rozwoju, żeby
+							podejmować decyzję z większą pewnością.
 						</p>
 					</div>
 
@@ -312,7 +317,7 @@ function App() {
 				</section>
 
 				<Card
-					id="jak-to-dziala"
+					id="jak-szukac"
 					className="mt-20 scroll-mt-24 gap-0 overflow-hidden border-border/70 bg-card/70 py-0 backdrop-blur-sm"
 				>
 					<div className="grid lg:grid-cols-[0.9fr_1.1fr]">
@@ -322,21 +327,21 @@ function App() {
 									variant="outline"
 									className="font-mono text-[9px] uppercase tracking-[0.16em]"
 								>
-									02 / przepływ
+									02 / wyszukiwanie
 								</Badge>
 								<CardTitle>
 									<h2 className="text-2xl tracking-tight sm:text-3xl">
-										Od portalu do mapy.
+										Trzy kroki do właściwego miejsca.
 									</h2>
 								</CardTitle>
 								<CardDescription className="leading-6">
-									Jeden powtarzalny proces od pobrania ogłoszenia do jego
-									lokalizacji na mapie.
+									Od pierwszego filtra aż po sprawdzenie okolicy — wszystko w
+									jednym miejscu.
 								</CardDescription>
 							</CardHeader>
 							<CardContent className="px-6 pb-7 sm:px-8">
 								<ol className="flex flex-col gap-4">
-									{PIPELINE.map((step, index) => (
+									{SEARCH_STEPS.map((step, index) => (
 										<li key={step.title} className="flex gap-3">
 											<span className="shrink-0 pt-0.5 font-mono text-[10px] whitespace-nowrap text-muted-foreground">
 												{String(index + 1).padStart(2, "0")}
@@ -356,7 +361,7 @@ function App() {
 						</div>
 						<div className="relative min-h-72 overflow-hidden border-t lg:min-h-0 lg:border-t-0 lg:border-l">
 							<AsciiArt
-								piece="data-flow"
+								piece="world-map-pings"
 								size={10.5}
 								speed={0.8}
 								mono
@@ -368,10 +373,10 @@ function App() {
 								variant="secondary"
 								className="absolute top-4 left-4 z-10 bg-card/80 font-mono text-[9px] uppercase tracking-[0.16em] backdrop-blur-sm"
 							>
-								SCHEMAT / ASCII
+								MAPA / WYSZUKIWANIE
 							</Badge>
 							<div className="absolute right-4 bottom-4 left-4 font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
-								źródła → normalizacja → deduplikacja → SQLite
+								wybór → porównanie → mapa
 							</div>
 						</div>
 					</div>
@@ -386,7 +391,7 @@ function App() {
 							id="regions-heading"
 							className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl"
 						>
-							Dwa regiony. Jeden widok.
+							Dwa regiony. Wiele możliwości.
 						</h2>
 					</div>
 					<div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -409,11 +414,7 @@ function App() {
 									</CardDescription>
 								</CardHeader>
 								<CardContent className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-									<div className="flex flex-wrap justify-between gap-2">
-										{region.coordinates.map((coordinate) => (
-											<span key={coordinate}>{coordinate}</span>
-										))}
-									</div>
+									Domy · Mieszkania · Działki
 								</CardContent>
 							</Card>
 						))}
@@ -430,17 +431,18 @@ function App() {
 						</Badge>
 						<CardTitle>
 							<h2 className="text-3xl tracking-tight text-balance sm:text-4xl">
-								Zobacz miasto na mapie.
+								Znajdź swoją następną nieruchomość.
 							</h2>
 						</CardTitle>
 						<CardDescription className="max-w-2xl text-base leading-7">
-							Oferty, filtry i warstwy kolejowe w jednym interaktywnym widoku.
+							Przeglądaj domy, mieszkania i działki do kupna lub wynajmu w
+							Małopolsce i na Śląsku.
 						</CardDescription>
 					</CardHeader>
 					<CardFooter className="px-6 pb-6 sm:px-8 sm:pb-8">
 						<Button asChild size="lg">
 							<Link to="/map">
-								Otwórz mapę
+								Szukaj na mapie
 								<ArrowRightIcon data-icon="inline-end" />
 							</Link>
 						</Button>
