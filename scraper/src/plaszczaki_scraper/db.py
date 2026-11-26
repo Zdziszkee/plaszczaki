@@ -86,6 +86,7 @@ EXPECTED_SCHEMA: dict[str, set[str]] = {
         "score_profile",
         "scores",
         "score_reasons",
+        "score_breakdown",
         "scored_at",
         "score_version",
     },
@@ -691,14 +692,23 @@ class Database:
         source_id: str | None = None,
         limit: int | None = None,
         pending_only: bool = False,
+        score_version: str | None = None,
     ) -> Iterable[sqlite3.Row]:
-        """Raw rows (with id and bookkeeping) for the scoring command."""
+        """Raw rows (with id and bookkeeping) for the scoring command.
+
+        Pending rows include unscored listings and rows produced by an older
+        scoring configuration. Without a requested version, ``pending_only``
+        keeps its original meaning: only listings invalidated by a data update.
+        """
         conditions: list[str] = []
         params: list[Any] = []
         if source_id is not None:
             conditions.append("source_id = ?")
             params.append(source_id)
-        if pending_only:
+        if pending_only and score_version is not None:
+            conditions.append("(scored_at IS NULL OR score_version IS NULL OR score_version != ?)")
+            params.append(score_version)
+        elif pending_only:
             conditions.append("scored_at IS NULL")
         where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
         sql = f"SELECT * FROM listing{where} ORDER BY id"
@@ -708,7 +718,7 @@ class Database:
         yield from self.conn.execute(sql, params).fetchall()
 
     def update_scores(self, updates: list[tuple[Any, ...]]) -> int:
-        """Persist (score, profile, scores_json, reasons_json, scored_at, version, id)."""
+        """Persist score, profile, per-profile scores, reasons, breakdown, time, version, id."""
         if not updates:
             return 0
         with self.conn:
@@ -716,7 +726,7 @@ class Database:
                 """
                 UPDATE listing
                 SET score = ?, score_profile = ?, scores = ?, score_reasons = ?,
-                    scored_at = ?, score_version = ?
+                    score_breakdown = ?, scored_at = ?, score_version = ?
                 WHERE id = ?
                 """,
                 updates,

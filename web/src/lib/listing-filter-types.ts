@@ -25,6 +25,7 @@ export const SCORE_PROFILES = [
 	"nowe_mieszkanie",
 	"dzialka_kolej",
 	"dom_airbnb",
+	"dom_kolej",
 	"dzialka_airbnb",
 ] as const;
 export type ScoreProfile = (typeof SCORE_PROFILES)[number];

@@ -1,5 +1,13 @@
 {
-	"version": "1",
+	"version": "4",
+	"profile_weights": {
+		"kamienica": { "price": 30, "location": 15, "attributes": 45, "nature": 0, "opportunity": 10 },
+		"nowe_mieszkanie": { "price": 30, "location": 30, "attributes": 25, "nature": 0, "opportunity": 15 },
+		"dom_airbnb": { "price": 20, "location": 10, "attributes": 30, "nature": 25, "opportunity": 15 },
+		"dom_kolej": { "price": 25, "location": 30, "attributes": 25, "nature": 10, "opportunity": 10 },
+		"dzialka_kolej": { "price": 25, "location": 30, "attributes": 30, "nature": 5, "opportunity": 10 },
+		"dzialka_airbnb": { "price": 20, "location": 5, "attributes": 25, "nature": 40, "opportunity": 10 }
+	},
 	"rail": {
 		"gate_km": 3.0,
 		"decay_km": 10.0,
@@ -21,14 +29,19 @@
 		"water": { "full_m": 300, "zero_m": 3000, "points": 25 },
 		"text_cap": 15
 	},
-	"prefab": { "penalty": 40, "cap": 30, "block_penalty": 10 },
-	"price": {
-		"kamienica": 15,
-		"nowe_mieszkanie": 30,
-		"mieszkanie_standard": 15,
-		"dzialka_kolej": 20,
-		"dzialka_airbnb": 15,
-		"dom_airbnb": 15
+	"prefab": { "penalty": 12, "cap": 30 },
+	"house": {
+		"no_charm_cap": 45,
+		"modern_penalty": 6
+	},
+	"plot_airbnb": {
+		"unconfirmed_build_cap": 55,
+		"non_residential_cap": 35
+	},
+	"new_flat": {
+		"commute_points": 15,
+		"commute_full_km": 0.3,
+		"commute_zero_km": 3.0
 	},
 	"comps": {
 		"radius_km": 2.5,

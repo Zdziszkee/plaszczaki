@@ -4,7 +4,8 @@ Fetchers (CLI ``geodata``) download open data into ``data/cache``:
 - GTFS national rail feed (PolishTrainsGTFS: PolRegio, PKP Intercity, Koleje
   Śląskie/Małopolskie and others) -> stations with direct service to the four
   target cities and weekly frequency.
-- OSM Overpass forest/lake polygons and amenity POIs for the two voivodeships.
+- BDOT10k forest/water polygons for the two voivodeships (preferred), with
+  OSM Overpass as a fallback, plus OSM amenity POIs.
 - Open-Meteo elevation for house/plot points (mountain proxy).
 
 The scoring module loads whatever is cached; missing files degrade gracefully
@@ -19,15 +20,21 @@ import io
 import json
 import logging
 import math
+import shutil
 import time
 import zipfile
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
+import flatgeobuf
+import fsspec
 import httpx
+import shapefile
+from pyproj import Transformer
 
 from plaszczaki_scraper.config import load_regions_config, repo_root
 from plaszczaki_scraper.normalize import normalize_text
@@ -36,6 +43,11 @@ from plaszczaki_scraper.robots import default_cache_dir
 logger = logging.getLogger(__name__)
 
 GTFS_URL = "https://mkuran.pl/gtfs/polish_trains.zip"
+BDOT_MALOPOLSKA_URL = "https://mapymalopolski.pl/shared/dane/12_BDOT10k_klasy_FlatGeoBuf.zip"
+BDOT_SLASKIE_FOREST_URL = (
+    "https://pzgik.wodgik.katowice.pl/download/bdot10k/tereny-zielone-i-uprawy.zip"
+)
+BDOT_SLASKIE_WATER_URL = "https://pzgik.wodgik.katowice.pl/download/bdot10k/siec-wodna.zip"
 OVERPASS_ENDPOINTS = [
     "https://overpass.openstreetmap.fr/api/interpreter",
     "https://overpass-api.de/api/interpreter",
@@ -416,15 +428,18 @@ def _safe_int(value: Any) -> int | None:
 
 
 # ---------------------------------------------------------------------------
-# Nature polygons and POIs (OSM Overpass)
+# Nature polygons: BDOT10k (preferred) and OSM Overpass (fallback)
 # ---------------------------------------------------------------------------
 
 
-def _simplify_ring(points: list[dict[str, float]], tolerance: float = 0.0008) -> list[list[float]]:
+def _simplify_lnglat(
+    points: list[tuple[float, float]], tolerance: float = 0.0008
+) -> list[list[float]]:
     """Radial-distance simplification (~80 m) keeps scoring granularity."""
     ring: list[list[float]] = []
-    for point in points:
-        lng, lat = point["lon"], point["lat"]
+    for lng, lat in points:
+        if not (math.isfinite(lng) and math.isfinite(lat)):
+            continue
         if ring and abs(ring[-1][0] - lng) < tolerance and abs(ring[-1][1] - lat) < tolerance:
             continue
         ring.append([round(lng, 5), round(lat, 5)])
@@ -433,11 +448,174 @@ def _simplify_ring(points: list[dict[str, float]], tolerance: float = 0.0008) ->
     return ring
 
 
-def fetch_nature(*, force: bool = False) -> dict[str, Any]:
-    path = cache_dir() / "nature.json"
-    if path.exists() and not force:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        return {"forest": len(payload["forest"]), "water": len(payload["water"]), "cached": True}
+def _simplify_ring(points: list[dict[str, float]], tolerance: float = 0.0008) -> list[list[float]]:
+    return _simplify_lnglat([(point["lon"], point["lat"]) for point in points], tolerance)
+
+
+def _project_ring(points: Any, transformer: Transformer) -> list[list[float]]:
+    coordinates = [(float(point[0]), float(point[1])) for point in points if len(point) >= 2]
+    if len(coordinates) < 3:
+        return []
+    xs = [point[0] for point in coordinates]
+    ys = [point[1] for point in coordinates]
+    lngs, lats = transformer.transform(xs, ys)
+    return _simplify_lnglat(list(zip(lngs, lats, strict=True)))
+
+
+def _geojson_polygon_rings(geometry: dict[str, Any]) -> Iterator[list[Any]]:
+    kind = geometry.get("type")
+    coordinates = geometry.get("coordinates")
+    if kind == "Polygon" and coordinates:
+        yield coordinates[0]
+    elif kind == "MultiPolygon" and coordinates:
+        for polygon in coordinates:
+            if polygon:
+                yield polygon[0]
+
+
+def _shapefile_rings(shape: Any) -> Iterator[list[Any]]:
+    points = shape.points
+    parts = list(shape.parts)
+    for index, start in enumerate(parts):
+        end = parts[index + 1] if index + 1 < len(parts) else len(points)
+        if end - start >= 3:
+            yield points[start:end]
+
+
+def _download(url: str, destination: Path, *, force: bool) -> None:
+    if destination.exists() and not force:
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(destination.suffix + ".tmp")
+    logger.info("downloading %s -> %s", url, destination)
+    with httpx.stream(
+        "GET", url, timeout=300.0, follow_redirects=True, headers=_geodata_headers()
+    ) as response:
+        response.raise_for_status()
+        with temporary.open("wb") as handle:
+            for chunk in response.iter_bytes(1 << 20):
+                handle.write(chunk)
+    temporary.replace(destination)
+
+
+def _extract_remote_zip_member(url: str, member: str, destination: Path, *, force: bool) -> None:
+    if destination.exists() and not force:
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(destination.suffix + ".tmp")
+    logger.info("extracting %s!%s -> %s", url, member, destination)
+    with (
+        fsspec.open(url, "rb", block_size=1 << 20) as remote,
+        zipfile.ZipFile(remote) as archive,
+        archive.open(member) as source,
+        temporary.open("wb") as handle,
+    ):
+        shutil.copyfileobj(source, handle, 1 << 20)
+    temporary.replace(destination)
+
+
+def _extract_zip_member(archive_path: Path, member: str, destination: Path, *, force: bool) -> None:
+    if destination.exists() and not force:
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(destination.suffix + ".tmp")
+    with (
+        zipfile.ZipFile(archive_path) as archive,
+        archive.open(member) as source,
+        temporary.open("wb") as handle,
+    ):
+        shutil.copyfileobj(source, handle, 1 << 20)
+    temporary.replace(destination)
+
+
+def _geodata_headers() -> dict[str, str]:
+    return {"user-agent": "plaszczaki-scoring-geodata/1.0"}
+
+
+def _read_flatgeobuf_rings(path: Path, transformer: Transformer) -> list[list[list[float]]]:
+    rings: list[list[list[float]]] = []
+    with path.open("rb") as handle:
+        for feature in flatgeobuf.Reader(handle):
+            geometry = feature.get("geometry")
+            if not isinstance(geometry, dict):
+                continue
+            for ring in _geojson_polygon_rings(geometry):
+                projected = _project_ring(ring, transformer)
+                if len(projected) >= 3:
+                    rings.append(projected)
+    return rings
+
+
+def _read_shapefile_rings(base: Path, transformer: Transformer) -> list[list[list[float]]]:
+    rings: list[list[list[float]]] = []
+    with (
+        base.with_suffix(".shp").open("rb") as shp,
+        base.with_suffix(".shx").open("rb") as shx,
+        base.with_suffix(".dbf").open("rb") as dbf,
+    ):
+        reader = shapefile.Reader(shp=shp, shx=shx, dbf=dbf)
+        for shape in reader.iterShapes():
+            for ring in _shapefile_rings(shape):
+                projected = _project_ring(ring, transformer)
+                if len(projected) >= 3:
+                    rings.append(projected)
+    return rings
+
+
+def _fetch_bdot_nature(*, force: bool) -> tuple[list[list[list[float]]], list[list[list[float]]]]:
+    root = cache_dir() / "bdot10k"
+    root.mkdir(parents=True, exist_ok=True)
+    transformer = Transformer.from_crs("EPSG:2180", "EPSG:4326", always_xy=True)
+    forest: list[list[list[float]]] = []
+    water: list[list[list[float]]] = []
+
+    malopolska_prefix = "12_BDOT10k_klasy_FlatGeoBuf/"
+    for kind, filename in (("forest", "OT_PTLZ_A.fgb"), ("water", "OT_PTWP_A.fgb")):
+        destination = root / f"malopolskie_{filename}"
+        _extract_remote_zip_member(
+            BDOT_MALOPOLSKA_URL,
+            malopolska_prefix + filename,
+            destination,
+            force=force,
+        )
+        rings = _read_flatgeobuf_rings(destination, transformer)
+        if kind == "forest":
+            forest.extend(rings)
+        else:
+            water.extend(rings)
+
+    slaskie_forest_zip = root / "slaskie_tereny_zielone.zip"
+    slaskie_water_zip = root / "slaskie_siec_wodna.zip"
+    _download(BDOT_SLASKIE_FOREST_URL, slaskie_forest_zip, force=force)
+    _download(BDOT_SLASKIE_WATER_URL, slaskie_water_zip, force=force)
+    for archive_path, members in (
+        (
+            slaskie_forest_zip,
+            [("TERENY_ZIELONE_I_UPRAWY/lasy_zadrzewienia", "slaskie_lasy")],
+        ),
+        (
+            slaskie_water_zip,
+            [("SIEC_WODNA/obszary_wodne", "slaskie_wody")],
+        ),
+    ):
+        for member, name in members:
+            base = root / name
+            for suffix in (".shp", ".shx", ".dbf"):
+                _extract_zip_member(
+                    archive_path,
+                    member + suffix,
+                    base.with_suffix(suffix),
+                    force=force,
+                )
+            rings = _read_shapefile_rings(base, transformer)
+            if name == "slaskie_lasy":
+                forest.extend(rings)
+            else:
+                water.extend(rings)
+    return forest, water
+
+
+def _fetch_osm_nature() -> tuple[list[list[list[float]]], list[list[list[float]]]]:
     payload = _overpass(NATURE_QUERY)
     forest: list[list[list[float]]] = []
     water: list[list[list[float]]] = []
@@ -453,9 +631,51 @@ def fetch_nature(*, force: bool = False) -> dict[str, Any]:
             forest.append(ring)
         elif kind in {"water", "reservoir"}:
             water.append(ring)
-    result = {"generated_at": int(time.time() * 1000), "forest": forest, "water": water}
+    return forest, water
+
+
+def fetch_nature(*, force: bool = False) -> dict[str, Any]:
+    path = cache_dir() / "nature.json"
+    cached: dict[str, Any] | None = None
+    if path.exists():
+        cached = json.loads(path.read_text(encoding="utf-8"))
+        if not force and cached.get("source") == "BDOT10k":
+            return {
+                "source": "BDOT10k",
+                "forest": len(cached["forest"]),
+                "water": len(cached["water"]),
+                "cached": True,
+            }
+    try:
+        forest, water = _fetch_bdot_nature(force=force)
+        if not forest and not water:
+            raise RuntimeError("BDOT10k returned no forest/water polygons")
+        source = "BDOT10k"
+    except Exception:
+        logger.warning("BDOT10k nature import failed; falling back to OSM", exc_info=True)
+        if cached is not None and not force:
+            return {
+                "source": cached.get("source", "OSM"),
+                "forest": len(cached["forest"]),
+                "water": len(cached["water"]),
+                "cached": True,
+                "fallback": True,
+            }
+        forest, water = _fetch_osm_nature()
+        source = "OSM"
+    result = {
+        "source": source,
+        "generated_at": int(time.time() * 1000),
+        "forest": forest,
+        "water": water,
+    }
     _write_json(path, result)
-    return {"forest": len(forest), "water": len(water), "output": str(path)}
+    return {
+        "source": source,
+        "forest": len(forest),
+        "water": len(water),
+        "output": str(path),
+    }
 
 
 def _poi_category(tags: dict[str, str]) -> str | None:
@@ -730,6 +950,23 @@ class GeoContext:
             distance = haversine_km(lat, lng, station["lat"], station["lng"])
             if distance <= radius_km and (best is None or distance < best[1]):
                 best = (station, distance)
+        return best
+
+    def nearest_transit(
+        self,
+        lat: float,
+        lng: float,
+        radius_km: float = 3.0,
+    ) -> tuple[dict[str, Any], float] | None:
+        """Nearest OSM bus/tram/rail stop within ``radius_km``."""
+        best: tuple[dict[str, Any], float] | None = None
+        for index in self.poi_index.query(lat, lng, radius_km):
+            poi = self.pois[index]
+            if poi.get("cat") != "transit":
+                continue
+            distance = haversine_km(lat, lng, poi["lat"], poi["lng"])
+            if distance <= radius_km and (best is None or distance < best[1]):
+                best = (poi, distance)
         return best
 
     def nature_distance_km(

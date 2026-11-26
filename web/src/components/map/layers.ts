@@ -1039,6 +1039,7 @@ function ensureListingPinIcon(map: MapboxMap): void {
 }
 
 function removeListingPoints(map: MapboxMap): void {
+	removeLayer(map, LAYER_IDS.listingScoreLabel);
 	removeLayer(map, LAYER_IDS.listingPoint);
 	removeLayer(map, LAYER_IDS.listingClusterCount);
 	removeLayer(map, LAYER_IDS.listingClusters);
@@ -1136,6 +1137,28 @@ export function syncListingPoints(
 				"icon-halo-width": 1.4,
 				"icon-halo-blur": 0.2,
 				"icon-opacity": 0.95,
+			},
+		});
+	}
+
+	if (!map.getLayer(LAYER_IDS.listingScoreLabel)) {
+		map.addLayer({
+			id: LAYER_IDS.listingScoreLabel,
+			type: "symbol",
+			source: LISTINGS_SOURCE,
+			filter: ["all", ["!", ["has", "point_count"]], ["has", "score"]],
+			layout: {
+				"text-field": ["to-string", ["get", "score"]],
+				"text-size": ["interpolate", ["linear"], ["zoom"], 10, 8, 14, 10],
+				"text-anchor": "center",
+				"text-offset": [0, -0.85],
+				"text-allow-overlap": true,
+				"text-ignore-placement": true,
+			},
+			paint: {
+				"text-color": COLORS.label,
+				"text-halo-color": COLORS.labelHalo,
+				"text-halo-width": 1.4,
 			},
 		});
 	}
@@ -1280,6 +1303,7 @@ export function applyToggles(map: MapboxMap, toggles: LayerToggles): void {
 	setVisibility(map, LAYER_IDS.listingClusters, toggles.listings);
 	setVisibility(map, LAYER_IDS.listingClusterCount, toggles.listings);
 	setVisibility(map, LAYER_IDS.listingPoint, toggles.listings);
+	setVisibility(map, LAYER_IDS.listingScoreLabel, toggles.listings);
 	setVisibility(map, LAYER_IDS.listingAggregate, toggles.listings);
 	setVisibility(map, LAYER_IDS.listingAggregateCount, toggles.listings);
 

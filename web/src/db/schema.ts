@@ -8,6 +8,7 @@ import {
 	text,
 	uniqueIndex,
 } from "drizzle-orm/sqlite-core";
+import type { ScoreBreakdown } from "#/lib/score-types";
 
 export const todos = sqliteTable("todos", {
 	id: integer({ mode: "number" }).primaryKey({
@@ -210,6 +211,9 @@ export const listing = sqliteTable(
 		scoreReasons: text("score_reasons", { mode: "json" }).$type<
 			Array<{ code: string; label: string; points: number }>
 		>(),
+		scoreBreakdown: text("score_breakdown", {
+			mode: "json",
+		}).$type<ScoreBreakdown>(),
 		scoredAt: integer("scored_at", { mode: "timestamp_ms" }),
 		scoreVersion: text("score_version"),
 	},

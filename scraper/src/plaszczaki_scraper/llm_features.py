@@ -51,10 +51,11 @@ candidates for this exact user profile:
 - Most interested in characterful old tenements with new windows, insulation and
   district heating; strongly dislikes large-panel apartment blocks.
 - For newer flats: price, location, surrounding amenities and commute matter most.
-- Building plots: good price and a real train station within 3 km serving Kraków,
+- Houses: two independent targets — old, charming houses suitable for atmospheric
+  Airbnb, or functional houses close to a real train station for daily commuting.
+- Plots: two independent targets — nature/tourism potential for Airbnb, or a
+  confirmed building plot with a real train station within 3 km serving Kraków,
   Katowice, Warszawa or Wrocław. Planned rail is only a speculative bonus.
-- Houses: old, charming houses suitable for atmospheric Airbnb; plots near forest,
-  lake or mountains also matter.
 Return exactly one JSON object:
 {"recommendations":[{"id":123,"why":"krótkie uzasadnienie po polsku","watch_out":"ryzyko lub null"}]}
 Order by overall attractiveness. Do not invent facts. Use at most 20 candidates.

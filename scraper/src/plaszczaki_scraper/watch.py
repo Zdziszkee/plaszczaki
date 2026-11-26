@@ -178,6 +178,7 @@ def run_watch_once(
     offer_types: Sequence[str] = (),
     region_ids: Sequence[str] | None = None,
     mode_lane: str = "",
+    score_pending: bool = True,
 ) -> dict[str, Any]:
     """Run one watch pass over the due sources.
 
@@ -278,7 +279,7 @@ def run_watch_once(
         results.append({"source_id": source.id, "mode": mode, **result})
 
     scoring = None
-    if not dry_run:
+    if not dry_run and score_pending:
         scoring = score_database(db, pending_only=True)
     return {"sources": len(results), "results": results, "scoring": scoring}
 
@@ -407,9 +408,11 @@ def run_watch_lanes(
             offer_types=lane["offer_types"],
             region_ids=lane["region_ids"],
             mode_lane=lane.get("mode_lane", ""),
+            score_pending=False,
         )
         passes.append({"lane": lane["key"], **report})
-    return {"lanes": len(passes), "passes": passes}
+    scoring = None if dry_run else score_database(db, pending_only=True)
+    return {"lanes": len(passes), "passes": passes, "scoring": scoring}
 
 
 def watch_loop(

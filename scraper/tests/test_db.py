@@ -187,6 +187,24 @@ def test_canonical_keys_are_set_and_backfilled(tmp_path: Path) -> None:
         assert db.backfill_canonical_keys() == 2
 
 
+def test_pending_score_rows_include_older_versions(tmp_path: Path) -> None:
+    with _database(tmp_path) as db:
+        db.upsert_source(
+            source_id="otodom",
+            label="Otodom",
+            homepage_url="https://www.otodom.pl",
+            adapter="otodom",
+        )
+        db.upsert_listing(_listing())
+        row = db.conn.execute("SELECT id FROM listing").fetchone()
+        assert row is not None
+        db.update_scores([(50, "nowe_mieszkanie", "{}", "[]", "{}", 1, "1", row["id"])])
+
+        assert list(db.iter_score_rows(pending_only=True)) == []
+        pending = list(db.iter_score_rows(pending_only=True, score_version="2"))
+        assert [item["id"] for item in pending] == [row["id"]]
+
+
 def test_update_listing_geo_sets_canonical_key(tmp_path: Path) -> None:
     with _database(tmp_path) as db:
         db.upsert_source(

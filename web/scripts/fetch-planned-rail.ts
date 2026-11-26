@@ -14,6 +14,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { matchKolejPlusProject } from "./kolej-plus-projects";
+import { isRail } from "./rail";
 
 const OUTPUT_FILE = join(
 	import.meta.dir,
@@ -39,8 +40,6 @@ area["ISO3166-2"="PL-12"]->.malopolskie;
   way["railway"~"^(construction|proposed)$"](area.malopolskie);
 );
 out geom tags;`;
-
-const RAIL_SUBTYPES = new Set(["rail", "light_rail", "narrow_gauge"]);
 
 type OsmGeometryPoint = { lat: number; lon: number };
 
@@ -77,16 +76,6 @@ type PlannedRailFeature = {
 		coordinates: Array<[number, number]>;
 	};
 };
-
-function railSubtype(tags: Record<string, string>): string | null {
-	if (tags.railway === "construction") {
-		return tags.construction ?? tags["construction:railway"] ?? "rail";
-	}
-	if (tags.railway === "proposed") {
-		return tags.proposed ?? tags["proposed:railway"] ?? "rail";
-	}
-	return null;
-}
 
 /**
  * Port Polska (formerly CPK) rail projects in the two voivodeships: the
@@ -215,11 +204,9 @@ let skipped = 0;
 
 for (const way of elements) {
 	const tags = way.tags ?? {};
-	const subtype = railSubtype(tags);
 	const status = tags.railway;
 	if (
-		!subtype ||
-		!RAIL_SUBTYPES.has(subtype) ||
+		!isRail(tags) ||
 		(status !== "construction" && status !== "proposed") ||
 		tags.usage === "industrial" ||
 		!way.geometry

@@ -259,21 +259,25 @@ a clear message if the migration has not been applied.
 
 ## Attractiveness scoring
 
-`score` is deterministic and training-free. It writes five independent 0–100
+`score` is deterministic and training-free. It writes six independent 0–100
 profiles to `listing` (`kamienica`, `nowe_mieszkanie`, `dzialka_kolej`,
-`dom_airbnb`, `dzialka_airbnb`) plus the best score and Polish explanations.
-Weights and keyword lists live in `config/scoring.json`.
+`dom_airbnb`, `dom_kolej`, `dzialka_airbnb`) plus the best score and Polish
+explanations. Every profile has an explicit 100-point budget in
+`config/scoring.json`; price, location, attributes, nature and market opportunity
+are scaled to that budget. `score_breakdown` stores all contributions, penalties,
+caps, eligibility and missing-data notes needed to reconstruct the final score.
 
 Inputs include canonical attributes, listing text, local price quantiles and
 distance-weighted comparable sales from this database, auction discounts,
-days on market, price cuts, gross rental yield, GTFS rail service, OSM
-forest/water/POI data, mountain regions and the map's planned-rail snapshots.
+days on market, price cuts, gross rental yield, GTFS rail service, BDOT10k
+forest/water data, OSM POIs, mountain regions and the map's planned-rail snapshots.
 Changed listings are invalidated automatically and rescored by `watch`, `run`
 and `run-all`; use `score --pending` for a manual catch-up.
 
 `geodata` refreshes the open-data cache under `data/cache/`. GTFS comes from
 PolishTrainsGTFS (PolRegio, PKP Intercity, Koleje Śląskie/Małopolskie and other
-operators); nature and POIs come from OpenStreetMap. Missing cache files degrade
+operators); nature uses BDOT10k (regional FlatGeoBuf/SHP) with OpenStreetMap as
+a fallback, and POIs come from OpenStreetMap. Missing cache files degrade
 to neutral geo signals rather than failing the scrape.
 
 `llm enrich` extracts objective facts from public descriptions with any approved
@@ -283,7 +287,8 @@ is performed. Set `OPENCODE_API_KEY` to enable these optional commands.
 
 The web app exposes the score in map popups and filters, and `/oferty` shows the
 top 25 scored sale/auction offers first seen each day in three columns:
-apartments, houses and plots.
+apartments, houses and plots. Houses and plots can be ranked independently for
+Airbnb or rail proximity, and every card exposes its full score breakdown.
 
 ## LLM lane
 

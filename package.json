@@ -28,6 +28,7 @@
     "deploy": "bash deploy/plaszczaki.sh"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.5"
+    "@biomejs/biome": "2.4.5",
+    "@tanstack/intent": "^0.5.6"
   }
 }

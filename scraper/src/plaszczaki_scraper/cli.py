@@ -597,6 +597,7 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
     store = GeocodeStore()
     results: list[dict[str, Any]] = []
     failed = False
+    scoring: dict[str, Any] | None = None
 
     def hook(batch: Any) -> None:
         for item in batch:
@@ -678,18 +679,24 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
                 finally:
                     if client is not None:
                         client.close()
-                if not args.dry_run:
-                    result["scoring"] = score_database(db, source_id=source.id, pending_only=True)
                 results.append(result)
                 if result["status"] == "failed":
                     failed = True
                     if args.fail_fast:
                         break
+            if not args.dry_run:
+                scoring = score_database(db, pending_only=True)
     finally:
         store.close()
         db.close()
 
-    print(json.dumps({"sources": len(results), "results": results}, ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            {"sources": len(results), "results": results, "scoring": scoring},
+            ensure_ascii=False,
+            indent=2,
+        ),
+    )
     if failed:
         return 1
     if any(result["status"] == "partial" for result in results):

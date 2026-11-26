@@ -1,0 +1,1 @@
+ALTER TABLE `listing` ADD `score_breakdown` text;

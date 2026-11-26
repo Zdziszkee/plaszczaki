@@ -517,3 +517,61 @@ def test_run_watch_lanes_uses_one_pass_per_lane(
         "stealth",
     ]
     assert {call["now_ms"] for call in calls} == {NOW}
+    assert all(call["score_pending"] is False for call in calls)
+
+
+def test_run_watch_once_scores_only_after_all_sources(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_build(monkeypatch)
+    events: list[str] = []
+    original = watch.score_database
+
+    def fake_score(db: Database, **kwargs: Any) -> dict[str, Any]:
+        events.append(f"score:{db.count_listings()}")
+        return original(db, **kwargs)
+
+    monkeypatch.setattr(watch, "score_database", fake_score)
+    with _database(tmp_path) as db:
+        report = watch.run_watch_once(
+            db=db,
+            catalog=_catalog(_source("first"), _source("second")),
+            regions=_regions(),
+            now_ms=NOW,
+            lock_path=tmp_path / "watch.lock",
+        )
+
+    assert report["scoring"] is not None
+    assert events == ["score:0"]
+
+
+def test_run_watch_lanes_scores_once_after_every_lane(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_lane_build(monkeypatch)
+    events: list[str] = []
+
+    def fake_run_watch_once(**kwargs: Any) -> dict[str, Any]:
+        events.append(f"lane:{kwargs['sources']}")
+        return {"sources": len(kwargs["sources"]), "results": [], "scoring": None}
+
+    def fake_score(db: Database, **kwargs: Any) -> dict[str, Any]:
+        events.append("score")
+        return {"processed": 0, "updated": 0}
+
+    monkeypatch.setattr(watch, "run_watch_once", fake_run_watch_once)
+    monkeypatch.setattr(watch, "score_database", fake_score)
+    with _database(tmp_path) as db:
+        report = watch.run_watch_lanes(
+            db=db,
+            catalog=_lane_catalog(),
+            regions=_regions(),
+            now_ms=NOW,
+        )
+
+    assert report["lanes"] == 7
+    assert events[-1] == "score"
+    assert events.count("score") == 1
+    assert all(event != "score" for event in events[:-1])

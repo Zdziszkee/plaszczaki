@@ -15,6 +15,7 @@ import type {
 	BBox,
 	ListingFilters,
 	PostedWithin,
+	ScoreProfile,
 } from "./listing-filter-types";
 
 type FilterKey = keyof ListingFilters;
@@ -42,6 +43,12 @@ export function postedAtExpression(): SQL<number> {
 
 export function postedWithinCondition(window: PostedWithin, now?: Date): SQL {
 	return gte(postedAtExpression(), postedWithinCutoff(window, now));
+}
+
+/** Overall winner score, or the independently scored profile selected by the user. */
+export function listingScoreExpression(profile?: ScoreProfile): SQL<number> {
+	if (!profile) return sql<number>`${listing.score}`;
+	return sql<number>`json_extract(${listing.scores}, ${`$.${profile}`})`;
 }
 
 export function buildListingConditions(
@@ -81,11 +88,15 @@ export function buildListingConditions(
 		conditions.push(lte(listing.pricePln, filters.maxPrice));
 	}
 	if (filters.minScore !== undefined && !skip.has("minScore")) {
-		conditions.push(gte(listing.score, filters.minScore));
+		conditions.push(
+			gte(listingScoreExpression(filters.scoreProfile), filters.minScore),
+		);
 	}
 	if (filters.scoreProfile && !skip.has("scoreProfile")) {
+		const eligiblePath = `$.profiles.${filters.scoreProfile}.eligible`;
 		conditions.push(
-			sql`json_extract(${listing.scores}, '$."${filters.scoreProfile}"') IS NOT NULL`,
+			isNotNull(listingScoreExpression(filters.scoreProfile)),
+			sql`json_extract(${listing.scoreBreakdown}, ${eligiblePath}) = 1`,
 		);
 	}
 

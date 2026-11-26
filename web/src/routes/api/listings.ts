@@ -6,6 +6,7 @@ import { parseBbox, parseListingFilters } from "#/lib/listing-filter-types";
 import {
 	buildListingConditions,
 	combineConditions,
+	listingScoreExpression,
 } from "#/lib/listing-filters";
 import { sourceColor } from "#/lib/source-colors";
 
@@ -62,6 +63,8 @@ export const Route = createFileRoute("/api/listings")({
 						scoreProfile: listing.scoreProfile,
 						scores: listing.scores,
 						scoreReasons: listing.scoreReasons,
+						scoreBreakdown: listing.scoreBreakdown,
+						scoreVersion: listing.scoreVersion,
 						buildingType: listing.buildingType,
 						buildYear: listing.buildYear,
 						heating: listing.heating,
@@ -72,13 +75,31 @@ export const Route = createFileRoute("/api/listings")({
 					.where(where)
 					.orderBy(
 						filters.sort === "score"
-							? desc(listing.score)
+							? desc(listingScoreExpression(filters.scoreProfile))
 							: desc(listing.lastSeenAt),
 					)
 					.limit(limit);
 
 				const features = rows.flatMap((row) => {
 					if (row.lat === null || row.lng === null) return [];
+					const profile = filters.scoreProfile ?? row.scoreProfile;
+					const score = filters.scoreProfile
+						? (row.scores?.[filters.scoreProfile] ?? row.score)
+						: row.score;
+					const breakdown = profile
+						? row.scoreBreakdown?.profiles[
+								profile as keyof typeof row.scoreBreakdown.profiles
+							]
+						: undefined;
+					const reasons = breakdown
+						? [
+								...breakdown.contributions
+									.filter((reason) => reason.points > 0)
+									.sort((a, b) => b.points - a.points)
+									.slice(0, 6),
+								...breakdown.penalties.slice(0, 2),
+							].map(({ code, label, points }) => ({ code, label, points }))
+						: (row.scoreReasons ?? []);
 					return [
 						{
 							type: "Feature" as const,
@@ -109,10 +130,12 @@ export const Route = createFileRoute("/api/listings")({
 								image: row.images?.[0] ?? null,
 								publishedAt:
 									row.publishedAt?.getTime() ?? row.firstSeenAt.getTime(),
-								score: row.score,
-								scoreProfile: row.scoreProfile,
+								score,
+								scoreProfile: profile,
 								scores: row.scores,
-								scoreReasons: row.scoreReasons,
+								scoreReasons: reasons,
+								scoreBreakdown: row.scoreBreakdown,
+								scoreVersion: row.scoreVersion,
 								buildingType: row.buildingType,
 								buildYear: row.buildYear,
 								heating: row.heating,

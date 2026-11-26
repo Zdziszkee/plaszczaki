@@ -11,6 +11,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "#/components/ui/card";
+import type { ListingDetails } from "#/lib/listing-details";
 import type { ListingFilters } from "#/lib/listing-filter-types";
 import {
 	LAYER_IDS,
@@ -37,24 +38,17 @@ import {
 	sync3d,
 	syncListingLayer,
 } from "./layers";
+import {
+	escapeHtml,
+	formatPln,
+	type ListingDetailsState,
+	listingPopupHtml,
+} from "./listing-popup";
 import type { ListingFeatureCollection, ListingsMode } from "./listings-types";
 import { pruneBadTileCache, resetTileCache } from "./tile-cache";
 import { useListingsLayer } from "./useListingsLayer";
 
-const HTML_ESCAPES: Record<string, string> = {
-	"&": "&amp;",
-	"<": "&lt;",
-	">": "&gt;",
-	'"': "&quot;",
-	"'": "&#39;",
-};
-
-function escapeHtml(value: unknown): string {
-	return String(value ?? "").replace(
-		/[&<>"']/g,
-		(character) => HTML_ESCAPES[character] ?? character,
-	);
-}
+const LISTING_DETAILS_CACHE_TTL_MS = 60_000;
 
 function featureProperties(feature: unknown): Record<string, unknown> | null {
 	if (!feature || typeof feature !== "object" || !("properties" in feature)) {
@@ -140,97 +134,6 @@ function plannedRailPopupHtml(properties: Record<string, unknown>): string {
 	</div>`;
 }
 
-const PROPERTY_LABELS: Record<string, string> = {
-	flat: "mieszkanie",
-	house: "dom",
-	plot: "działka",
-	commercial: "lokal",
-	garage: "garaż",
-	room: "pokój",
-};
-
-const OFFER_LABELS: Record<string, string> = {
-	sale: "sprzedaż",
-	rent: "wynajem",
-	auction: "aukcja",
-	lease: "dzierżawa",
-};
-
-function formatPln(value: number): string {
-	return new Intl.NumberFormat("pl-PL", {
-		style: "currency",
-		currency: "PLN",
-		maximumFractionDigits: 0,
-	}).format(value);
-}
-
-/** Popup content for a scraped property listing. */
-function listingPopupHtml(properties: Record<string, unknown>): string {
-	const title =
-		typeof properties.title === "string" ? properties.title : "Oferta";
-	const url = typeof properties.url === "string" ? properties.url : "";
-	const source = typeof properties.source === "string" ? properties.source : "";
-	const sourceLabel =
-		typeof properties.sourceLabel === "string"
-			? properties.sourceLabel
-			: source;
-	const color =
-		typeof properties.color === "string" ? properties.color : "#94a3b8";
-	const price =
-		typeof properties.pricePln === "number"
-			? formatPln(properties.pricePln)
-			: properties.priceKind === "call"
-				? "Cena do uzgodnienia"
-				: "Cena nieznana";
-	const pricePerM2 =
-		typeof properties.pricePerM2Pln === "number"
-			? `${formatPln(properties.pricePerM2Pln)}/m²`
-			: "";
-
-	const details: string[] = [];
-	const offerType =
-		typeof properties.offerType === "string"
-			? (OFFER_LABELS[properties.offerType] ?? properties.offerType)
-			: "";
-	if (offerType) details.push(offerType);
-	if (typeof properties.propertyType === "string") {
-		details.push(
-			PROPERTY_LABELS[properties.propertyType] ?? properties.propertyType,
-		);
-	}
-	if (typeof properties.rooms === "number") {
-		details.push(`${properties.rooms} pok.`);
-	}
-	if (typeof properties.areaM2 === "number") {
-		details.push(`${properties.areaM2.toLocaleString("pl-PL")} m²`);
-	}
-	if (typeof properties.city === "string") details.push(properties.city);
-
-	const image =
-		typeof properties.image === "string" && properties.image
-			? `<img src="${escapeHtml(properties.image)}" alt="" style="width:100%;max-height:110px;object-fit:cover;border-radius:6px;margin-bottom:6px" loading="lazy" />`
-			: "";
-	const link = url
-		? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:7px;color:inherit;font-weight:600;text-decoration:underline">${sourceLabel ? `Otwórz na ${escapeHtml(sourceLabel)}` : "Otwórz ofertę"}</a>`
-		: "";
-	const sourceLine = sourceLabel
-		? `<div style="display:flex;align-items:center;gap:5px;margin-bottom:5px">
-				<span style="width:8px;height:8px;border-radius:9999px;background:${escapeHtml(color)};flex:none"></span>
-				<span style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted-foreground)">${escapeHtml(sourceLabel)}</span>
-			</div>`
-		: "";
-
-	return `<div style="font:12px/1.45 system-ui,sans-serif;color:var(--popover-foreground);max-width:260px">
-		${image}
-		${sourceLine}
-		<div style="font-size:16px;font-weight:750;margin-bottom:1px">${escapeHtml(price)}</div>
-		${pricePerM2 ? `<div style="font-size:11px;color:var(--muted-foreground);margin-bottom:4px">${escapeHtml(pricePerM2)}</div>` : ""}
-		<div style="font-weight:600;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${escapeHtml(title)}</div>
-		<div style="color:var(--muted-foreground)">${details.map(escapeHtml).join(" · ")}</div>
-		${link}
-	</div>`;
-}
-
 /** Popup for a low-zoom aggregate cell. */
 function aggregatePopupHtml(properties: Record<string, unknown>): string {
 	const count = typeof properties.count === "number" ? properties.count : 0;
@@ -291,6 +194,10 @@ export default function MapView({
 	const containerRef = useRef<HTMLDivElement>(null);
 	const mapRef = useRef<mapboxgl.Map | null>(null);
 	const popupRef = useRef<mapboxgl.Popup | null>(null);
+	const detailsRequestRef = useRef<AbortController | null>(null);
+	const detailsCacheRef = useRef(
+		new Map<number, { details: ListingDetails; cachedAt: number }>(),
+	);
 	const togglesRef = useRef(toggles);
 	const listingsDataRef = useRef<ListingFeatureCollection | null>(null);
 	const listingsModeRef = useRef<ListingsMode>("clusters");
@@ -414,6 +321,106 @@ export default function MapView({
 			}
 		});
 
+		const closePopup = () => {
+			detailsRequestRef.current?.abort();
+			detailsRequestRef.current = null;
+			const popup = popupRef.current;
+			popupRef.current = null;
+			popup?.remove();
+		};
+
+		const showListingPopup = (
+			properties: Record<string, unknown>,
+			center: [number, number],
+		) => {
+			closePopup();
+			const popup = new mapboxgl.Popup({
+				closeButton: true,
+				offset: 12,
+				maxWidth: "360px",
+				className: "listing-popup-container",
+			});
+			let requestController: AbortController | null = null;
+
+			const render = (state: ListingDetailsState) => {
+				if (popupRef.current !== popup) return;
+				popup.setHTML(listingPopupHtml(properties, state));
+				if (state.status === "error") {
+					popup
+						.getElement()
+						?.querySelector<HTMLButtonElement>("[data-listing-retry]")
+						?.addEventListener("click", loadDetails);
+				}
+			};
+
+			function loadDetails() {
+				requestController?.abort();
+				const rawId = properties.id;
+				const id = typeof rawId === "number" ? rawId : Number(rawId);
+				if (!Number.isSafeInteger(id) || id <= 0) {
+					render({ status: "error" });
+					return;
+				}
+
+				const cached = detailsCacheRef.current.get(id);
+				if (
+					cached &&
+					Date.now() - cached.cachedAt < LISTING_DETAILS_CACHE_TTL_MS
+				) {
+					render({ status: "ready", details: cached.details });
+					return;
+				}
+				detailsCacheRef.current.delete(id);
+
+				render({ status: "loading" });
+				const controller = new AbortController();
+				requestController = controller;
+				detailsRequestRef.current = controller;
+				fetch(`/api/listings/${id}`, {
+					signal: controller.signal,
+					headers: { Accept: "application/json" },
+				})
+					.then(async (response) => {
+						if (!response.ok) throw new Error(`HTTP ${response.status}`);
+						return (await response.json()) as ListingDetails;
+					})
+					.then((details) => {
+						if (controller.signal.aborted || popupRef.current !== popup) {
+							return;
+						}
+						detailsCacheRef.current.set(id, {
+							details,
+							cachedAt: Date.now(),
+						});
+						requestController = null;
+						detailsRequestRef.current = null;
+						render({ status: "ready", details });
+					})
+					.catch(() => {
+						if (controller.signal.aborted || popupRef.current !== popup) {
+							return;
+						}
+						requestController = null;
+						detailsRequestRef.current = null;
+						render({ status: "error" });
+					});
+			}
+
+			popup.on("close", () => {
+				const controller = requestController;
+				controller?.abort();
+				requestController = null;
+				if (detailsRequestRef.current === controller) {
+					detailsRequestRef.current = null;
+				}
+				if (popupRef.current === popup) popupRef.current = null;
+			});
+			popupRef.current = popup;
+			render({ status: "loading" });
+			popup.setLngLat(center).addTo(map);
+			loadDetails();
+		};
+
 		let pending: mapboxgl.LngLat | null = null;
 		let pendingPoint: mapboxgl.Point | null = null;
 		let frame = 0;
@@ -436,7 +443,9 @@ export default function MapView({
 								.length > 0
 						: false;
 				const listingLayers = togglesRef.current.listings
-					? [LAYER_IDS.listingPoint].filter((id) => map.getLayer(id))
+					? [LAYER_IDS.listingPoint, LAYER_IDS.listingScoreLabel].filter((id) =>
+							map.getLayer(id),
+						)
 					: [];
 				const hoveringListing =
 					point && listingLayers.length > 0
@@ -508,7 +517,7 @@ export default function MapView({
 				const properties = featureProperties(aggregateFeature);
 				if (!properties) return;
 				const [lng, lat] = geometry.coordinates;
-				popupRef.current?.remove();
+				closePopup();
 				const popup = new mapboxgl.Popup({
 					closeButton: true,
 					offset: 12,
@@ -535,7 +544,9 @@ export default function MapView({
 			}
 
 			const listingLayers = togglesRef.current.listings
-				? [LAYER_IDS.listingPoint].filter((id) => map.getLayer(id))
+				? [LAYER_IDS.listingPoint, LAYER_IDS.listingScoreLabel].filter((id) =>
+						map.getLayer(id),
+					)
 				: [];
 			const listingFeature =
 				listingLayers.length > 0
@@ -552,15 +563,7 @@ export default function MapView({
 					geometry?.type === "Point"
 						? geometry.coordinates
 						: [event.lngLat.lng, event.lngLat.lat];
-				popupRef.current?.remove();
-				popupRef.current = new mapboxgl.Popup({
-					closeButton: true,
-					offset: 12,
-					maxWidth: "300px",
-				})
-					.setLngLat(center)
-					.setHTML(listingPopupHtml(listingProperties))
-					.addTo(map);
+				showListingPopup(listingProperties, center);
 				return;
 			}
 
@@ -572,6 +575,7 @@ export default function MapView({
 					? map.queryRenderedFeatures(event.point, { layers: clusterLayers })[0]
 					: undefined;
 			if (clusterFeature) {
+				closePopup();
 				const geometry = (
 					clusterFeature as unknown as {
 						geometry?: { type: string; coordinates: [number, number] };
@@ -608,7 +612,7 @@ export default function MapView({
 					: undefined;
 			const plannedProperties = featureProperties(plannedFeature);
 			if (plannedProperties) {
-				popupRef.current?.remove();
+				closePopup();
 				popupRef.current = new mapboxgl.Popup({
 					closeButton: true,
 					offset: 12,
@@ -630,7 +634,7 @@ export default function MapView({
 					: "brak danych wysokościowych";
 			const lat = event.lngLat.lat.toFixed(5);
 			const lng = event.lngLat.lng.toFixed(5);
-			popupRef.current?.remove();
+			closePopup();
 			popupRef.current = new mapboxgl.Popup({ closeButton: true, offset: 12 })
 				.setLngLat(event.lngLat)
 				.setHTML(
@@ -644,7 +648,7 @@ export default function MapView({
 
 		return () => {
 			if (frame) cancelAnimationFrame(frame);
-			popupRef.current?.remove();
+			closePopup();
 			popupRef.current = null;
 			(window as unknown as { __map?: mapboxgl.Map }).__map = undefined;
 			map.remove();

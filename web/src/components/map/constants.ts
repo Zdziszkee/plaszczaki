@@ -141,6 +141,7 @@ export const LAYER_IDS = {
 	listingClusters: "listing-clusters",
 	listingClusterCount: "listing-cluster-count",
 	listingPoint: "listing-point",
+	listingScoreLabel: "listing-score-label",
 	listingAggregate: "listing-aggregate",
 	listingAggregateCount: "listing-aggregate-count",
 	trafficCasing: "traffic-casing",

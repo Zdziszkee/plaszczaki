@@ -1,16 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { and, desc, gte, inArray, isNotNull, lt } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import {
 	ArrowLeftIcon,
 	ArrowRightIcon,
 	AwardIcon,
 	BuildingIcon,
 	CalendarDaysIcon,
+	ChevronDownIcon,
 	HouseIcon,
 	LandPlotIcon,
 	MapIcon,
 } from "lucide-react";
+import ScoreBreakdown from "#/components/ScoreBreakdown";
+import ScoreMethodology from "#/components/ScoreMethodology";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import {
@@ -21,14 +24,23 @@ import {
 } from "#/components/ui/card";
 import { Spinner } from "#/components/ui/spinner";
 import { db } from "#/db";
-import { listing } from "#/db/schema";
+import { listing, source } from "#/db/schema";
 import type { ScoreProfile } from "#/lib/listing-filter-types";
+import { listingScoreExpression } from "#/lib/listing-filters";
+import {
+	SCORE_PROFILE_SHORT_LABELS,
+	type ScoreBreakdown as ScoreBreakdownData,
+} from "#/lib/score-types";
 
 type TopOffersSearch = {
 	date?: string;
+	flatProfile?: ScoreProfile;
+	houseProfile?: ScoreProfile;
+	plotProfile?: ScoreProfile;
 };
 
 type TopPropertyType = "flat" | "house" | "plot";
+type ProfileSearchKey = "flatProfile" | "houseProfile" | "plotProfile";
 
 type ScoreReason = {
 	code: string;
@@ -44,7 +56,6 @@ type TopOffer = {
 	propertyType: TopPropertyType;
 	offerType: string;
 	pricePln: number | null;
-	priceKind: string;
 	pricePerM2Pln: number | null;
 	areaM2: number | null;
 	landAreaM2: number | null;
@@ -54,9 +65,11 @@ type TopOffer = {
 	district: string | null;
 	image: string | null;
 	score: number;
-	scoreProfile: string | null;
+	scoreProfile: ScoreProfile | null;
+	scores: Partial<Record<ScoreProfile, number>>;
 	scoreReasons: ScoreReason[];
-	firstSeenAt: number;
+	scoreBreakdown: ScoreBreakdownData | null;
+	scoreVersion: string | null;
 };
 
 type TopOffersData = {
@@ -71,37 +84,49 @@ const PROPERTY_GROUPS: Array<{
 	type: TopPropertyType;
 	title: string;
 	description: string;
+	searchKey: ProfileSearchKey;
+	profiles: ScoreProfile[];
 	icon: typeof BuildingIcon;
 }> = [
 	{
 		type: "flat",
 		title: "Mieszkania",
 		description: "Kamienice i nowe mieszkania",
+		searchKey: "flatProfile",
+		profiles: ["kamienica", "nowe_mieszkanie"],
 		icon: BuildingIcon,
 	},
 	{
 		type: "house",
 		title: "Domy",
-		description: "Klimat i potencjał Airbnb",
+		description: "Airbnb lub dom blisko kolei",
+		searchKey: "houseProfile",
+		profiles: ["dom_airbnb", "dom_kolej"],
 		icon: HouseIcon,
 	},
 	{
 		type: "plot",
 		title: "Działki",
-		description: "Kolej, las, woda i góry",
+		description: "Airbnb lub działka pod kolej",
+		searchKey: "plotProfile",
+		profiles: ["dzialka_airbnb", "dzialka_kolej"],
 		icon: LandPlotIcon,
 	},
 ];
 
-const PROFILE_LABELS: Record<ScoreProfile, string> = {
-	kamienica: "Kamienica",
-	nowe_mieszkanie: "Nowe mieszkanie",
-	dzialka_kolej: "Pod kolej",
-	dom_airbnb: "Dom pod Airbnb",
-	dzialka_airbnb: "Przy naturze",
-};
-
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function todayInWarsaw(): string {
+	const parts = new Intl.DateTimeFormat("en-US", {
+		timeZone: "Europe/Warsaw",
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+	}).formatToParts(new Date());
+	const value = (type: Intl.DateTimeFormatPartTypes) =>
+		parts.find((part) => part.type === type)?.value ?? "";
+	return `${value("year")}-${value("month")}-${value("day")}`;
+}
 
 function validDate(value: string | undefined): string {
 	if (value && DATE_RE.test(value)) {
@@ -113,7 +138,16 @@ function validDate(value: string | undefined): string {
 			return value;
 		}
 	}
-	return new Date().toISOString().slice(0, 10);
+	return todayInWarsaw();
+}
+
+function validProfile(
+	value: unknown,
+	profiles: ScoreProfile[],
+): ScoreProfile | undefined {
+	return typeof value === "string" && profiles.includes(value as ScoreProfile)
+		? (value as ScoreProfile)
+		: undefined;
 }
 
 function shiftDate(date: string, days: number): string {
@@ -128,7 +162,7 @@ function warsawMidnight(date: string): number {
 	const parts = new Intl.DateTimeFormat("en-US", {
 		timeZone: "Europe/Warsaw",
 		timeZoneName: "shortOffset",
-	}).formatToParts(new Date(utcMidnight));
+	}).formatToParts(utcMidnight);
 	const offset =
 		parts.find((part) => part.type === "timeZoneName")?.value ?? "GMT+1";
 	const match = /GMT([+-])(\d{1,2})(?::(\d{2}))?/.exec(offset);
@@ -157,28 +191,72 @@ function formatPln(value: number): string {
 	}).format(value);
 }
 
+function updateProfileSearch(
+	previous: TopOffersSearch,
+	key: ProfileSearchKey,
+	value: ScoreProfile | undefined,
+): TopOffersSearch {
+	return { ...previous, [key]: value };
+}
+
 const getTopOffers = createServerFn({ method: "GET" })
 	.validator((input: TopOffersSearch) => ({
 		date: validDate(input?.date),
+		flatProfile: validProfile(input?.flatProfile, [
+			"kamienica",
+			"nowe_mieszkanie",
+		]),
+		houseProfile: validProfile(input?.houseProfile, [
+			"dom_airbnb",
+			"dom_kolej",
+		]),
+		plotProfile: validProfile(input?.plotProfile, [
+			"dzialka_airbnb",
+			"dzialka_kolej",
+		]),
 	}))
 	.handler(async ({ data }): Promise<TopOffersData> => {
 		const date = validDate(data.date);
 		const start = warsawMidnight(date);
 		const end = warsawMidnight(shiftDate(date, 1));
 		const types: TopPropertyType[] = ["flat", "house", "plot"];
+		const selections: Record<TopPropertyType, ScoreProfile | undefined> = {
+			flat: data.flatProfile,
+			house: data.houseProfile,
+			plot: data.plotProfile,
+		};
 
 		const rowsByType = await Promise.all(
 			types.map(async (propertyType) => {
+				const selectedProfile = selections[propertyType];
+				const conditions = [
+					inArray(listing.propertyType, [propertyType]),
+					inArray(listing.offerType, ["sale", "auction"]),
+					gte(listing.firstSeenAt, new Date(start)),
+					lt(listing.firstSeenAt, new Date(end)),
+					isNotNull(listing.score),
+				];
+				let order = desc(listing.score);
+
+				if (selectedProfile) {
+					const eligiblePath = `$.profiles.${selectedProfile}.eligible`;
+					const selectedScore = listingScoreExpression(selectedProfile);
+					conditions.push(
+						isNotNull(selectedScore),
+						sql`json_extract(${listing.scoreBreakdown}, ${eligiblePath}) = 1`,
+					);
+					order = desc(selectedScore);
+				}
+
 				const rows = await db
 					.select({
 						id: listing.id,
 						title: listing.title,
 						url: listing.url,
-						sourceLabel: listing.sourceId,
+						sourceLabel: source.label,
 						propertyType: listing.propertyType,
 						offerType: listing.offerType,
 						pricePln: listing.pricePln,
-						priceKind: listing.priceKind,
 						pricePerM2Pln: listing.pricePerM2Pln,
 						areaM2: listing.areaM2,
 						landAreaM2: listing.landAreaM2,
@@ -189,32 +267,30 @@ const getTopOffers = createServerFn({ method: "GET" })
 						image: listing.images,
 						score: listing.score,
 						scoreProfile: listing.scoreProfile,
+						scores: listing.scores,
 						scoreReasons: listing.scoreReasons,
+						scoreBreakdown: listing.scoreBreakdown,
+						scoreVersion: listing.scoreVersion,
 						firstSeenAt: listing.firstSeenAt,
 						canonicalKey: listing.canonicalKey,
 					})
 					.from(listing)
-					.where(
-						and(
-							inArray(listing.propertyType, [propertyType]),
-							inArray(listing.offerType, ["sale", "auction"]),
-							gte(listing.firstSeenAt, new Date(start)),
-							lt(listing.firstSeenAt, new Date(end)),
-							isNotNull(listing.score),
-						),
-					)
-					.orderBy(
-						desc(listing.score),
-						desc(listing.firstSeenAt),
-						desc(listing.id),
-					)
+					.innerJoin(source, eq(source.id, listing.sourceId))
+					.where(and(...conditions))
+					.orderBy(order, desc(listing.firstSeenAt), desc(listing.id))
 					.limit(200);
+
 				const seen = new Set<string>();
 				const offers: TopOffer[] = [];
 				for (const row of rows) {
 					const key = row.canonicalKey ?? `id:${row.id}`;
 					if (seen.has(key)) continue;
 					seen.add(key);
+					const winnerProfile = row.scoreProfile as ScoreProfile | null;
+					const profile = selectedProfile ?? winnerProfile;
+					const score = selectedProfile
+						? (row.scores?.[selectedProfile] ?? 0)
+						: (row.score ?? 0);
 					offers.push({
 						id: row.id,
 						title: row.title ?? "Oferta nieruchomości",
@@ -223,7 +299,6 @@ const getTopOffers = createServerFn({ method: "GET" })
 						propertyType: row.propertyType as TopPropertyType,
 						offerType: row.offerType,
 						pricePln: row.pricePln,
-						priceKind: row.priceKind,
 						pricePerM2Pln: row.pricePerM2Pln,
 						areaM2: row.areaM2,
 						landAreaM2: row.landAreaM2,
@@ -232,17 +307,19 @@ const getTopOffers = createServerFn({ method: "GET" })
 						city: row.city,
 						district: row.district,
 						image: row.image?.[0] ?? null,
-						score: row.score ?? 0,
-						scoreProfile: row.scoreProfile,
+						score,
+						scoreProfile: profile,
+						scores: row.scores ?? {},
 						scoreReasons: row.scoreReasons ?? [],
-						firstSeenAt: row.firstSeenAt.getTime(),
+						scoreBreakdown: row.scoreBreakdown,
+						scoreVersion: row.scoreVersion,
 					});
 					if (offers.length === 25) break;
 				}
 				return offers;
 			}),
 		);
-		const today = new Date().toISOString().slice(0, 10);
+		const today = todayInWarsaw();
 		return {
 			date,
 			previousDate: shiftDate(date, -1),
@@ -259,9 +336,26 @@ const getTopOffers = createServerFn({ method: "GET" })
 export const Route = createFileRoute("/oferty")({
 	validateSearch: (search: Record<string, unknown>): TopOffersSearch => ({
 		date: validDate(typeof search.date === "string" ? search.date : undefined),
+		flatProfile: validProfile(search.flatProfile, [
+			"kamienica",
+			"nowe_mieszkanie",
+		]),
+		houseProfile: validProfile(search.houseProfile, [
+			"dom_airbnb",
+			"dom_kolej",
+		]),
+		plotProfile: validProfile(search.plotProfile, [
+			"dzialka_airbnb",
+			"dzialka_kolej",
+		]),
 	}),
-	loaderDeps: ({ search }) => ({ date: search.date }),
-	loader: async ({ deps }) => await getTopOffers({ data: { date: deps.date } }),
+	loaderDeps: ({ search }) => ({
+		date: search.date,
+		flatProfile: search.flatProfile,
+		houseProfile: search.houseProfile,
+		plotProfile: search.plotProfile,
+	}),
+	loader: async ({ deps }) => await getTopOffers({ data: deps }),
 	pendingComponent: TopOffersPending,
 	component: TopOffersPage,
 	head: () => ({
@@ -270,7 +364,7 @@ export const Route = createFileRoute("/oferty")({
 			{
 				name: "description",
 				content:
-					"25 najlepiej ocenionych ofert dodanych każdego dnia: mieszkania, domy i działki w Małopolsce i na Śląsku.",
+					"25 najlepiej ocenionych ofert dodanych każdego dnia: mieszkania, domy i działki w Małopolsce i na Śląsku, z pełnym wyjaśnieniem punktów.",
 			},
 		],
 	}),
@@ -281,19 +375,33 @@ function TopOffersPending() {
 		<main className="mx-auto flex min-h-[60vh] w-full max-w-[1600px] items-center justify-center px-4">
 			<div className="flex items-center gap-3 text-muted-foreground">
 				<Spinner />
-				Rankingujemy oferty…
+				Rankujemy oferty…
 			</div>
 		</main>
 	);
 }
 
 function OfferCard({ offer, rank }: { offer: TopOffer; rank: number }) {
-	const profile = offer.scoreProfile as ScoreProfile | null;
-	const reasons = offer.scoreReasons
+	const group = PROPERTY_GROUPS.find(
+		(item) => item.type === offer.propertyType,
+	);
+	const breakdown = offer.scoreProfile
+		? offer.scoreBreakdown?.profiles[offer.scoreProfile]
+		: null;
+	const reasons = (breakdown?.contributions ?? [])
 		.filter((reason) => reason.points > 0)
-		.slice(0, 2);
+		.slice(0, 3);
 	const location = [offer.district, offer.city].filter(Boolean).join(" · ");
 	const area = offer.propertyType === "plot" ? offer.landAreaM2 : offer.areaM2;
+	const FallbackIcon =
+		offer.propertyType === "house"
+			? HouseIcon
+			: offer.propertyType === "flat"
+				? BuildingIcon
+				: LandPlotIcon;
+	const alternativeProfiles =
+		group?.profiles.filter((profile) => profile !== offer.scoreProfile) ?? [];
+
 	return (
 		<Card className="group gap-0 overflow-hidden border-border/70 bg-card/75 py-0 backdrop-blur-sm transition-colors hover:border-primary/40">
 			<CardContent className="relative h-36 overflow-hidden bg-muted p-0">
@@ -306,7 +414,7 @@ function OfferCard({ offer, rank }: { offer: TopOffer; rank: number }) {
 					/>
 				) : (
 					<div className="flex size-full items-center justify-center text-muted-foreground">
-						<LandPlotIcon className="size-10 opacity-30" />
+						<FallbackIcon className="size-10 opacity-30" />
 					</div>
 				)}
 				<div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
@@ -321,9 +429,16 @@ function OfferCard({ offer, rank }: { offer: TopOffer; rank: number }) {
 			</CardContent>
 			<CardHeader className="gap-2 px-4 pt-4">
 				<div className="flex flex-wrap items-center gap-1.5">
-					{profile && (
-						<Badge variant="secondary">{PROFILE_LABELS[profile]}</Badge>
+					{offer.scoreProfile && (
+						<Badge variant="secondary">
+							{SCORE_PROFILE_SHORT_LABELS[offer.scoreProfile]}
+						</Badge>
 					)}
+					{alternativeProfiles.map((profile) => (
+						<Badge key={profile} variant="outline">
+							{SCORE_PROFILE_SHORT_LABELS[profile]} {offer.scores[profile] ?? 0}
+						</Badge>
+					))}
 					<Badge variant="outline">
 						{offer.offerType === "auction" ? "Licytacja" : "Sprzedaż"}
 					</Badge>
@@ -361,18 +476,28 @@ function OfferCard({ offer, rank }: { offer: TopOffer; rank: number }) {
 					</div>
 				</div>
 				{reasons.length > 0 && (
-					<ul className="flex flex-col gap-1 border-t pt-3 text-xs text-muted-foreground">
+					<ul className="flex flex-col gap-1.5 border-t pt-3 text-xs text-muted-foreground">
 						{reasons.map((reason) => (
-							<li key={reason.code} className="flex gap-1.5">
-								<span className="text-primary">+</span>
+							<li
+								key={reason.code}
+								className="flex items-start justify-between gap-2"
+							>
 								<span>{reason.label}</span>
+								<span className="shrink-0 font-mono text-foreground">
+									+{reason.points.toFixed(1).replace(".", ",")}
+								</span>
 							</li>
 						))}
 					</ul>
 				)}
+				<ScoreBreakdown breakdown={breakdown} score={offer.score} />
 			</CardContent>
-			<CardFooter className="px-4 pt-3 pb-4">
-				<Button asChild variant="outline" size="sm" className="w-full">
+			<CardFooter className="flex-wrap justify-between gap-2 px-4 pt-3 pb-4">
+				<span className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
+					{offer.sourceLabel}
+					{offer.scoreVersion ? ` · model ${offer.scoreVersion}` : ""}
+				</span>
+				<Button asChild variant="outline" size="sm">
 					<a href={offer.url} target="_blank" rel="noreferrer">
 						Otwórz ofertę
 						<ArrowRightIcon data-icon="inline-end" />
@@ -380,6 +505,44 @@ function OfferCard({ offer, rank }: { offer: TopOffer; rank: number }) {
 				</Button>
 			</CardFooter>
 		</Card>
+	);
+}
+
+function ProfileSwitch({ group }: { group: (typeof PROPERTY_GROUPS)[number] }) {
+	const search = Route.useSearch();
+	const selected = search[group.searchKey];
+	const options: Array<ScoreProfile | undefined> = [
+		undefined,
+		...group.profiles,
+	];
+	return (
+		<nav
+			aria-label={`Profile: ${group.title}`}
+			className="mb-4 flex flex-wrap gap-1"
+		>
+			{options.map((profile) => {
+				const active = selected === profile;
+				return (
+					<Button
+						key={profile ?? "best"}
+						asChild
+						variant={active ? "secondary" : "ghost"}
+						size="sm"
+					>
+						<Link
+							from="/oferty"
+							search={(previous) =>
+								updateProfileSearch(previous, group.searchKey, profile)
+							}
+							activeOptions={{ exact: true }}
+							aria-current={active ? "page" : undefined}
+						>
+							{profile ? SCORE_PROFILE_SHORT_LABELS[profile] : "Najlepszy"}
+						</Link>
+					</Button>
+				);
+			})}
+		</nav>
 	);
 }
 
@@ -401,8 +564,15 @@ function TopOffersPage() {
 					</h1>
 					<p className="max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
 						Najlepiej ocenione oferty dodane tego dnia. Mieszkania, domy i
-						działki ma osobne rankingi — zgodnie z Twoimi preferencjami.
+						działki mają osobne rankingi. Domy i działki możesz oceniać pod
+						Airbnb albo pod bliskość stacji kolejowej.
 					</p>
+					<Button asChild variant="link" className="w-fit px-0">
+						<a href="#jak-liczymy">
+							Jak policzono punkty?
+							<ChevronDownIcon data-icon="inline-end" />
+						</a>
+					</Button>
 				</div>
 				<div className="flex flex-col gap-3">
 					<div className="flex items-center gap-2">
@@ -412,7 +582,13 @@ function TopOffersPage() {
 							size="icon"
 							aria-label="Poprzedni dzień"
 						>
-							<Link from="/oferty" search={{ date: data.previousDate }}>
+							<Link
+								from="/oferty"
+								search={(previous) => ({
+									...previous,
+									date: data.previousDate,
+								})}
+							>
 								<ArrowLeftIcon />
 							</Link>
 						</Button>
@@ -430,7 +606,10 @@ function TopOffersPage() {
 							{data.isToday ? (
 								<ArrowRightIcon />
 							) : (
-								<Link from="/oferty" search={{ date: data.nextDate }}>
+								<Link
+									from="/oferty"
+									search={(previous) => ({ ...previous, date: data.nextDate })}
+								>
 									<ArrowRightIcon />
 								</Link>
 							)}
@@ -439,7 +618,10 @@ function TopOffersPage() {
 					<div className="flex gap-2">
 						{!data.isToday && (
 							<Button asChild variant="secondary" size="sm">
-								<Link from="/oferty" search={{ date: undefined }}>
+								<Link
+									from="/oferty"
+									search={(previous) => ({ ...previous, date: undefined })}
+								>
 									Dzisiaj
 								</Link>
 							</Button>
@@ -479,11 +661,12 @@ function TopOffersPage() {
 								</div>
 								<Badge variant="secondary">{offers.length}/25</Badge>
 							</header>
+							<ProfileSwitch group={group} />
 							{offers.length === 0 ? (
 								<Card className="border-dashed py-12 text-center">
 									<CardContent className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
 										<Icon className="size-8 opacity-40" />
-										Brak ocenionych ofert dodanych tego dnia.
+										Brak ofert spełniających wybrany profil.
 									</CardContent>
 								</Card>
 							) : (
@@ -497,6 +680,8 @@ function TopOffersPage() {
 					);
 				})}
 			</div>
+
+			<ScoreMethodology />
 		</main>
 	);
 }

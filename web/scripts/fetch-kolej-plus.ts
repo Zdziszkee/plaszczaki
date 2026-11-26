@@ -18,6 +18,7 @@ import {
 	KOLEJ_PLUS_PROJECTS,
 	matchKolejPlusProject,
 } from "./kolej-plus-projects";
+import { isRail } from "./rail";
 
 const OUTPUT_FILE = join(
 	import.meta.dir,
@@ -55,21 +56,6 @@ type OsmWay = {
 };
 
 type OverpassResponse = { elements?: OsmWay[] };
-
-const RAIL_SUBTYPES = new Set(["rail", "light_rail", "narrow_gauge"]);
-
-function isRail(tags: Record<string, string>): boolean {
-	const status = tags.railway;
-	if (status === "construction") {
-		return RAIL_SUBTYPES.has(
-			tags.construction ?? tags["construction:railway"] ?? "rail",
-		);
-	}
-	if (status === "proposed") {
-		return RAIL_SUBTYPES.has(tags.proposed ?? tags["proposed:railway"] ?? "rail");
-	}
-	return status === "rail" || status === "disused" || status === "abandoned";
-}
 
 function cleanCoordinates(points: OsmGeometryPoint[]): Array<[number, number]> {
 	const coordinates: Array<[number, number]> = [];
