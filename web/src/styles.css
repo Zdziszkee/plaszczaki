@@ -373,6 +373,36 @@ body {
   font-weight: 600;
 }
 
+.aggregate-popup {
+  max-width: 240px;
+  font: 12px/1.45 system-ui, sans-serif;
+  color: var(--popover-foreground);
+}
+
+.aggregate-popup-label {
+  margin-bottom: 4px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.aggregate-popup-count {
+  font-size: 18px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.aggregate-popup-range {
+  margin: 4px 0 10px;
+  color: var(--muted-foreground);
+}
+
+.aggregate-popup-action {
+  margin-top: 10px;
+}
+
 .listing-popup-loading,
 .listing-popup-error {
   display: flex;

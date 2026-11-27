@@ -1,8 +1,10 @@
 import type {
+	CircleLayerSpecification,
 	ExpressionSpecification,
 	FilterSpecification,
 	GeoJSONSource,
 	Map as MapboxMap,
+	SymbolLayerSpecification,
 } from "mapbox-gl";
 import type { RcnFeatureCollection } from "#/lib/rcn-types";
 import {
@@ -23,6 +25,7 @@ import {
 	TRAM_STOP_MINZOOM,
 } from "./constants";
 import type { ListingFeatureCollection, ListingsMode } from "./listings-types";
+import { type AggregateMapTheme, readAggregateMapTheme } from "./map-theme";
 
 /** One vector source serves rail, boundaries and the POI heatmap. */
 const STREETS_SOURCE = "streets";
@@ -1000,6 +1003,124 @@ function emptyListings(): ListingFeatureCollection {
 	return { type: "FeatureCollection", features: [] };
 }
 
+const AGGREGATE_RADIUS: ExpressionSpecification = [
+	"step",
+	["get", "count"],
+	11,
+	10,
+	13,
+	50,
+	15,
+	200,
+	18,
+];
+const AGGREGATE_HOVER: ExpressionSpecification = [
+	"boolean",
+	["feature-state", "hover"],
+	false,
+];
+
+function aggregateCirclePaint(
+	theme: AggregateMapTheme,
+	color: string,
+): CircleLayerSpecification["paint"] {
+	return {
+		"circle-color": color,
+		"circle-opacity": 0.96,
+		"circle-radius": [
+			"case",
+			AGGREGATE_HOVER,
+			["+", AGGREGATE_RADIUS, 2],
+			AGGREGATE_RADIUS,
+		],
+		"circle-stroke-color": [
+			"case",
+			AGGREGATE_HOVER,
+			theme.ring,
+			theme.background,
+		],
+		"circle-stroke-width": ["case", AGGREGATE_HOVER, 2.5, 2],
+		"circle-pitch-alignment": "viewport",
+	};
+}
+
+function aggregateCountPaint(color: string): SymbolLayerSpecification["paint"] {
+	return {
+		"text-color": color,
+		"text-halo-width": 0,
+	};
+}
+
+function addAggregateShadow(map: MapboxMap, source: string, id: string): void {
+	if (map.getLayer(id)) return;
+	map.addLayer({
+		id,
+		type: "circle",
+		source,
+		paint: {
+			"circle-color": COLORS.labelHalo,
+			"circle-opacity": 0.28,
+			"circle-radius": ["+", AGGREGATE_RADIUS, 2],
+			"circle-blur": 0.8,
+			"circle-translate": [0, 2],
+			"circle-translate-anchor": "viewport",
+			"circle-pitch-alignment": "viewport",
+		},
+	});
+}
+
+function applyAggregateCircleTheme(
+	map: MapboxMap,
+	layerId: string,
+	theme: AggregateMapTheme,
+	color: string,
+): void {
+	map.setPaintProperty(layerId, "circle-color", color);
+	map.setPaintProperty(layerId, "circle-stroke-color", [
+		"case",
+		AGGREGATE_HOVER,
+		theme.ring,
+		theme.background,
+	]);
+	map.setPaintProperty(layerId, "circle-stroke-width", [
+		"case",
+		AGGREGATE_HOVER,
+		2.5,
+		2,
+	]);
+}
+
+/** Re-read semantic colors after light/dark theme changes. */
+export function syncAggregateTheme(map: MapboxMap): void {
+	const theme = readAggregateMapTheme();
+	if (map.getLayer(LAYER_IDS.listingAggregate)) {
+		applyAggregateCircleTheme(
+			map,
+			LAYER_IDS.listingAggregate,
+			theme,
+			theme.primary,
+		);
+		map.setPaintProperty(
+			LAYER_IDS.listingAggregateCount,
+			"text-color",
+			theme.primaryForeground,
+		);
+	}
+	if (map.getLayer(LAYER_IDS.rcnCluster)) {
+		applyAggregateCircleTheme(
+			map,
+			LAYER_IDS.rcnCluster,
+			theme,
+			COLORS.rcnCluster,
+		);
+		map.setPaintProperty(
+			LAYER_IDS.rcnClusterCount,
+			"text-color",
+			COLORS.rcnClusterLabel,
+		);
+	}
+}
+
 /** Pin sprite dimensions in device pixels; drawn at 2x for crisp rendering. */
 const LISTING_PIN_WIDTH = 48;
 const LISTING_PIN_HEIGHT = 60;
@@ -1048,6 +1169,7 @@ function removeListingPoints(map: MapboxMap): void {
 function removeListingAggregate(map: MapboxMap): void {
 	removeLayer(map, LAYER_IDS.listingAggregateCount);
 	removeLayer(map, LAYER_IDS.listingAggregate);
+	removeLayer(map, LAYER_IDS.listingAggregateShadow);
 	removeSource(map, LISTINGS_AGG_SOURCE);
 }
 
@@ -1123,7 +1245,7 @@ export function syncListingPoints(
 	}
 }
 
-/** Low-zoom aggregate cells returned by `/api/listings/clusters`. */
+/** Low-zoom hexagonal aggregates returned by `/api/listings/clusters`. */
 export function syncListingAggregate(
 	map: MapboxMap,
 	data?: ListingFeatureCollection,
@@ -1140,28 +1262,18 @@ export function syncListingAggregate(
 		existing.setData(data);
 	}
 
+	const theme = readAggregateMapTheme();
+	addAggregateShadow(
+		map,
+		LISTINGS_AGG_SOURCE,
+		LAYER_IDS.listingAggregateShadow,
+	);
 	if (!map.getLayer(LAYER_IDS.listingAggregate)) {
 		map.addLayer({
 			id: LAYER_IDS.listingAggregate,
 			type: "circle",
 			source: LISTINGS_AGG_SOURCE,
-			paint: {
-				"circle-color": [
-					"step",
-					["get", "count"],
-					COLORS.listingOther,
-					10,
-					COLORS.listingSale,
-					50,
-					COLORS.listingRent,
-					200,
-					COLORS.listingAuction,
-				],
-				"circle-radius": ["step", ["get", "count"], 9, 10, 14, 50, 20, 200, 28],
-				"circle-opacity": 0.82,
-				"circle-stroke-color": COLORS.labelHalo,
-				"circle-stroke-width": 1.5,
-			},
+			paint: aggregateCirclePaint(theme, theme.primary),
 		});
 	}
 
@@ -1171,15 +1283,17 @@ export function syncListingAggregate(
 			type: "symbol",
 			source: LISTINGS_AGG_SOURCE,
 			layout: {
-				"text-field": ["to-string", ["get", "count"]],
-				"text-size": ["step", ["get", "count"], 10, 100, 11, 1000, 12],
+				"text-field": [
+					"coalesce",
+					["get", "countLabel"],
+					["to-string", ["get", "count"]],
+				],
+				"text-size": ["step", ["get", "count"], 10.5, 1000, 9.5],
+				"text-anchor": "center",
 				"text-allow-overlap": true,
+				"text-ignore-placement": true,
 			},
-			paint: {
-				"text-color": COLORS.label,
-				"text-halo-color": COLORS.labelHalo,
-				"text-halo-width": 1.5,
-			},
+			paint: aggregateCountPaint(theme.primaryForeground),
 		});
 	}
 }
@@ -1187,6 +1301,7 @@ export function syncListingAggregate(
 function removeRcnLayers(map: MapboxMap): void {
 	removeLayer(map, LAYER_IDS.rcnClusterCount);
 	removeLayer(map, LAYER_IDS.rcnCluster);
+	removeLayer(map, LAYER_IDS.rcnClusterShadow);
 	removeLayer(map, LAYER_IDS.rcnPoint);
 	removeSource(map, RCN_SOURCE);
 }
@@ -1208,28 +1323,14 @@ export function syncRcnLayer(
 		data: data ?? { type: "FeatureCollection", features: [] },
 	});
 	if (mode === "clusters") {
+		const theme = readAggregateMapTheme();
+		addAggregateShadow(map, RCN_SOURCE, LAYER_IDS.rcnClusterShadow);
 		map.addLayer({
 			id: LAYER_IDS.rcnCluster,
 			type: "circle",
 			source: RCN_SOURCE,
 			filter: ["has", "count"],
-			paint: {
-				"circle-color": "#f59e0b",
-				"circle-opacity": 0.75,
-				"circle-stroke-color": "#fef3c7",
-				"circle-stroke-width": 1,
-				"circle-radius": [
-					"interpolate",
-					["linear"],
-					["get", "count"],
-					1,
-					5,
-					50,
-					10,
-					500,
-					18,
-				],
-			},
+			paint: aggregateCirclePaint(theme, COLORS.rcnCluster),
 		});
 		map.addLayer({
 			id: LAYER_IDS.rcnClusterCount,
@@ -1237,15 +1338,17 @@ export function syncRcnLayer(
 			source: RCN_SOURCE,
 			filter: ["has", "count"],
 			layout: {
-				"text-field": ["to-string", ["get", "count"]],
-				"text-size": 10,
+				"text-field": [
+					"coalesce",
+					["get", "countLabel"],
+					["to-string", ["get", "count"]],
+				],
+				"text-size": ["step", ["get", "count"], 10.5, 1000, 9.5],
+				"text-anchor": "center",
 				"text-allow-overlap": true,
+				"text-ignore-placement": true,
 			},
-			paint: {
-				"text-color": "#111827",
-				"text-halo-color": "#fef3c7",
-				"text-halo-width": 1,
-			},
+			paint: aggregateCountPaint(COLORS.rcnClusterLabel),
 		});
 		return;
 	}
@@ -1350,8 +1453,10 @@ export function applyToggles(map: MapboxMap, toggles: LayerToggles): void {
 
 	setVisibility(map, LAYER_IDS.listingPoint, toggles.listings);
 	setVisibility(map, LAYER_IDS.listingScoreLabel, toggles.listings);
+	setVisibility(map, LAYER_IDS.listingAggregateShadow, toggles.listings);
 	setVisibility(map, LAYER_IDS.listingAggregate, toggles.listings);
 	setVisibility(map, LAYER_IDS.listingAggregateCount, toggles.listings);
+	setVisibility(map, LAYER_IDS.rcnClusterShadow, toggles.rcn);
 	setVisibility(map, LAYER_IDS.rcnCluster, toggles.rcn);
 	setVisibility(map, LAYER_IDS.rcnClusterCount, toggles.rcn);
 	setVisibility(map, LAYER_IDS.rcnPoint, toggles.rcn);

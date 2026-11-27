@@ -3,6 +3,7 @@ export type ListingsMode = "clusters" | "points";
 
 export type ListingFeature = {
 	type: "Feature";
+	id?: string | number;
 	geometry: {
 		type: "Point";
 		coordinates: [number, number];

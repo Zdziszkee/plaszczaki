@@ -39,8 +39,11 @@ import {
 	addRailLayers,
 	addTerrainLayers,
 	applyToggles,
+	LISTINGS_AGG_SOURCE,
 	PLANNED_RAIL_LINE_LAYERS,
+	RCN_SOURCE,
 	sync3d,
+	syncAggregateTheme,
 	syncListingLayer,
 	syncRcnLayer,
 } from "./layers";
@@ -57,6 +60,26 @@ import { useListingsLayer } from "./useListingsLayer";
 import { useRcnLayer } from "./useRcnLayer";
 
 const LISTING_DETAILS_CACHE_TTL_MS = 60_000;
+
+type AggregateFeatureIdentifier = {
+	source: string;
+	id: string | number;
+};
+
+type AggregateHoverRef = {
+	current: AggregateFeatureIdentifier | null;
+};
+
+function clearAggregateHover(
+	map: mapboxgl.Map,
+	hoverRef: AggregateHoverRef,
+): void {
+	const hovered = hoverRef.current;
+	hoverRef.current = null;
+	if (hovered && map.getSource(hovered.source)) {
+		map.removeFeatureState(hovered);
+	}
+}
 
 function featureProperties(feature: unknown): Record<string, unknown> | null {
 	if (!feature || typeof feature !== "object" || !("properties" in feature)) {
@@ -142,6 +165,18 @@ function plannedRailPopupHtml(properties: Record<string, unknown>): string {
 	</div>`;
 }
 
+function offerCountLabel(count: number): string {
+	if (count === 1) return "oferta";
+	if (
+		count % 10 >= 2 &&
+		count % 10 <= 4 &&
+		(count % 100 < 12 || count % 100 > 14)
+	) {
+		return "oferty";
+	}
+	return "ofert";
+}
+
 /** Popup for a low-zoom aggregate cell. */
 function aggregatePopupHtml(properties: Record<string, unknown>): string {
 	const count = typeof properties.count === "number" ? properties.count : 0;
@@ -156,10 +191,11 @@ function aggregatePopupHtml(properties: Record<string, unknown>): string {
 				: `${formatPln(minPrice)} – ${formatPln(maxPrice)}`
 			: "Brak danych o cenach";
 
-	return `<div style="font:12px/1.45 system-ui,sans-serif;color:var(--popover-foreground);max-width:220px">
-		<div style="font-size:16px;font-weight:750;margin-bottom:2px">${count.toLocaleString("pl-PL")} ofert</div>
-		<div style="color:var(--muted-foreground);margin-bottom:8px">${escapeHtml(priceRange)}</div>
-		<button type="button" data-aggregate-zoom="1" style="width:100%;cursor:pointer;border:1px solid var(--border);border-radius:6px;background:var(--secondary);color:var(--secondary-foreground);padding:5px 8px;font:inherit;font-weight:600">Przybliż</button>
+	return `<div class="aggregate-popup">
+		<div class="aggregate-popup-label">Oferty w obszarze</div>
+		<div class="aggregate-popup-count">${count.toLocaleString("pl-PL")} ${offerCountLabel(count)}</div>
+		<div class="aggregate-popup-range">${escapeHtml(priceRange)}</div>
+		<button type="button" class="listing-popup-action aggregate-popup-action" data-aggregate-zoom="1">Przybliż</button>
 	</div>`;
 }
 
@@ -212,6 +248,7 @@ export default function MapView({
 	const togglesRef = useRef(toggles);
 	const listingsDataRef = useRef<ListingFeatureCollection | null>(null);
 	const listingsModeRef = useRef<ListingsMode>("clusters");
+	const aggregateHoverRef = useRef<AggregateFeatureIdentifier | null>(null);
 	const rcnDataRef = useRef<RcnFeatureCollection | null>(null);
 	const rcnModeRef = useRef<ListingsMode>("clusters");
 	const [map, setMap] = useState<mapboxgl.Map | null>(null);
@@ -230,6 +267,7 @@ export default function MapView({
 	useEffect(() => {
 		togglesRef.current = toggles;
 		if (!map) return;
+		clearAggregateHover(map, aggregateHoverRef);
 		applyToggles(map, toggles);
 	}, [map, toggles]);
 
@@ -237,6 +275,7 @@ export default function MapView({
 		if (!map) return;
 		listingsDataRef.current = listings.data;
 		listingsModeRef.current = listings.mode;
+		clearAggregateHover(map, aggregateHoverRef);
 		const sync = () => {
 			if (!map.isStyleLoaded()) return;
 			syncListingLayer(
@@ -258,6 +297,7 @@ export default function MapView({
 		if (!map) return;
 		rcnDataRef.current = rcn.data;
 		rcnModeRef.current = rcn.mode;
+		clearAggregateHover(map, aggregateHoverRef);
 		const sync = () => {
 			if (!map.isStyleLoaded()) return;
 			syncRcnLayer(map, toggles.rcn, rcn.mode, rcn.data ?? undefined);
@@ -313,11 +353,31 @@ export default function MapView({
 			"bottom-left",
 		);
 
+		const updateAggregateHover = (feature: unknown, source: string) => {
+			const id =
+				feature && typeof feature === "object" && "id" in feature
+					? (feature as { id?: unknown }).id
+					: undefined;
+			if (
+				(typeof id !== "string" && typeof id !== "number") ||
+				!map.getSource(source)
+			) {
+				clearAggregateHover(map, aggregateHoverRef);
+				return;
+			}
+			const current = aggregateHoverRef.current;
+			if (current?.source === source && current.id === id) return;
+			clearAggregateHover(map, aggregateHoverRef);
+			aggregateHoverRef.current = { source, id };
+			map.setFeatureState({ source, id }, { hover: true });
+		};
+
 		const syncDetail = () => sync3d(map, togglesRef.current.objects3d);
 
 		// `style.load` fires after every style (re)load; custom sources and
 		// layers must be (re)created there.
 		map.on("style.load", () => {
+			clearAggregateHover(map, aggregateHoverRef);
 			addTerrainLayers(map);
 			addContourLayers(map);
 			addRailLayers(map);
@@ -354,6 +414,15 @@ export default function MapView({
 		});
 
 		map.on("idle", () => pruneBadTileCache());
+		const onSourceData = (event: mapboxgl.MapSourceDataEvent) => {
+			if (
+				event.sourceId === LISTINGS_AGG_SOURCE ||
+				event.sourceId === RCN_SOURCE
+			) {
+				clearAggregateHover(map, aggregateHoverRef);
+			}
+		};
+		map.on("sourcedata", onSourceData);
 		map.on("error", (event) => {
 			const message = event.error?.message ?? "";
 			if (message.includes("Expected varint not more than 10 bytes")) {
@@ -560,20 +629,31 @@ export default function MapView({
 				const aggregateLayers = togglesRef.current.listings
 					? [LAYER_IDS.listingAggregate].filter((id) => map.getLayer(id))
 					: [];
-				const hoveringAggregate =
+				const aggregateFeature =
 					point && aggregateLayers.length > 0
-						? map.queryRenderedFeatures(point, { layers: aggregateLayers })
-								.length > 0
-						: false;
+						? map.queryRenderedFeatures(point, { layers: aggregateLayers })[0]
+						: undefined;
+				const hoveringAggregate = aggregateFeature !== undefined;
 				const rcnLayers = togglesRef.current.rcn
 					? [LAYER_IDS.rcnCluster, LAYER_IDS.rcnPoint].filter((id) =>
 							map.getLayer(id),
 						)
 					: [];
+				const rcnClusterLayers = togglesRef.current.rcn
+					? [LAYER_IDS.rcnCluster].filter((id) => map.getLayer(id))
+					: [];
+				const rcnClusterFeature =
+					point && rcnClusterLayers.length > 0
+						? map.queryRenderedFeatures(point, { layers: rcnClusterLayers })[0]
+						: undefined;
 				const hoveringRcn =
 					point && rcnLayers.length > 0
 						? map.queryRenderedFeatures(point, { layers: rcnLayers }).length > 0
 						: false;
+				updateAggregateHover(
+					aggregateFeature ?? rcnClusterFeature,
+					aggregateFeature ? LISTINGS_AGG_SOURCE : RCN_SOURCE,
+				);
 				map.getCanvas().style.cursor =
 					hoveringPlanned || hoveringListing || hoveringAggregate || hoveringRcn
 						? "pointer"
@@ -595,6 +675,7 @@ export default function MapView({
 		};
 		const onMouseOut = () => {
 			map.getCanvas().style.cursor = "";
+			clearAggregateHover(map, aggregateHoverRef);
 			setElevation(null);
 		};
 		map.on("mousemove", onMouseMove);
@@ -623,8 +704,9 @@ export default function MapView({
 				closePopup();
 				const popup = new mapboxgl.Popup({
 					closeButton: true,
-					offset: 12,
+					offset: 20,
 					maxWidth: "240px",
+					className: "aggregate-popup-container",
 				})
 					.setLngLat([lng, lat])
 					.setHTML(aggregatePopupHtml(properties))
@@ -690,8 +772,12 @@ export default function MapView({
 				closePopup();
 				const popup = new mapboxgl.Popup({
 					closeButton: true,
-					offset: 12,
+					offset: typeof rcnProperties.count === "number" ? 20 : 12,
 					maxWidth: "300px",
+					className:
+						typeof rcnProperties.count === "number"
+							? "aggregate-popup-container"
+							: undefined,
 				})
 					.setLngLat(center)
 					.setHTML(rcnPopupHtml(rcnProperties))
@@ -755,6 +841,8 @@ export default function MapView({
 
 		return () => {
 			if (frame) cancelAnimationFrame(frame);
+			clearAggregateHover(map, aggregateHoverRef);
+			map.off("sourcedata", onSourceData);
 			closePopup();
 			popupRef.current = null;
 			(window as unknown as { __map?: mapboxgl.Map }).__map = undefined;
@@ -763,6 +851,25 @@ export default function MapView({
 			setMap(null);
 		};
 	}, []);
+
+	useEffect(() => {
+		if (!map) return;
+		const syncTheme = () => syncAggregateTheme(map);
+		syncTheme();
+		const observer = new MutationObserver(syncTheme);
+		observer.observe(document.documentElement, {
+			attributes: true,
+			attributeFilter: ["class", "data-theme", "style"],
+		});
+		const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
+		colorScheme.addEventListener("change", syncTheme);
+		map.on("style.load", syncTheme);
+		return () => {
+			observer.disconnect();
+			colorScheme.removeEventListener("change", syncTheme);
+			map.off("style.load", syncTheme);
+		};
+	}, [map]);
 
 	if (!MAPBOX_TOKEN) return <MissingToken />;
 

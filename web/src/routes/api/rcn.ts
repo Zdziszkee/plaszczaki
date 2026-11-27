@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { and, between, count, desc, eq, gte, max, min, sql } from "drizzle-orm";
 import { db } from "#/db";
 import { rcnImport, rcnTransaction, rcnTransactionObject } from "#/db/schema";
+import { aggregateHexagons } from "#/lib/hex-aggregation";
 import { parseBbox } from "#/lib/listing-filter-types";
 import { RCN_ATTRIBUTION, RCN_GRID_DEGREES } from "#/lib/rcn-comparables";
 import { monthsCutoff, parseRcnFilters } from "#/lib/rcn-filters";
@@ -72,12 +73,17 @@ export const Route = createFileRoute("/api/rcn")({
 					.where(where);
 
 				if (mode === "clusters") {
-					const latExpr = sql<number>`(floor(${rcnTransactionObject.lat} / ${precision}) * ${precision}) + ${precision / 2}`;
-					const lngExpr = sql<number>`(floor(${rcnTransactionObject.lng} / ${precision}) * ${precision}) + ${precision / 2}`;
+					const finePrecision = precision / 4;
+					const latBin = sql<number>`floor(${rcnTransactionObject.lat} / ${finePrecision}) * ${finePrecision}`;
+					const lngBin = sql<number>`floor(${rcnTransactionObject.lng} / ${finePrecision}) * ${finePrecision}`;
 					const rows = await db
 						.select({
-							lat: latExpr,
-							lng: lngExpr,
+							lat: sql<number>`avg(${rcnTransactionObject.lat})`.mapWith(
+								Number,
+							),
+							lng: sql<number>`avg(${rcnTransactionObject.lng})`.mapWith(
+								Number,
+							),
 							cellCount: count(),
 							minPrice: min(rcnTransactionObject.comparablePricePln),
 							maxPrice: max(rcnTransactionObject.comparablePricePln),
@@ -88,20 +94,36 @@ export const Route = createFileRoute("/api/rcn")({
 							eq(rcnTransaction.id, rcnTransactionObject.transactionId),
 						)
 						.where(where)
-						.groupBy(latExpr, lngExpr)
-						.orderBy(desc(count()))
-						.limit(limit);
+						.groupBy(latBin, lngBin);
+					const aggregates = aggregateHexagons(
+						rows.flatMap((row) =>
+							row.lat === null || row.lng === null
+								? []
+								: [
+										{
+											lat: row.lat,
+											lng: row.lng,
+											count: row.cellCount,
+											minPrice: row.minPrice,
+											maxPrice: row.maxPrice,
+										},
+									],
+						),
+						precision,
+					).slice(0, limit);
 					const payload: RcnFeatureCollection = {
 						type: "FeatureCollection",
-						features: rows.map((row) => ({
+						features: aggregates.map((row) => ({
 							type: "Feature",
+							id: row.id,
 							geometry: {
 								type: "Point",
 								coordinates: [row.lng, row.lat],
 							},
 							properties: {
 								cluster: true,
-								count: row.cellCount,
+								count: row.count,
+								countLabel: row.countLabel,
 								minPrice: row.minPrice,
 								maxPrice: row.maxPrice,
 							},
@@ -109,9 +131,10 @@ export const Route = createFileRoute("/api/rcn")({
 						meta: {
 							mode: "clusters",
 							total: totalRow?.total ?? 0,
-							returned: rows.length,
+							returned: aggregates.length,
 							limit,
 							precision,
+							aggregation: "hex",
 							importedAt: freshness?.importedAt?.toISOString() ?? null,
 							attribution: RCN_ATTRIBUTION,
 						},

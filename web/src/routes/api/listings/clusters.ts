@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { count, max, min, sql } from "drizzle-orm";
 import { db } from "#/db";
 import { listing } from "#/db/schema";
+import { aggregateHexagons } from "#/lib/hex-aggregation";
 import { parseBbox, parseListingFilters } from "#/lib/listing-filter-types";
 import {
 	buildListingConditions,
@@ -45,8 +46,12 @@ export const Route = createFileRoute("/api/listings/clusters")({
 				const requestedLimit = numberParam(search.get("limit")) ?? 2000;
 				const limit = Math.min(Math.max(Math.trunc(requestedLimit), 1), 5000);
 
-				const latExpr = sql<number>`(floor(${listing.lat} / ${precision}) * ${precision}) + ${precision / 2}`;
-				const lngExpr = sql<number>`(floor(${listing.lng} / ${precision}) * ${precision}) + ${precision / 2}`;
+				// Reduce raw rows in SQLite before assigning hexagons in JS.
+				// Fine bins at one quarter of the requested precision keep
+				// centroids accurate without returning every raw point.
+				const finePrecision = precision / 4;
+				const latBin = sql<number>`floor(${listing.lat} / ${finePrecision}) * ${finePrecision}`;
+				const lngBin = sql<number>`floor(${listing.lng} / ${finePrecision}) * ${finePrecision}`;
 
 				const [totalRow] = await db
 					.select({ total: count() })
@@ -55,26 +60,44 @@ export const Route = createFileRoute("/api/listings/clusters")({
 
 				const rows = await db
 					.select({
-						lat: latExpr,
-						lng: lngExpr,
+						lat: sql<number>`avg(${listing.lat})`.mapWith(Number),
+						lng: sql<number>`avg(${listing.lng})`.mapWith(Number),
 						cellCount: count(),
 						minPrice: min(listing.pricePln),
 						maxPrice: max(listing.pricePln),
 					})
 					.from(listing)
 					.where(where)
-					.groupBy(latExpr, lngExpr)
-					.limit(limit);
+					.groupBy(latBin, lngBin);
 
-				const features = rows.map((row) => ({
+				const aggregates = aggregateHexagons(
+					rows.flatMap((row) =>
+						row.lat === null || row.lng === null
+							? []
+							: [
+									{
+										lat: row.lat,
+										lng: row.lng,
+										count: row.cellCount,
+										minPrice: row.minPrice,
+										maxPrice: row.maxPrice,
+									},
+								],
+					),
+					precision,
+				).slice(0, limit);
+
+				const features = aggregates.map((row) => ({
 					type: "Feature" as const,
+					id: row.id,
 					geometry: {
 						type: "Point" as const,
 						coordinates: [row.lng, row.lat],
 					},
 					properties: {
 						cluster: true,
-						count: row.cellCount,
+						count: row.count,
+						countLabel: row.countLabel,
 						minPrice: row.minPrice,
 						maxPrice: row.maxPrice,
 					},
@@ -90,6 +113,7 @@ export const Route = createFileRoute("/api/listings/clusters")({
 							returned: features.length,
 							limit,
 							precision,
+							aggregation: "hex",
 						},
 					},
 					{ headers: { "Cache-Control": "public, max-age=30" } },

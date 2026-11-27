@@ -13,6 +13,7 @@ type ResponseMeta = {
 	returned?: number;
 	precision?: number;
 	limit?: number;
+	aggregation?: string;
 };
 
 type ListingsResponse = ListingFeatureCollection & {

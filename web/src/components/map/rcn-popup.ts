@@ -49,6 +49,18 @@ const MARKET_LABELS: Record<string, string> = {
 	secondary: "rynek wtórny",
 };
 
+function transactionCountLabel(count: number): string {
+	if (count === 1) return "transakcja";
+	if (
+		count % 10 >= 2 &&
+		count % 10 <= 4 &&
+		(count % 100 < 12 || count % 100 > 14)
+	) {
+		return "transakcje";
+	}
+	return "transakcji";
+}
+
 export function rcnPopupHtml(properties: Record<string, unknown>): string {
 	const count = numberValue(properties.count);
 	if (count !== null) {
@@ -60,10 +72,11 @@ export function rcnPopupHtml(properties: Record<string, unknown>): string {
 				: minPrice === maxPrice
 					? formatPln(minPrice)
 					: `${formatPln(minPrice)} – ${formatPln(maxPrice ?? minPrice)}`;
-		return `<div style="font:12px/1.45 system-ui,sans-serif;color:var(--popover-foreground);max-width:240px">
-			<div style="font-size:16px;font-weight:750">${count.toLocaleString("pl-PL")} transakcji RCN</div>
-			<div style="color:var(--muted-foreground);margin:4px 0 8px">${escapeHtml(range)}</div>
-			<button type="button" data-rcn-zoom style="width:100%;cursor:pointer;border:1px solid var(--border);border-radius:6px;background:var(--secondary);color:var(--secondary-foreground);padding:5px 8px;font:inherit;font-weight:600">Przybliż</button>
+		return `<div class="aggregate-popup">
+			<div class="aggregate-popup-label">Transakcje RCN w obszarze</div>
+			<div class="aggregate-popup-count">${count.toLocaleString("pl-PL")} ${transactionCountLabel(count)}</div>
+			<div class="aggregate-popup-range">${escapeHtml(range)}</div>
+			<button type="button" class="listing-popup-action aggregate-popup-action" data-rcn-zoom>Przybliż</button>
 		</div>`;
 	}
 	const price = numberValue(properties.pricePln);

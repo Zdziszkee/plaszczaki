@@ -23,6 +23,7 @@ export const DEFAULT_RCN_FILTERS: RcnMapFilters = {
 
 export type RcnFeature = {
 	type: "Feature";
+	id?: string | number;
 	geometry: {
 		type: "Point";
 		coordinates: [number, number];
@@ -39,6 +40,7 @@ export type RcnFeatureCollection = {
 		returned?: number;
 		limit?: number;
 		precision?: number;
+		aggregation?: "hex";
 		importedAt?: string | null;
 		attribution?: string;
 	};
