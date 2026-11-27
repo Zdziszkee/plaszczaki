@@ -1,12 +1,18 @@
 import type { ListingDetails, ListingScoreReason } from "#/lib/listing-details";
 import type { ScoreProfile } from "#/lib/listing-filter-types";
+import type { RcnComparables } from "#/lib/rcn-types";
 import { SCORE_PROFILE_LABELS } from "#/lib/score-types";
 import { sourceColor } from "#/lib/source-colors";
+
+export type ListingRcnState =
+	| { status: "loading" }
+	| { status: "error" }
+	| { status: "ready"; data: RcnComparables };
 
 export type ListingDetailsState =
 	| { status: "loading" }
 	| { status: "error" }
-	| { status: "ready"; details: ListingDetails };
+	| { status: "ready"; details: ListingDetails; rcn?: ListingRcnState };
 
 type ListingAttribute = {
 	label: string;
@@ -477,6 +483,53 @@ function attributesHtml(details: ListingDetails): string {
 		.join("")}</dl>`;
 }
 
+function rcnComparablesHtml(state: ListingRcnState | undefined): string {
+	if (!state || state.status === "loading") {
+		return `<section class="listing-popup-section"><h3 class="listing-popup-section-title">Porównanie RCN</h3><div class="listing-popup-loading" role="status"><span class="listing-popup-spinner" aria-hidden="true"></span>Szukam porównywalnych transakcji…</div></section>`;
+	}
+	if (state.status === "error") {
+		return `<section class="listing-popup-section"><h3 class="listing-popup-section-title">Porównanie RCN</h3><p class="listing-popup-muted">Nie udało się pobrać transakcji RCN.</p></section>`;
+	}
+	const data = state.data;
+	if (data.status === "unavailable") {
+		return `<section class="listing-popup-section"><h3 class="listing-popup-section-title">Porównanie RCN</h3><p class="listing-popup-muted">Brak wystarczającej liczby porównywalnych transakcji w okolicy.</p></section>`;
+	}
+	const median = data.weightedPricePerM2Pln ?? data.medianPricePerM2Pln;
+	const low = data.p25PricePerM2Pln;
+	const high = data.p75PricePerM2Pln;
+	const range =
+		low !== null && high !== null
+			? `${formatPln(low)} – ${formatPln(high)}/m²`
+			: "brak przedziału";
+	const samples = data.samples
+		.map(
+			(sample) =>
+				`<li><span>${formatPln(sample.pricePerM2Pln)}/m²</span> · ${numberFormatter.format(sample.areaM2)} m² · ${formatDate(sample.documentDate)} · ${sample.distanceKm.toFixed(1)} km</li>`,
+		)
+		.join("");
+	const imported = data.importedAt ? new Date(data.importedAt) : null;
+	const importedLabel =
+		imported && !Number.isNaN(imported.getTime())
+			? new Intl.DateTimeFormat("pl-PL", { dateStyle: "short" }).format(
+					imported,
+				)
+			: null;
+	const sameAddress =
+		data.sameAddress.length > 0
+			? `<div class="listing-popup-muted">Ten sam adres: ${data.sameAddress.length} wcześniejszych transakcji.</div>`
+			: "";
+	return `<section class="listing-popup-section" aria-labelledby="listing-rcn-title">
+		<h3 id="listing-rcn-title" class="listing-popup-section-title">Porównanie RCN</h3>
+		<div class="listing-popup-rcn-summary"><strong>${median === null ? "—" : `${formatPln(median)}/m²`}</strong><span>mediana ważona · ${data.count} transakcji</span></div>
+		<div class="listing-popup-muted">${escapeHtml(range)} · promień ${data.radiusKm} km · ${data.months} mies.</div>
+		${sameAddress}
+		${samples ? `<ul class="listing-popup-rcn-samples">${samples}</ul>` : ""}
+		${importedLabel ? `<div class="listing-popup-muted">Import RCN: ${escapeHtml(importedLabel)}</div>` : ""}
+		<div class="listing-popup-rcn-source">RCN/GUGiK — ${escapeHtml(data.attribution)}</div>
+		<div class="listing-popup-muted">Dane poglądowe, nie wycena. Cena transakcji może obejmować więcej nieruchomości.</div>
+	</section>`;
+}
+
 /** Popup content for a scraped property listing. */
 export function listingPopupHtml(
 	properties: Record<string, unknown>,
@@ -583,6 +636,8 @@ export function listingPopupHtml(
 			: state.status === "error"
 				? `<div class="listing-popup-error" role="status"><span>Nie udało się pobrać szczegółów.</span><button type="button" class="listing-popup-retry" data-listing-retry>Spróbuj ponownie</button></div>`
 				: `<div class="listing-popup-loading" role="status"><span class="listing-popup-spinner" aria-hidden="true"></span>Ładowanie szczegółów…</div>`;
+	const rcnContent =
+		state.status === "ready" ? rcnComparablesHtml(state.rcn) : "";
 
 	return `<div class="listing-popup">
 		${image}
@@ -593,6 +648,7 @@ export function listingPopupHtml(
 		<div class="listing-popup-title">${escapeHtml(title)}</div>
 		<div class="listing-popup-summary">${details.map(escapeHtml).join(" · ")}</div>
 		${detailContent}
+		${rcnContent}
 		${link}
 	</div>`;
 }

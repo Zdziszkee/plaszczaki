@@ -7,9 +7,32 @@ import {
 } from "#/components/ui/collapsible";
 import {
 	formatScorePoints,
+	type PriceEvidence,
 	type ScoreCategoryCode,
 	type ScoreProfileBreakdown,
 } from "#/lib/score-types";
+
+const CONFIDENCE_LABELS: Record<
+	Exclude<PriceEvidence["confidence"], null>,
+	string
+> = {
+	high: "wysoka",
+	medium: "średnia",
+	low: "niska",
+};
+
+function formatPln(value: number): string {
+	return new Intl.NumberFormat("pl-PL", {
+		style: "currency",
+		currency: "PLN",
+		maximumFractionDigits: 0,
+	}).format(value);
+}
+
+function formatDiscount(value: number): string {
+	const percent = Math.round(Math.abs(value) * 100);
+	return `${percent}% ${value >= 0 ? "poniżej" : "powyżej"}`;
+}
 
 const CATEGORY_ORDER: readonly ScoreCategoryCode[] = [
 	"price",
@@ -48,9 +71,11 @@ function ContributionRow({
 export default function ScoreBreakdown({
 	breakdown,
 	score,
+	priceEvidence,
 }: {
 	breakdown: ScoreProfileBreakdown | null | undefined;
 	score: number;
+	priceEvidence?: PriceEvidence | null;
 }) {
 	if (!breakdown) {
 		return (
@@ -82,6 +107,54 @@ export default function ScoreBreakdown({
 				)}
 				{breakdown.eligible === null && (
 					<Badge variant="outline">Wymagania do potwierdzenia</Badge>
+				)}
+
+				{priceEvidence && (
+					<div className="flex flex-col gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs">
+						<div className="flex items-center justify-between gap-3">
+							<p className="font-medium">Porównanie ceny</p>
+							{priceEvidence.confidence && (
+								<span className="text-muted-foreground">
+									pewność: {CONFIDENCE_LABELS[priceEvidence.confidence]}
+								</span>
+							)}
+						</div>
+						{priceEvidence.listing && (
+							<div className="flex justify-between gap-3 text-muted-foreground">
+								<span>
+									Oferty w promieniu {priceEvidence.listing.radiusKm} km (n=
+									{priceEvidence.listing.count})
+								</span>
+								<span className="shrink-0 font-mono text-foreground">
+									{formatPln(priceEvidence.listing.median)}/m²
+								</span>
+							</div>
+						)}
+						{priceEvidence.rcn && (
+							<div className="flex justify-between gap-3 text-muted-foreground">
+								<span>Transakcje RCN (n={priceEvidence.rcn.count})</span>
+								<span className="shrink-0 font-mono text-foreground">
+									{formatPln(priceEvidence.rcn.median)}/m²
+								</span>
+							</div>
+						)}
+						{priceEvidence.effectiveDiscount !== null && (
+							<div className="flex justify-between gap-3 border-t pt-2">
+								<span className="text-muted-foreground">
+									Użyta przewaga cenowa
+								</span>
+								<span className="shrink-0 font-mono font-medium">
+									{formatDiscount(priceEvidence.effectiveDiscount)}
+								</span>
+							</div>
+						)}
+						{priceEvidence.rcn && (
+							<p className="text-[10px] leading-4 text-muted-foreground">
+								Wykorzystano/opracowano na podstawie materiałów państwowego
+								zasobu geodezyjnego i kartograficznego
+							</p>
+						)}
+					</div>
 				)}
 
 				<ul className="flex flex-col gap-3">

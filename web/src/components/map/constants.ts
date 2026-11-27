@@ -82,6 +82,7 @@ export type LayerToggles = {
 	traffic: boolean;
 	heatmap: boolean;
 	listings: boolean;
+	rcn: boolean;
 	models3d: boolean;
 	contours: boolean;
 	hillshade: boolean;
@@ -101,6 +102,7 @@ export const DEFAULT_TOGGLES: LayerToggles = {
 	traffic: false,
 	heatmap: false,
 	listings: true,
+	rcn: false,
 	models3d: false,
 	contours: true,
 	hillshade: true,
@@ -111,6 +113,7 @@ export const DEFAULT_TOGGLES: LayerToggles = {
 
 export const TOGGLES_STORAGE_KEY = "plaszczaki:map:toggles";
 export const LISTINGS_FILTERS_STORAGE_KEY = "plaszczaki:map:listings-filters";
+export const RCN_FILTERS_STORAGE_KEY = "plaszczaki:map:rcn-filters";
 export const LISTINGS_AGGREGATE_MIN_ZOOM = 10;
 
 export const LAYER_IDS = {
@@ -144,6 +147,9 @@ export const LAYER_IDS = {
 	listingScoreLabel: "listing-score-label",
 	listingAggregate: "listing-aggregate",
 	listingAggregateCount: "listing-aggregate-count",
+	rcnCluster: "rcn-cluster",
+	rcnClusterCount: "rcn-cluster-count",
+	rcnPoint: "rcn-point",
 	trafficCasing: "traffic-casing",
 	trafficLine: "traffic-line",
 	trafficClosed: "traffic-closed",

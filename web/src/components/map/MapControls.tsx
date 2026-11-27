@@ -34,6 +34,7 @@ import type {
 	PostedWithin,
 	ScoreProfile,
 } from "#/lib/listing-filter-types";
+import type { RcnMapFilters } from "#/lib/rcn-types";
 import { SCORE_PROFILE_LABELS } from "#/lib/score-types";
 import { sourceColor } from "#/lib/source-colors";
 import { cn } from "#/lib/utils";
@@ -65,6 +66,7 @@ const OPTIONS: Array<{ key: keyof LayerToggles; label: string; hint: string }> =
 		{ key: "traffic", label: "Ruch drogowy", hint: "Korki (na żywo)" },
 		{ key: "heatmap", label: "Gęstość POI", hint: "Mapa cieplna POI" },
 		{ key: "listings", label: "Oferty", hint: "Mieszkania, domy, działki" },
+		{ key: "rcn", label: "Transakcje RCN", hint: "Historyczne ceny z GUGiK" },
 		{ key: "models3d", label: "Turbiny 3D", hint: "glTF (demo: Margonin)" },
 		{ key: "contours", label: "Warstwice", hint: "Poziomice z etykietami" },
 		{ key: "hillshade", label: "Hillshade", hint: "Cieniowanie rzeźby" },
@@ -108,6 +110,8 @@ export default function MapControls({
 	onChange,
 	filters,
 	onFiltersChange,
+	rcnFilters,
+	onRcnFiltersChange,
 	stats,
 	statsLoading,
 }: {
@@ -115,6 +119,8 @@ export default function MapControls({
 	onChange: (key: keyof LayerToggles, value: boolean) => void;
 	filters: ListingFilters;
 	onFiltersChange: (patch: Partial<ListingFilters> | "reset") => void;
+	rcnFilters: RcnMapFilters;
+	onRcnFiltersChange: (patch: Partial<RcnMapFilters> | "reset") => void;
 	stats: ListingsStats | null;
 	statsLoading: boolean;
 }) {
@@ -445,6 +451,76 @@ export default function MapControls({
 							<SourceLegend stats={stats} />
 						</CardContent>
 					)}
+					{toggles.rcn && (
+						<CardContent className="flex flex-col gap-3 border-t pt-4">
+							<div className="flex items-center justify-between">
+								<span className="text-xs font-medium text-muted-foreground">
+									Filtry RCN
+								</span>
+								<Button
+									variant="ghost"
+									size="xs"
+									onClick={() => onRcnFiltersChange("reset")}
+								>
+									Wyczyść
+								</Button>
+							</div>
+							<label className="flex flex-col gap-1 text-xs">
+								<span className="text-muted-foreground">Nieruchomość</span>
+								<select
+									id="rcn-kind"
+									className={selectClass}
+									value={rcnFilters.kind}
+									onChange={(event) =>
+										onRcnFiltersChange({
+											kind: event.target.value as RcnMapFilters["kind"],
+										})
+									}
+								>
+									<option value="all">Wszystkie</option>
+									<option value="flat">Mieszkania</option>
+									<option value="building">Budynki</option>
+									<option value="plot">Działki</option>
+									<option value="premises">Inne lokale</option>
+								</select>
+							</label>
+							<div className="grid grid-cols-2 gap-2">
+								<label className="flex flex-col gap-1 text-xs">
+									<span className="text-muted-foreground">Rynek</span>
+									<select
+										id="rcn-market"
+										className={selectClass}
+										value={rcnFilters.market}
+										onChange={(event) =>
+											onRcnFiltersChange({
+												market: event.target.value as RcnMapFilters["market"],
+											})
+										}
+									>
+										<option value="all">Wszystkie</option>
+										<option value="secondary">Wtórny</option>
+										<option value="primary">Pierwotny</option>
+									</select>
+								</label>
+								<label className="flex flex-col gap-1 text-xs">
+									<span className="text-muted-foreground">Okres</span>
+									<select
+										id="rcn-months"
+										className={selectClass}
+										value={rcnFilters.months}
+										onChange={(event) =>
+											onRcnFiltersChange({ months: Number(event.target.value) })
+										}
+									>
+										<option value={12}>12 mies.</option>
+										<option value={24}>24 mies.</option>
+										<option value={60}>5 lat</option>
+										<option value={120}>10 lat</option>
+									</select>
+								</label>
+							</div>
+						</CardContent>
+					)}
 					<CardFooter className="shrink-0 flex-col items-start gap-3">
 						<Separator />
 						<span className="text-xs font-medium text-muted-foreground">
@@ -507,6 +583,17 @@ export default function MapControls({
 								className="text-[10px] text-muted-foreground underline-offset-2 hover:underline"
 							>
 								Kolej planowana: dane © OpenStreetMap (ODbL)
+							</a>
+						)}
+						{toggles.rcn && (
+							<a
+								href="https://www.geoportal.gov.pl/pl/dane/rejestr-cen-nieruchomosci-rcn"
+								target="_blank"
+								rel="noreferrer"
+								className="text-[10px] leading-4 text-muted-foreground underline-offset-2 hover:underline"
+							>
+								RCN/GUGiK — Wykorzystano/opracowano na podstawie materiałów
+								państwowego zasobu geodezyjnego i kartograficznego.
 							</a>
 						)}
 					</CardFooter>

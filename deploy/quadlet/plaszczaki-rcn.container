@@ -1,0 +1,29 @@
+[Unit]
+Description=plaszczaki official RCN transaction sync
+
+[Container]
+Image=localhost/plaszczaki-scraper:0.1.0
+ContainerName=plaszczaki-rcn
+Volume=%h/Projects/plaszczaki/data:/data
+EnvironmentFile=%h/.config/plaszczaki/scraper.env
+Environment=HOME=/tmp
+Environment=TZ=Europe/Warsaw
+Environment=PYTHONUNBUFFERED=1
+Environment=DATABASE_URL=/data/plaszczaki.db
+Environment=PLASZCZAKI_CACHE_DIR=/data/cache
+Exec=rcn sync --lock-file /data/cache/rcn.lock
+ReadOnly=true
+Tmpfs=/tmp:size=1g
+ShmSize=1g
+DropCapability=all
+NoNewPrivileges=true
+PidsLimit=512
+Memory=4g
+Network=default
+
+[Service]
+TimeoutStartSec=14400
+Restart=no
+
+[Install]
+WantedBy=default.target

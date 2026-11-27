@@ -5,6 +5,7 @@ import {
 	DEFAULT_TOGGLES,
 	type LayerToggles,
 	LISTINGS_FILTERS_STORAGE_KEY,
+	RCN_FILTERS_STORAGE_KEY,
 	TOGGLES_STORAGE_KEY,
 } from "#/components/map/constants";
 import MapControls from "#/components/map/MapControls";
@@ -16,6 +17,8 @@ import {
 	type ListingFilters,
 	sanitizeListingFilters,
 } from "#/lib/listing-filter-types";
+import { sanitizeRcnFilters } from "#/lib/rcn-filters";
+import { DEFAULT_RCN_FILTERS, type RcnMapFilters } from "#/lib/rcn-types";
 
 // mapbox-gl touches `window` at module load, so it must never be imported
 // during SSR. The dynamic import only runs after mount on the client.
@@ -56,6 +59,9 @@ function MapPage() {
 	const [toggles, setToggles] = useState<LayerToggles>(DEFAULT_TOGGLES);
 	const [filters, setFilters] = useState<ListingFilters>({});
 	const filtersRef = useRef<ListingFilters>({});
+	const [rcnFilters, setRcnFilters] =
+		useState<RcnMapFilters>(DEFAULT_RCN_FILTERS);
+	const rcnFiltersRef = useRef<RcnMapFilters>(DEFAULT_RCN_FILTERS);
 	const { stats, loading: statsLoading } = useListingsStats(filters);
 
 	useEffect(() => {
@@ -74,6 +80,14 @@ function MapPage() {
 				const parsed = sanitizeListingFilters(JSON.parse(rawFilters));
 				filtersRef.current = parsed;
 				setFilters(parsed);
+			}
+			const rawRcnFilters = window.localStorage.getItem(
+				RCN_FILTERS_STORAGE_KEY,
+			);
+			if (rawRcnFilters) {
+				const parsed = sanitizeRcnFilters(JSON.parse(rawRcnFilters));
+				rcnFiltersRef.current = parsed;
+				setRcnFilters(parsed);
 			}
 		} catch {
 			// Storage disabled or malformed: keep the defaults.
@@ -109,6 +123,23 @@ function MapPage() {
 		}
 	};
 
+	const onRcnFiltersChange = (patch: Partial<RcnMapFilters> | "reset") => {
+		const next =
+			patch === "reset"
+				? { ...DEFAULT_RCN_FILTERS }
+				: { ...rcnFiltersRef.current, ...patch };
+		rcnFiltersRef.current = next;
+		setRcnFilters(next);
+		try {
+			window.localStorage.setItem(
+				RCN_FILTERS_STORAGE_KEY,
+				JSON.stringify(next),
+			);
+		} catch {
+			// Not fatal: the filter just won't persist.
+		}
+	};
+
 	return (
 		<div className="fixed inset-0 z-[60] bg-background text-foreground">
 			{mounted ? (
@@ -116,6 +147,7 @@ function MapPage() {
 					<MapView
 						toggles={toggles}
 						filters={filters}
+						rcnFilters={rcnFilters}
 						totalAll={stats?.total ?? 0}
 					/>
 				</Suspense>
@@ -140,6 +172,8 @@ function MapPage() {
 					onChange={onChange}
 					filters={filters}
 					onFiltersChange={onFiltersChange}
+					rcnFilters={rcnFilters}
+					onRcnFiltersChange={onRcnFiltersChange}
 					stats={stats}
 					statsLoading={statsLoading}
 				/>

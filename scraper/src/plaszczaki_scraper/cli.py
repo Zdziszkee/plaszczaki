@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from duckdb import Error as DuckDBError
 
 from plaszczaki_scraper.adapters.registry import build_adapter
 from plaszczaki_scraper.audit import audit_sources
@@ -34,6 +35,9 @@ from plaszczaki_scraper.http import FetchError, HttpClient, user_agent
 from plaszczaki_scraper.llm import LLMConfigError, check_models, models_report
 from plaszczaki_scraper.llm_features import enrich_listings, rerank_top
 from plaszczaki_scraper.probe import probe_sources
+from plaszczaki_scraper.rcn.config import load_rcn_config
+from plaszczaki_scraper.rcn.importer import import_dataset, sync_datasets
+from plaszczaki_scraper.rcn.rcn_db import RcnDatabase
 from plaszczaki_scraper.regions import RegionRegistry
 from plaszczaki_scraper.review import review_sources
 from plaszczaki_scraper.robots import default_cache_dir
@@ -258,6 +262,27 @@ def _parser() -> argparse.ArgumentParser:
     geodata.add_argument("--force", action="store_true", help="ignore cached downloads")
     geodata.add_argument("--rps", type=float, default=1.0)
 
+    rcn = subparsers.add_parser("rcn", help="import and inspect official RCN transactions")
+    rcn_sub = rcn.add_subparsers(dest="rcn_command", required=True)
+    rcn_import = rcn_sub.add_parser("import", help="import one region/layer snapshot")
+    rcn_import.add_argument("--region", help="voivodeship id (default: all configured regions)")
+    rcn_import.add_argument(
+        "--kind",
+        choices=("dzialki", "budynki", "lokale"),
+        help="object layer (default: all layers)",
+    )
+    rcn_import.add_argument("--force", action="store_true", help="ignore ETag and redownload")
+    rcn_import.add_argument(
+        "--dry-run", action="store_true", help="parse and print without writing"
+    )
+    rcn_import.add_argument("--limit", type=int, help="maximum source rows (skips reconciliation)")
+    rcn_import.add_argument("--lock-file", help="override the RCN lock path")
+    rcn_sync = rcn_sub.add_parser("sync", help="sync every configured RCN dataset")
+    rcn_sync.add_argument("--region", help="voivodeship id (default: all configured regions)")
+    rcn_sync.add_argument("--force", action="store_true", help="ignore ETag and redownload")
+    rcn_sync.add_argument("--lock-file", help="override the RCN lock path")
+    rcn_sub.add_parser("status", help="show RCN import freshness and row counts")
+
     subparsers.add_parser("verify-schema", help="check the SQLite schema")
     subparsers.add_parser("list-sources", help="show configured adapters and inventory")
 
@@ -335,6 +360,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_score(args)
         if args.command == "geodata":
             return _cmd_geodata(args)
+        if args.command == "rcn":
+            return _cmd_rcn(args)
         if args.command == "verify-schema":
             return _cmd_verify_schema()
         if args.command == "list-sources":
@@ -351,7 +378,7 @@ def main(argv: list[str] | None = None) -> int:
     except SchemaError as exc:
         print(f"schema error: {exc}", file=sys.stderr)
         return 1
-    except (FetchError, ValueError, LLMConfigError, httpx.HTTPError) as exc:
+    except (FetchError, ValueError, LLMConfigError, httpx.HTTPError, DuckDBError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     return 2
@@ -950,6 +977,61 @@ def _cmd_dedupe(args: argparse.Namespace) -> int:
         db.close()
     print(json.dumps({"updated": updated, **stats}, ensure_ascii=False, indent=2))
     return 0
+
+
+def _cmd_rcn(args: argparse.Namespace) -> int:
+    db = Database(default_database_path())
+    try:
+        db.verify_schema()
+        if args.rcn_command == "status":
+            print(
+                json.dumps(RcnDatabase(db.conn).status(), ensure_ascii=False, indent=2, default=str)
+            )
+            return 0
+
+        regions_config = load_regions_config()
+        selected = _select_regions(regions_config, args.region)
+        region_pairs = [
+            (region_id, regions_config.regions[region_id].teryt) for region_id in selected
+        ]
+        config = load_rcn_config()
+        lock_path = (
+            Path(args.lock_file).expanduser()
+            if args.lock_file
+            else default_cache_dir() / "rcn.lock"
+        )
+        with file_lock(lock_path) as acquired:
+            if not acquired:
+                print("another RCN import is already active; skipping", file=sys.stderr)
+                return 0
+            if args.rcn_command == "sync":
+                report = sync_datasets(db, regions=region_pairs, config=config, force=args.force)
+            else:
+                if args.limit is not None and args.limit < 1:
+                    raise ValueError("--limit must be positive")
+                kinds = (args.kind,) if args.kind else config.object_kinds
+                report = []
+                for region_id, region_teryt in region_pairs:
+                    for kind in kinds:
+                        report.append(
+                            import_dataset(
+                                db,
+                                region_id=region_id,
+                                region_teryt=region_teryt,
+                                source_layer=kind,
+                                config=config,
+                                force=args.force,
+                                dry_run=args.dry_run,
+                                limit=args.limit,
+                                refresh_comparables=False,
+                            )
+                        )
+                if not args.dry_run and any(item["status"] == "ok" for item in report):
+                    RcnDatabase(db.conn).refresh_comparables()
+        print(json.dumps({"results": report}, ensure_ascii=False, indent=2, default=str))
+        return 1 if any(item["status"] == "failed" for item in report) else 0
+    finally:
+        db.close()
 
 
 def _cmd_verify_schema() -> int:

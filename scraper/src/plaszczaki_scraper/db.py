@@ -132,6 +132,91 @@ EXPECTED_SCHEMA: dict[str, set[str]] = {
         "created_at",
         "updated_at",
     },
+    "rcn_import": {
+        "id",
+        "region_id",
+        "object_kind",
+        "source_url",
+        "etag",
+        "last_modified",
+        "file_sha256",
+        "status",
+        "started_at",
+        "finished_at",
+        "source_rows",
+        "imported_rows",
+        "skipped_rows",
+        "error",
+    },
+    "rcn_transaction": {
+        "id",
+        "transaction_key",
+        "county_teryt",
+        "region_id",
+        "iip_namespace",
+        "local_id",
+        "version_at",
+        "designation",
+        "transaction_type",
+        "market",
+        "seller_type",
+        "buyer_type",
+        "gross_price_pln",
+        "vat_pln",
+        "document_ref",
+        "document_date",
+        "document_creator",
+        "property_kind",
+        "right_kind",
+        "share_raw",
+        "share_fraction",
+        "land_area_m2",
+        "property_price_pln",
+        "property_vat_pln",
+        "description",
+        "source_url",
+        "record_hash",
+        "first_seen_at",
+        "last_seen_at",
+    },
+    "rcn_transaction_object": {
+        "id",
+        "transaction_id",
+        "object_key",
+        "region_id",
+        "object_kind",
+        "object_id",
+        "object_number",
+        "address_text",
+        "city",
+        "street",
+        "function_raw",
+        "rooms",
+        "floor",
+        "usable_area_m2",
+        "ancillary_area_m2",
+        "plot_area_m2",
+        "mpzp_purpose",
+        "land_use",
+        "building_type_raw",
+        "object_price_pln",
+        "object_vat_pln",
+        "info",
+        "lat",
+        "lng",
+        "geo_cell_lat",
+        "geo_cell_lng",
+        "source_layer",
+        "source_gid",
+        "comparable_price_pln",
+        "comparable_area_m2",
+        "price_per_m2_pln",
+        "exclusion_reason",
+        "record_hash",
+        "last_seen_import_id",
+        "first_seen_at",
+        "last_seen_at",
+    },
 }
 
 
@@ -716,6 +801,57 @@ class Database:
             sql += " LIMIT ?"
             params.append(limit)
         yield from self.conn.execute(sql, params).fetchall()
+
+    def iter_rcn_score_rows(
+        self,
+        *,
+        document_date_cutoff: str,
+        regions: set[str] | None = None,
+        object_kinds: set[str] | None = None,
+    ) -> Iterable[sqlite3.Row]:
+        """Stream comparables from the latest successful RCN snapshots only."""
+        conditions = [
+            "o.exclusion_reason IS NULL",
+            "o.price_per_m2_pln > 0",
+            "o.comparable_area_m2 > 0",
+            "o.lat IS NOT NULL",
+            "o.lng IS NOT NULL",
+            "t.document_date >= ?",
+        ]
+        params: list[Any] = [document_date_cutoff]
+        if regions:
+            placeholders = ", ".join("?" for _ in regions)
+            conditions.append(f"o.region_id IN ({placeholders})")
+            params.extend(sorted(regions))
+        if object_kinds:
+            placeholders = ", ".join("?" for _ in object_kinds)
+            conditions.append(f"o.object_kind IN ({placeholders})")
+            params.extend(sorted(object_kinds))
+        yield from self.conn.execute(
+            f"""
+            SELECT
+                o.object_key AS key,
+                o.object_kind AS kind,
+                o.lat,
+                o.lng,
+                o.comparable_area_m2 AS area,
+                o.price_per_m2_pln AS ppm,
+                t.market,
+                o.rooms,
+                t.document_date
+            FROM rcn_transaction_object AS o
+            JOIN rcn_transaction AS t ON t.id = o.transaction_id
+            JOIN (
+                SELECT region_id, object_kind, max(id) AS id
+                FROM rcn_import
+                WHERE status = 'ok'
+                GROUP BY region_id, object_kind
+            ) AS latest ON latest.id = o.last_seen_import_id
+            WHERE {" AND ".join(conditions)}
+            ORDER BY o.id
+            """,
+            params,
+        )
 
     def update_scores(self, updates: list[tuple[Any, ...]]) -> int:
         """Persist score, profile, per-profile scores, reasons, breakdown, time, version, id."""

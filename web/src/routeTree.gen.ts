@@ -13,11 +13,14 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as MapRouteImport } from './routes/map'
 import { Route as OfertyRouteImport } from './routes/oferty'
 import { Route as ApiListingsRouteImport } from './routes/api/listings'
+import { Route as ApiRcnRouteImport } from './routes/api/rcn'
 import { Route as ApiSourcesRouteImport } from './routes/api/sources'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiListingsIdRouteImport } from './routes/api/listings/$id'
 import { Route as ApiListingsClustersRouteImport } from './routes/api/listings/clusters'
 import { Route as ApiListingsStatsRouteImport } from './routes/api/listings/stats'
+import { Route as ApiRcnStatusRouteImport } from './routes/api/rcn/status'
+import { Route as ApiListingsIdRcnRouteImport } from './routes/api/listings/$id.rcn'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -37,6 +40,11 @@ const OfertyRoute = OfertyRouteImport.update({
 const ApiListingsRoute = ApiListingsRouteImport.update({
   id: '/api/listings',
   path: '/api/listings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiRcnRoute = ApiRcnRouteImport.update({
+  id: '/api/rcn',
+  path: '/api/rcn',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSourcesRoute = ApiSourcesRouteImport.update({
@@ -64,28 +72,44 @@ const ApiListingsStatsRoute = ApiListingsStatsRouteImport.update({
   path: '/stats',
   getParentRoute: () => ApiListingsRoute,
 } as any)
+const ApiRcnStatusRoute = ApiRcnStatusRouteImport.update({
+  id: '/status',
+  path: '/status',
+  getParentRoute: () => ApiRcnRoute,
+} as any)
+const ApiListingsIdRcnRoute = ApiListingsIdRcnRouteImport.update({
+  id: '/rcn',
+  path: '/rcn',
+  getParentRoute: () => ApiListingsIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/map': typeof MapRoute
   '/oferty': typeof OfertyRoute
   '/api/listings': typeof ApiListingsRouteWithChildren
+  '/api/rcn': typeof ApiRcnRouteWithChildren
   '/api/sources': typeof ApiSourcesRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/api/listings/$id': typeof ApiListingsIdRoute
+  '/api/listings/$id': typeof ApiListingsIdRouteWithChildren
   '/api/listings/clusters': typeof ApiListingsClustersRoute
   '/api/listings/stats': typeof ApiListingsStatsRoute
+  '/api/rcn/status': typeof ApiRcnStatusRoute
+  '/api/listings/$id/rcn': typeof ApiListingsIdRcnRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/map': typeof MapRoute
   '/oferty': typeof OfertyRoute
   '/api/listings': typeof ApiListingsRouteWithChildren
+  '/api/rcn': typeof ApiRcnRouteWithChildren
   '/api/sources': typeof ApiSourcesRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/api/listings/$id': typeof ApiListingsIdRoute
+  '/api/listings/$id': typeof ApiListingsIdRouteWithChildren
   '/api/listings/clusters': typeof ApiListingsClustersRoute
   '/api/listings/stats': typeof ApiListingsStatsRoute
+  '/api/rcn/status': typeof ApiRcnStatusRoute
+  '/api/listings/$id/rcn': typeof ApiListingsIdRcnRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -93,11 +117,14 @@ export interface FileRoutesById {
   '/map': typeof MapRoute
   '/oferty': typeof OfertyRoute
   '/api/listings': typeof ApiListingsRouteWithChildren
+  '/api/rcn': typeof ApiRcnRouteWithChildren
   '/api/sources': typeof ApiSourcesRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/api/listings/$id': typeof ApiListingsIdRoute
+  '/api/listings/$id': typeof ApiListingsIdRouteWithChildren
   '/api/listings/clusters': typeof ApiListingsClustersRoute
   '/api/listings/stats': typeof ApiListingsStatsRoute
+  '/api/rcn/status': typeof ApiRcnStatusRoute
+  '/api/listings/$id/rcn': typeof ApiListingsIdRcnRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -106,33 +133,42 @@ export interface FileRouteTypes {
     | '/map'
     | '/oferty'
     | '/api/listings'
+    | '/api/rcn'
     | '/api/sources'
     | '/api/auth/$'
     | '/api/listings/$id'
     | '/api/listings/clusters'
     | '/api/listings/stats'
+    | '/api/rcn/status'
+    | '/api/listings/$id/rcn'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/map'
     | '/oferty'
     | '/api/listings'
+    | '/api/rcn'
     | '/api/sources'
     | '/api/auth/$'
     | '/api/listings/$id'
     | '/api/listings/clusters'
     | '/api/listings/stats'
+    | '/api/rcn/status'
+    | '/api/listings/$id/rcn'
   id:
     | '__root__'
     | '/'
     | '/map'
     | '/oferty'
     | '/api/listings'
+    | '/api/rcn'
     | '/api/sources'
     | '/api/auth/$'
     | '/api/listings/$id'
     | '/api/listings/clusters'
     | '/api/listings/stats'
+    | '/api/rcn/status'
+    | '/api/listings/$id/rcn'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -140,6 +176,7 @@ export interface RootRouteChildren {
   MapRoute: typeof MapRoute
   OfertyRoute: typeof OfertyRoute
   ApiListingsRoute: typeof ApiListingsRouteWithChildren
+  ApiRcnRoute: typeof ApiRcnRouteWithChildren
   ApiSourcesRoute: typeof ApiSourcesRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -172,6 +209,13 @@ declare module '@tanstack/react-router' {
       path: '/api/listings'
       fullPath: '/api/listings'
       preLoaderRoute: typeof ApiListingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/rcn': {
+      id: '/api/rcn'
+      path: '/api/rcn'
+      fullPath: '/api/rcn'
+      preLoaderRoute: typeof ApiRcnRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/sources': {
@@ -209,17 +253,43 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiListingsStatsRouteImport
       parentRoute: typeof ApiListingsRoute
     }
+    '/api/rcn/status': {
+      id: '/api/rcn/status'
+      path: '/status'
+      fullPath: '/api/rcn/status'
+      preLoaderRoute: typeof ApiRcnStatusRouteImport
+      parentRoute: typeof ApiRcnRoute
+    }
+    '/api/listings/$id/rcn': {
+      id: '/api/listings/$id/rcn'
+      path: '/rcn'
+      fullPath: '/api/listings/$id/rcn'
+      preLoaderRoute: typeof ApiListingsIdRcnRouteImport
+      parentRoute: typeof ApiListingsIdRoute
+    }
   }
 }
 
+interface ApiListingsIdRouteChildren {
+  ApiListingsIdRcnRoute: typeof ApiListingsIdRcnRoute
+}
+
+const ApiListingsIdRouteChildren: ApiListingsIdRouteChildren = {
+  ApiListingsIdRcnRoute: ApiListingsIdRcnRoute,
+}
+
+const ApiListingsIdRouteWithChildren = ApiListingsIdRoute._addFileChildren(
+  ApiListingsIdRouteChildren,
+)
+
 interface ApiListingsRouteChildren {
-  ApiListingsIdRoute: typeof ApiListingsIdRoute
+  ApiListingsIdRoute: typeof ApiListingsIdRouteWithChildren
   ApiListingsClustersRoute: typeof ApiListingsClustersRoute
   ApiListingsStatsRoute: typeof ApiListingsStatsRoute
 }
 
 const ApiListingsRouteChildren: ApiListingsRouteChildren = {
-  ApiListingsIdRoute: ApiListingsIdRoute,
+  ApiListingsIdRoute: ApiListingsIdRouteWithChildren,
   ApiListingsClustersRoute: ApiListingsClustersRoute,
   ApiListingsStatsRoute: ApiListingsStatsRoute,
 }
@@ -228,11 +298,23 @@ const ApiListingsRouteWithChildren = ApiListingsRoute._addFileChildren(
   ApiListingsRouteChildren,
 )
 
+interface ApiRcnRouteChildren {
+  ApiRcnStatusRoute: typeof ApiRcnStatusRoute
+}
+
+const ApiRcnRouteChildren: ApiRcnRouteChildren = {
+  ApiRcnStatusRoute: ApiRcnStatusRoute,
+}
+
+const ApiRcnRouteWithChildren =
+  ApiRcnRoute._addFileChildren(ApiRcnRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   MapRoute: MapRoute,
   OfertyRoute: OfertyRoute,
   ApiListingsRoute: ApiListingsRouteWithChildren,
+  ApiRcnRoute: ApiRcnRouteWithChildren,
   ApiSourcesRoute: ApiSourcesRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

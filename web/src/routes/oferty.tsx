@@ -229,12 +229,20 @@ const getTopOffers = createServerFn({ method: "GET" })
 		const rowsByType = await Promise.all(
 			types.map(async (propertyType) => {
 				const selectedProfile = selections[propertyType];
+				const effectiveDiscount = sql<number>`coalesce(json_extract(${listing.scoreBreakdown}, '$.priceEvidence.effectiveDiscount'), -1)`;
+				const confidenceRank = sql<number>`case json_extract(${listing.scoreBreakdown}, '$.priceEvidence.confidence')
+					when 'high' then 3
+					when 'medium' then 2
+					when 'low' then 1
+					else 0
+				end`;
 				const conditions = [
 					inArray(listing.propertyType, [propertyType]),
 					inArray(listing.offerType, ["sale", "auction"]),
 					gte(listing.firstSeenAt, new Date(start)),
 					lt(listing.firstSeenAt, new Date(end)),
 					isNotNull(listing.score),
+					sql`json_extract(${listing.scoreBreakdown}, '$.priceEvidence.topEligible') = 1`,
 				];
 				let order = desc(listing.score);
 
@@ -247,6 +255,32 @@ const getTopOffers = createServerFn({ method: "GET" })
 					);
 					order = desc(selectedScore);
 				}
+
+				const candidates = await db
+					.select({
+						id: listing.id,
+						canonicalKey: listing.canonicalKey,
+					})
+					.from(listing)
+					.where(and(...conditions))
+					.orderBy(
+						order,
+						desc(effectiveDiscount),
+						desc(confidenceRank),
+						desc(listing.firstSeenAt),
+						desc(listing.id),
+					);
+
+				const seen = new Set<string>();
+				const rankedIds: number[] = [];
+				for (const candidate of candidates) {
+					const key = candidate.canonicalKey ?? `id:${candidate.id}`;
+					if (seen.has(key)) continue;
+					seen.add(key);
+					rankedIds.push(candidate.id);
+					if (rankedIds.length === 25) break;
+				}
+				if (rankedIds.length === 0) return [];
 
 				const rows = await db
 					.select({
@@ -271,52 +305,46 @@ const getTopOffers = createServerFn({ method: "GET" })
 						scoreReasons: listing.scoreReasons,
 						scoreBreakdown: listing.scoreBreakdown,
 						scoreVersion: listing.scoreVersion,
-						firstSeenAt: listing.firstSeenAt,
-						canonicalKey: listing.canonicalKey,
 					})
 					.from(listing)
 					.innerJoin(source, eq(source.id, listing.sourceId))
-					.where(and(...conditions))
-					.orderBy(order, desc(listing.firstSeenAt), desc(listing.id))
-					.limit(200);
+					.where(inArray(listing.id, rankedIds));
+				const rowsById = new Map(rows.map((row) => [row.id, row]));
 
-				const seen = new Set<string>();
-				const offers: TopOffer[] = [];
-				for (const row of rows) {
-					const key = row.canonicalKey ?? `id:${row.id}`;
-					if (seen.has(key)) continue;
-					seen.add(key);
+				return rankedIds.flatMap((id) => {
+					const row = rowsById.get(id);
+					if (!row) return [];
 					const winnerProfile = row.scoreProfile as ScoreProfile | null;
 					const profile = selectedProfile ?? winnerProfile;
 					const score = selectedProfile
 						? (row.scores?.[selectedProfile] ?? 0)
 						: (row.score ?? 0);
-					offers.push({
-						id: row.id,
-						title: row.title ?? "Oferta nieruchomości",
-						url: row.url,
-						sourceLabel: row.sourceLabel,
-						propertyType: row.propertyType as TopPropertyType,
-						offerType: row.offerType,
-						pricePln: row.pricePln,
-						pricePerM2Pln: row.pricePerM2Pln,
-						areaM2: row.areaM2,
-						landAreaM2: row.landAreaM2,
-						rooms: row.rooms,
-						buildYear: row.buildYear,
-						city: row.city,
-						district: row.district,
-						image: row.image?.[0] ?? null,
-						score,
-						scoreProfile: profile,
-						scores: row.scores ?? {},
-						scoreReasons: row.scoreReasons ?? [],
-						scoreBreakdown: row.scoreBreakdown,
-						scoreVersion: row.scoreVersion,
-					});
-					if (offers.length === 25) break;
-				}
-				return offers;
+					return [
+						{
+							id: row.id,
+							title: row.title ?? "Oferta nieruchomości",
+							url: row.url,
+							sourceLabel: row.sourceLabel,
+							propertyType: row.propertyType as TopPropertyType,
+							offerType: row.offerType,
+							pricePln: row.pricePln,
+							pricePerM2Pln: row.pricePerM2Pln,
+							areaM2: row.areaM2,
+							landAreaM2: row.landAreaM2,
+							rooms: row.rooms,
+							buildYear: row.buildYear,
+							city: row.city,
+							district: row.district,
+							image: row.image?.[0] ?? null,
+							score,
+							scoreProfile: profile,
+							scores: row.scores ?? {},
+							scoreReasons: row.scoreReasons ?? [],
+							scoreBreakdown: row.scoreBreakdown,
+							scoreVersion: row.scoreVersion,
+						},
+					];
+				});
 			}),
 		);
 		const today = todayInWarsaw();
@@ -490,7 +518,11 @@ function OfferCard({ offer, rank }: { offer: TopOffer; rank: number }) {
 						))}
 					</ul>
 				)}
-				<ScoreBreakdown breakdown={breakdown} score={offer.score} />
+				<ScoreBreakdown
+					breakdown={breakdown}
+					score={offer.score}
+					priceEvidence={offer.scoreBreakdown?.priceEvidence}
+				/>
 			</CardContent>
 			<CardFooter className="flex-wrap justify-between gap-2 px-4 pt-3 pb-4">
 				<span className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
@@ -563,8 +595,9 @@ function TopOffersPage() {
 						Top 25 ofert dziennie
 					</h1>
 					<p className="max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-						Najlepiej ocenione oferty dodane tego dnia. Mieszkania, domy i
-						działki mają osobne rankingi. Domy i działki możesz oceniać pod
+						Najlepiej ocenione oferty dodane tego dnia, z potwierdzoną przewagą
+						cenową nad podobnymi ofertami lub transakcjami RCN. Mieszkania, domy
+						i działki mają osobne rankingi. Domy i działki możesz oceniać pod
 						Airbnb albo pod bliskość stacji kolejowej.
 					</p>
 					<Button asChild variant="link" className="w-fit px-0">
@@ -666,7 +699,7 @@ function TopOffersPage() {
 								<Card className="border-dashed py-12 text-center">
 									<CardContent className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
 										<Icon className="size-8 opacity-40" />
-										Brak ofert spełniających wybrany profil.
+										Brak ofert spełniających profil i wymagania cenowe.
 									</CardContent>
 								</Card>
 							) : (

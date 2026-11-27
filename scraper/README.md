@@ -86,6 +86,10 @@ uv run python -m plaszczaki_scraper geodata --part elevation
 uv run python -m plaszczaki_scraper score --dry-run
 uv run python -m plaszczaki_scraper score
 uv run python -m plaszczaki_scraper score --pending
+uv run python -m plaszczaki_scraper rcn import --region malopolskie --dry-run --limit 100
+uv run python -m plaszczaki_scraper rcn import --region malopolskie
+uv run python -m plaszczaki_scraper rcn sync
+uv run python -m plaszczaki_scraper rcn status
 uv run python -m plaszczaki_scraper verify-schema
 ```
 
@@ -219,6 +223,29 @@ long, resumable full job. `--mode discover` is diagnostics only and writes
 nothing. `--limit` caps parsed offers per run, `--max-pages` caps discovery per
 query, and `--dry-run` prints records without writing.
 
+## Official RCN transactions
+
+`rcn import` streams the official GUGiK GeoParquet exports into dedicated
+`rcn_transaction` / `rcn_transaction_object` tables. It does not create listing
+rows. The six Małopolskie/Śląskie files are cached under `data/cache/rcn/` and
+checked with ETag/Last-Modified; unchanged files are skipped. Imports are
+idempotent, reconcile removed objects only after a complete successful snapshot,
+and derive conservative comparable prices without splitting multi-property
+transaction prices.
+
+```bash
+uv run python -m plaszczaki_scraper rcn import --region malopolskie --kind lokale --dry-run --limit 100
+uv run python -m plaszczaki_scraper rcn import --region malopolskie
+uv run python -m plaszczaki_scraper rcn import --region slaskie
+uv run python -m plaszczaki_scraper rcn sync
+uv run python -m plaszczaki_scraper rcn status
+```
+
+`plaszczaki-rcn.timer` runs `rcn sync` daily. Records without geometry remain in
+the database but are excluded from map/comparable queries. The required reuse
+notice is: „Wykorzystano/opracowano na podstawie materiałów państwowego zasobu
+geodezyjnego i kartograficznego”.
+
 ## Configuration
 
 - `config/sources.json` — the single config file: `defaults.rps` (rate fallback)
@@ -233,6 +260,8 @@ query, and `--dry-run` prints records without writing.
   or `defer` to stop instead of sleeping). Parked sources keep only the catalog
   fields.
 - `config/regions.json` — Małopolskie/Śląskie, TERYT codes, bboxes and place lists.
+- `config/rcn.json` — official RCN export URL pattern, object layers, streaming
+  batch size, spatial grid and comparable-sale defaults.
 
 `PLASZCZAKI_CONFIG_DIR` overrides the config directory and
 `PLASZCZAKI_SOURCES_CONFIG` points directly at a `sources.json` file.
@@ -267,12 +296,14 @@ explanations. Every profile has an explicit 100-point budget in
 are scaled to that budget. `score_breakdown` stores all contributions, penalties,
 caps, eligibility and missing-data notes needed to reconstruct the final score.
 
-Inputs include canonical attributes, listing text, local price quantiles and
-distance-weighted comparable sales from this database, auction discounts,
-days on market, price cuts, gross rental yield, GTFS rail service, BDOT10k
-forest/water data, OSM POIs, mountain regions and the map's planned-rail snapshots.
-Changed listings are invalidated automatically and rescored by `watch`, `run`
-and `run-all`; use `score --pending` for a manual catch-up.
+Inputs include canonical attributes, listing text, local price quantiles, matched
+nearby asking prices and comparable transactions from the latest successful RCN
+snapshots, auction discounts, days on market, price cuts, gross rental yield, GTFS
+rail service, BDOT10k forest/water data, OSM POIs, mountain regions and the map's
+planned-rail snapshots. `score_breakdown.priceEvidence` stores both benchmarks,
+their counts/radii/confidence and the conservative effective discount used by the
+score. Changed listings are invalidated automatically and rescored by `watch`,
+`run` and `run-all`; use `score --pending` for a manual catch-up.
 
 `geodata` refreshes the open-data cache under `data/cache/`. GTFS comes from
 PolishTrainsGTFS (PolRegio, PKP Intercity, Koleje Śląskie/Małopolskie and other
@@ -285,10 +316,12 @@ OpenCode Go `-free` model and caches them in `llm_job`. `llm rerank` re-ranks th
 deterministic shortlist using the user's preference profile. No model training
 is performed. Set `OPENCODE_API_KEY` to enable these optional commands.
 
-The web app exposes the score in map popups and filters, and `/oferty` shows the
-top 25 scored sale/auction offers first seen each day in three columns:
-apartments, houses and plots. Houses and plots can be ranked independently for
-Airbnb or rail proximity, and every card exposes its full score breakdown.
+The web app exposes the score in map popups and filters, and `/oferty` shows up to
+25 sale/auction offers first seen each day in three columns: apartments, houses and
+plots. Only offers with matched nearby listings and a verified positive price
+advantage qualify; when RCN is available, the smaller of the listing and RCN
+discounts is used. Houses and plots can be ranked independently for Airbnb or rail
+proximity, and every card exposes its full score and price-evidence breakdown.
 
 ## LLM lane
 

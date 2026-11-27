@@ -17,6 +17,8 @@ SCRAPER_UNIT=plaszczaki-scraper.service
 SCRAPER_TIMER=plaszczaki-scraper.timer
 FULL_UNIT=plaszczaki-full.service
 FULL_TIMER=plaszczaki-full.timer
+RCN_UNIT=plaszczaki-rcn.service
+RCN_TIMER=plaszczaki-rcn.timer
 REVIEW_TIMER=plaszczaki-review.timer
 
 log() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
@@ -76,7 +78,8 @@ EOF
 stop_services() {
 	log "stopping $WEB_UNIT and $SCRAPER_UNIT"
 	systemctl --user stop \
-		"$WEB_UNIT" "$SCRAPER_UNIT" "$SCRAPER_TIMER" "$FULL_UNIT" "$FULL_TIMER" "$REVIEW_TIMER" \
+		"$WEB_UNIT" "$SCRAPER_UNIT" "$SCRAPER_TIMER" "$FULL_UNIT" "$FULL_TIMER" \
+		"$RCN_UNIT" "$RCN_TIMER" "$REVIEW_TIMER" \
 		2>/dev/null || true
 }
 
@@ -128,6 +131,9 @@ start_services() {
 	log "enabling $FULL_TIMER (nightly non-incremental full pass)"
 	systemctl --user enable --now "$FULL_TIMER"
 
+	log "enabling $RCN_TIMER (daily official RCN sync)"
+	systemctl --user enable --now "$RCN_TIMER"
+
 	log "enabling $REVIEW_TIMER (monthly parked-source review)"
 	systemctl --user enable --now "$REVIEW_TIMER"
 }
@@ -146,6 +152,9 @@ print_status() {
 	systemctl --user show "$FULL_TIMER" -p ActiveState -p SubState -p NextElapseUSecRealtime --value 2>/dev/null |
 		paste -sd' ' - |
 		awk '{printf "\033[1mfull-pass timer:\033[0m %s\n", $0}'
+	systemctl --user show "$RCN_TIMER" -p ActiveState -p SubState -p NextElapseUSecRealtime --value 2>/dev/null |
+		paste -sd' ' - |
+		awk '{printf "\033[1mRCN timer:\033[0m %s\n", $0}'
 	podman ps -a --filter name=plaszczaki --format '  {{.Names}}  {{.Status}}  {{.Ports}}' || true
 	local code
 	code=$(curl -fsS -o /dev/null -w '%{http_code}' http://localhost:3000/ 2>/dev/null || true)

@@ -1,0 +1,23 @@
+{
+	"source_page": "https://www.geoportal.gov.pl/pl/dane/rejestr-cen-nieruchomosci-rcn",
+	"export_url": "https://opendata.geoportal.gov.pl/InneDane/latest_exports/rcn_transakcje_ceny/PARQUET/{region}_transakcje_ceny_{kind}.parquet",
+	"object_kinds": ["dzialki", "budynki", "lokale"],
+	"batch_rows": 5000,
+	"grid_degrees": 0.02,
+	"request_timeout_seconds": 900,
+	"attribution": "Wykorzystano/opracowano na podstawie materiałów państwowego zasobu geodezyjnego i kartograficznego",
+	"comparables": {
+		"months": 24,
+		"minimum_count": 5,
+		"maximum_count": 30,
+		"sample_count": 5,
+		"radii_km": {
+			"flat": [1.0, 2.5, 5.0],
+			"house": [2.0, 4.0, 5.0],
+			"plot": [2.0, 4.0, 5.0]
+		},
+		"area_ratio": [0.7, 1.4],
+		"plot_area_ratio": [0.5, 2.0],
+		"rooms_delta": 1
+	}
+}

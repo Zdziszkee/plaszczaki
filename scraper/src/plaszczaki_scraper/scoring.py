@@ -12,6 +12,7 @@ price cuts, and gross rental yield.
 
 from __future__ import annotations
 
+import calendar
 import json
 import logging
 import math
@@ -19,9 +20,11 @@ import sqlite3
 import statistics
 import time
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from plaszczaki_scraper.config import repo_root
 from plaszczaki_scraper.geodata import GeoContext, haversine_km
@@ -156,6 +159,81 @@ class Comparable:
     area: float
     ppm: float
     building_type: str
+    market: str | None = None
+    rooms: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RcnComparable:
+    key: str
+    lat: float
+    lng: float
+    area: float
+    ppm: float
+    market: str | None
+    rooms: int | None
+    document_date: date
+
+
+@dataclass(frozen=True, slots=True)
+class ComparableSummary:
+    median: float
+    p25: float
+    p75: float
+    count: int
+    radius_km: float
+    confidence: str
+
+
+@dataclass(frozen=True, slots=True)
+class PriceEvidence:
+    listing: ComparableSummary | None
+    rcn: ComparableSummary | None
+    baseline: PriceBaseline | None
+    benchmark: float | None
+    benchmark_source: str | None
+    discount: float | None
+    effective_discount: float | None
+    confidence: str | None
+    overpriced: bool
+    top_eligible: bool
+
+    def as_json(self) -> dict[str, Any]:
+        return {
+            "listing": _summary_json(self.listing),
+            "rcn": _summary_json(self.rcn),
+            "baseline": (
+                {
+                    "low": self.baseline.low,
+                    "median": self.baseline.median,
+                    "high": self.baseline.high,
+                    "count": self.baseline.count,
+                    "level": self.baseline.level,
+                }
+                if self.baseline is not None
+                else None
+            ),
+            "benchmark": self.benchmark,
+            "benchmarkSource": self.benchmark_source,
+            "discount": self.discount,
+            "effectiveDiscount": self.effective_discount,
+            "confidence": self.confidence,
+            "overpriced": self.overpriced,
+            "topEligible": self.top_eligible,
+        }
+
+
+def _summary_json(summary: ComparableSummary | None) -> dict[str, Any] | None:
+    if summary is None:
+        return None
+    return {
+        "median": summary.median,
+        "p25": summary.p25,
+        "p75": summary.p75,
+        "count": summary.count,
+        "radiusKm": summary.radius_km,
+        "confidence": summary.confidence,
+    }
 
 
 @dataclass(slots=True)
@@ -353,17 +431,104 @@ def _quantile(values: list[float], fraction: float) -> float:
     return ordered[low] + (ordered[high] - ordered[low]) * (position - low)
 
 
+def _months_ago(months: int) -> str:
+    today = date.today()
+    year, month_zero = divmod(today.year * 12 + today.month - 1 - months, 12)
+    month = month_zero + 1
+    day = min(today.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day).isoformat()
+
+
+def _quantile_entries(
+    entries: list[tuple[float, str]], fraction: float, skip_index: int | None = None
+) -> float:
+    count = len(entries) - (1 if skip_index is not None else 0)
+    if count <= 0:
+        return 0.0
+    position = (count - 1) * fraction
+    low = math.floor(position)
+    high = math.ceil(position)
+
+    def value_at(index: int) -> float:
+        if skip_index is not None and index >= skip_index:
+            index += 1
+        return entries[index][0]
+
+    if low == high:
+        return value_at(low)
+    weight = position - low
+    return value_at(low) * (1.0 - weight) + value_at(high) * weight
+
+
+def _weighted_median(candidates: list[tuple[float, float, float]]) -> float | None:
+    weighted = sorted(((ppm, weight) for _, ppm, weight in candidates), key=lambda item: item[0])
+    total = sum(weight for _, weight in weighted)
+    if total <= 0:
+        return None
+    cumulative = 0.0
+    for ppm, weight in weighted:
+        cumulative += weight
+        if cumulative >= total / 2:
+            return ppm
+    return weighted[-1][0]
+
+
+def _remove_price_outliers(
+    candidates: list[tuple[float, float, float]],
+) -> list[tuple[float, float, float]]:
+    if len(candidates) < 8:
+        return candidates
+    values = [ppm for _, ppm, _ in candidates]
+    q1 = _quantile(values, 0.25)
+    q3 = _quantile(values, 0.75)
+    spread = q3 - q1
+    if spread <= 0:
+        return candidates
+    lower = q1 - spread * 1.5
+    upper = q3 + spread * 1.5
+    return [candidate for candidate in candidates if lower <= candidate[1] <= upper]
+
+
+def _market(row: sqlite3.Row) -> str | None:
+    value = _text(row, "market")
+    return value if value in {"primary", "secondary"} else None
+
+
+def _rooms(row: sqlite3.Row, column: str = "rooms") -> int | None:
+    value = _number(row, column)
+    return round(value) if value is not None else None
+
+
+def _area_ratio(property_type: str, config: dict[str, Any]) -> tuple[float, float]:
+    key = "plot_area_ratio" if property_type == "plot" else "area_ratio"
+    low, high = config.get(key, [0.7, 1.4])
+    return float(low), float(high)
+
+
+def _confidence(count: int, radius_km: float, minimum_count: int) -> str:
+    if count >= 10 and radius_km <= 2.5:
+        return "high"
+    return "medium" if count >= minimum_count else "low"
+
+
 class PriceModel:
-    """Hierarchical local price quantiles + training-free comparable sales."""
+    """Hierarchical baselines plus matched nearby asks and RCN transactions."""
 
     COMP_CELL = 0.02  # ~2.2 km; avoids scanning whole city blocks for every offer.
+    CONFIDENCE_RANK: ClassVar[dict[str, int]] = {"low": 1, "medium": 2, "high": 3}
 
     def __init__(self, rows: list[sqlite3.Row]) -> None:
-        self.groups: dict[tuple[str, str, str], list[float]] = defaultdict(list)
+        self.groups: dict[tuple[str, str, str], list[tuple[float, str]]] = defaultdict(list)
         self.comps: dict[str, list[Comparable]] = defaultdict(list)
         self.comp_index: dict[str, dict[tuple[int, int], list[int]]] = defaultdict(
             lambda: defaultdict(list)
         )
+        self.rcn_comps: dict[str, list[RcnComparable]] = defaultdict(list)
+        self.rcn_index: dict[str, dict[tuple[int, int], list[int]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
+        self._evidence_cache: dict[str, PriceEvidence] = {}
+        self._today = date.today()
         seen: set[str] = set()
         for row in rows:
             value = _ppm(row)
@@ -394,24 +559,78 @@ class PriceModel:
                 if district and district != city:
                     group_keys.add((property_type, city, district))
             for group in group_keys:
-                self.groups[group].append(value)
+                self.groups[group].append((value, dedupe_key))
             lat, lng, area = _number(row, "lat"), _number(row, "lng"), _area(row)
             if lat is not None and lng is not None and area is not None:
                 index = len(self.comps[property_type])
                 self.comps[property_type].append(
-                    Comparable(key, lat, lng, area, value, _building_type(row))
+                    Comparable(
+                        key,
+                        lat,
+                        lng,
+                        area,
+                        value,
+                        _building_type(row),
+                        _market(row),
+                        _rooms(row),
+                    )
                 )
                 cell = (int(lat // self.COMP_CELL), int(lng // self.COMP_CELL))
                 self.comp_index[property_type][cell].append(index)
 
+        self.group_entries = {key: sorted(values) for key, values in self.groups.items()}
+        self.group_positions = {
+            key: {member: index for index, (_, member) in enumerate(values)}
+            for key, values in self.group_entries.items()
+        }
         self.quantiles: dict[tuple[str, str, str], tuple[float, float, float, int]] = {}
-        for key, values in self.groups.items():
+        for key, values in self.group_entries.items():
+            plain = [value for value, _ in values]
             self.quantiles[key] = (
-                _quantile(values, 0.25),
-                _quantile(values, 0.5),
-                _quantile(values, 0.75),
-                len(values),
+                _quantile(plain, 0.25),
+                _quantile(plain, 0.5),
+                _quantile(plain, 0.75),
+                len(plain),
             )
+
+    def load_rcn(self, rows: Iterable[sqlite3.Row]) -> int:
+        loaded = 0
+        for row in rows:
+            kind = _text(row, "kind")
+            lat, lng = _number(row, "lat"), _number(row, "lng")
+            area, ppm = _number(row, "area"), _number(row, "ppm")
+            try:
+                document_date = date.fromisoformat(_text(row, "document_date"))
+            except ValueError:
+                continue
+            if (
+                kind not in {"flat", "building", "plot"}
+                or lat is None
+                or lng is None
+                or area is None
+                or area <= 0
+                or ppm is None
+                or ppm <= 0
+            ):
+                continue
+            index = len(self.rcn_comps[kind])
+            self.rcn_comps[kind].append(
+                RcnComparable(
+                    _text(row, "key"),
+                    lat,
+                    lng,
+                    area,
+                    ppm,
+                    _market(row),
+                    _rooms(row),
+                    document_date,
+                )
+            )
+            cell = (int(lat // self.COMP_CELL), int(lng // self.COMP_CELL))
+            self.rcn_index[kind][cell].append(index)
+            loaded += 1
+        self._evidence_cache.clear()
+        return loaded
 
     def baseline(self, row: sqlite3.Row) -> PriceBaseline | None:
         property_type = _text(row, "property_type")
@@ -419,6 +638,8 @@ class PriceModel:
         district = normalize_text(_text(row, "district"))
         county = normalize_text(_text(row, "county"))
         voivodeship = normalize_text(_text(row, "voivodeship"))
+        source_key = row["canonical_key"] or f"{row['source_id']}:{row['external_id']}"
+        member = f"{property_type}:{source_key}"
         candidates: list[tuple[tuple[str, str, str], int, str]] = []
         if city and district and district != city:
             candidates.append(((property_type, city, district), 8, "dzielnica"))
@@ -430,53 +651,241 @@ class PriceModel:
             candidates.append(((property_type, voivodeship, ""), 25, "województwo"))
         candidates.append(((property_type, "", ""), 20, "kraj"))
         for key, minimum, level in candidates:
-            stats = self.quantiles.get(key)
-            if stats is not None and stats[3] >= minimum:
-                return PriceBaseline(stats[0], stats[1], stats[2], stats[3], level)
+            entries = self.group_entries.get(key)
+            if entries is None:
+                continue
+            skip = self.group_positions[key].get(member)
+            count = len(entries) - (1 if skip is not None else 0)
+            if count < minimum:
+                continue
+            return PriceBaseline(
+                _quantile_entries(entries, 0.25, skip),
+                _quantile_entries(entries, 0.5, skip),
+                _quantile_entries(entries, 0.75, skip),
+                count,
+                level,
+            )
         return None
 
-    def comparable(self, row: sqlite3.Row, config: dict[str, Any]) -> tuple[float | None, int]:
+    def _listing_candidates(
+        self, row: sqlite3.Row, radius_km: float, config: dict[str, Any]
+    ) -> list[tuple[float, float, float]]:
         property_type = _text(row, "property_type")
-        lat, lng, area, value = _number(row, "lat"), _number(row, "lng"), _area(row), _ppm(row)
-        if lat is None or lng is None or area is None or value is None:
-            return None, 0
-        radius = float(config.get("radius_km", 2.5))
-        ratio_low, ratio_high = config.get("area_ratio", [0.7, 1.4])
+        lat, lng, area = _number(row, "lat"), _number(row, "lng"), _area(row)
+        if lat is None or lng is None or area is None:
+            return []
+        ratio_low, ratio_high = _area_ratio(property_type, config)
         candidates: list[tuple[float, float, float]] = []
         cx, cy = int(lat // self.COMP_CELL), int(lng // self.COMP_CELL)
         cells = self.comp_index[property_type]
         source_key = row["canonical_key"] or f"{row['source_id']}:{row['external_id']}"
         own_type = _building_type(row)
-        span = max(1, math.ceil(radius / (self.COMP_CELL * 111.0)))
+        own_market = _market(row)
+        own_rooms = _rooms(row)
+        span = max(1, math.ceil(radius_km / (self.COMP_CELL * 111.0)))
         for dx in range(-span, span + 1):
             for dy in range(-span, span + 1):
                 for index in cells.get((cx + dx, cy + dy), []):
                     candidate = self.comps[property_type][index]
                     if candidate.key == source_key:
                         continue
-                    if not (ratio_low <= candidate.area / area <= ratio_high):
+                    if own_market is not None and candidate.market != own_market:
+                        continue
+                    ratio = candidate.area / area
+                    if not (ratio_low <= ratio <= ratio_high):
                         continue
                     distance = haversine_km(lat, lng, candidate.lat, candidate.lng)
-                    if distance > radius:
+                    if distance > radius_km:
                         continue
-                    similarity = 1.0
+                    similarity = 1.0 - min(0.25, abs(ratio - 1.0) * 0.5)
                     if own_type and candidate.building_type and own_type != candidate.building_type:
                         similarity *= 0.75
+                    if property_type == "flat" and own_rooms is not None:
+                        if candidate.rooms is None:
+                            similarity *= 0.85
+                        elif abs(candidate.rooms - own_rooms) > 1:
+                            continue
                     weight = (1.0 / (1.0 + distance)) * similarity
                     candidates.append((distance, candidate.ppm, weight))
-        if len(candidates) < int(config.get("min_count", 5)):
+        return candidates
+
+    def _rcn_candidates(
+        self, row: sqlite3.Row, radius_km: float, config: dict[str, Any]
+    ) -> list[tuple[float, float, float]]:
+        property_type = _text(row, "property_type")
+        kind = {"flat": "flat", "house": "building", "plot": "plot"}.get(property_type)
+        lat, lng, area = _number(row, "lat"), _number(row, "lng"), _area(row)
+        if kind is None or lat is None or lng is None or area is None:
+            return []
+        ratio_low, ratio_high = _area_ratio(property_type, config)
+        candidates: list[tuple[float, float, float]] = []
+        cx, cy = int(lat // self.COMP_CELL), int(lng // self.COMP_CELL)
+        cells = self.rcn_index[kind]
+        own_market = _market(row)
+        own_rooms = _rooms(row)
+        span = max(1, math.ceil(radius_km / (self.COMP_CELL * 111.0)))
+        for dx in range(-span, span + 1):
+            for dy in range(-span, span + 1):
+                for index in cells.get((cx + dx, cy + dy), []):
+                    candidate = self.rcn_comps[kind][index]
+                    if own_market is not None and candidate.market != own_market:
+                        continue
+                    ratio = candidate.area / area
+                    if not (ratio_low <= ratio <= ratio_high):
+                        continue
+                    distance = haversine_km(lat, lng, candidate.lat, candidate.lng)
+                    if distance > radius_km:
+                        continue
+                    similarity = 1.0 - min(0.25, abs(ratio - 1.0) * 0.5)
+                    if kind == "flat" and own_rooms is not None:
+                        if candidate.rooms is None:
+                            similarity *= 0.85
+                        elif abs(candidate.rooms - own_rooms) > int(config.get("rooms_delta", 1)):
+                            continue
+                    age_days = max(0, (self._today - candidate.document_date).days)
+                    recency = math.exp(-age_days / 730.0)
+                    weight = (1.0 / (1.0 + distance)) * similarity * recency
+                    candidates.append((distance, candidate.ppm, weight))
+        return candidates
+
+    @staticmethod
+    def _summary(
+        candidates: list[tuple[float, float, float]],
+        *,
+        radius_km: float,
+        minimum_count: int,
+        maximum_count: int,
+    ) -> ComparableSummary | None:
+        candidates = _remove_price_outliers(candidates)
+        if len(candidates) < minimum_count:
+            return None
+        selected = sorted(candidates, key=lambda item: item[2], reverse=True)[:maximum_count]
+        median = _weighted_median(selected)
+        if median is None:
+            return None
+        values = [ppm for _, ppm, _ in selected]
+        return ComparableSummary(
+            median,
+            _quantile(values, 0.25),
+            _quantile(values, 0.75),
+            len(selected),
+            radius_km,
+            _confidence(len(selected), radius_km, minimum_count),
+        )
+
+    def listing_summary(self, row: sqlite3.Row, config: dict[str, Any]) -> ComparableSummary | None:
+        minimum_count = int(config.get("min_count", 5))
+        maximum_count = int(config.get("max_count", 30))
+        radii = config.get("radii_km", [1.0, float(config.get("radius_km", 2.5)), 5.0])
+        for radius in radii:
+            summary = self._summary(
+                self._listing_candidates(row, float(radius), config),
+                radius_km=float(radius),
+                minimum_count=minimum_count,
+                maximum_count=maximum_count,
+            )
+            if summary is not None:
+                return summary
+        return None
+
+    def rcn_summary(self, row: sqlite3.Row, config: dict[str, Any]) -> ComparableSummary | None:
+        kind = {"flat": "flat", "house": "building", "plot": "plot"}.get(
+            _text(row, "property_type")
+        )
+        if kind is None:
+            return None
+        minimum_count = int(config.get("min_count", 5))
+        maximum_count = int(config.get("max_count", 30))
+        radii = config.get("radii_km", {}).get(kind, [1.0, 2.5, 5.0])
+        for radius in radii:
+            summary = self._summary(
+                self._rcn_candidates(row, float(radius), config),
+                radius_km=float(radius),
+                minimum_count=minimum_count,
+                maximum_count=maximum_count,
+            )
+            if summary is not None:
+                return summary
+        return None
+
+    def comparable(self, row: sqlite3.Row, config: dict[str, Any]) -> tuple[float | None, int]:
+        candidates = self._listing_candidates(row, float(config.get("radius_km", 2.5)), config)
+        minimum_count = int(config.get("min_count", 5))
+        if len(candidates) < minimum_count:
             return None, len(candidates)
-        selected = sorted(candidates, key=lambda item: item[2], reverse=True)[:30]
-        weighted = sorted(((ppm, weight) for _, ppm, weight in selected), key=lambda item: item[0])
-        total = sum(weight for _, weight in weighted)
-        if total <= 0:
-            return None, len(selected)
-        cumulative = 0.0
-        for ppm, weight in weighted:
-            cumulative += weight
-            if cumulative >= total / 2:
-                return ppm, len(selected)
-        return weighted[-1][0], len(selected)
+        selected = sorted(candidates, key=lambda item: item[2], reverse=True)[
+            : int(config.get("max_count", 30))
+        ]
+        return _weighted_median(selected), len(selected)
+
+    def evidence(
+        self,
+        row: sqlite3.Row,
+        comps_config: dict[str, Any],
+        rcn_config: dict[str, Any],
+        value_config: dict[str, Any],
+    ) -> PriceEvidence:
+        source_key = row["canonical_key"] or f"{row['source_id']}:{row['external_id']}"
+        cache_key = f"{_text(row, 'property_type')}:{source_key}"
+        cached = self._evidence_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        listing = self.listing_summary(row, comps_config)
+        rcn = self.rcn_summary(row, rcn_config)
+        baseline = self.baseline(row)
+        value = _ppm(row)
+        listing_discount = (
+            (listing.median - value) / listing.median
+            if listing is not None and value is not None
+            else None
+        )
+        rcn_discount = (
+            (rcn.median - value) / rcn.median if rcn is not None and value is not None else None
+        )
+        discounts = [item for item in (listing_discount, rcn_discount) if item is not None]
+        effective_discount = min(discounts) if discounts else None
+        if rcn is not None:
+            benchmark, source = rcn.median, "rcn"
+        elif listing is not None:
+            benchmark, source = listing.median, "listings"
+        elif baseline is not None:
+            benchmark, source = baseline.median, "baseline"
+        else:
+            benchmark, source = None, None
+        discount = (
+            (benchmark - value) / benchmark if benchmark is not None and value is not None else None
+        )
+        confidences = [item.confidence for item in (rcn, listing) if item is not None]
+        confidence = (
+            min(confidences, key=lambda item: self.CONFIDENCE_RANK[item])
+            if len(confidences) == 2
+            else max(confidences, key=lambda item: self.CONFIDENCE_RANK[item])
+            if confidences
+            else None
+        )
+        overpriced = effective_discount is not None and effective_discount < -float(
+            value_config["overpriced_threshold"]
+        )
+        top_eligible = (
+            listing is not None
+            and effective_discount is not None
+            and effective_discount >= float(value_config["top_min_discount"])
+            and not overpriced
+        )
+        evidence = PriceEvidence(
+            listing,
+            rcn,
+            baseline,
+            benchmark,
+            source,
+            discount,
+            effective_discount,
+            confidence,
+            overpriced,
+            top_eligible,
+        )
+        self._evidence_cache[cache_key] = evidence
+        return evidence
 
 
 def _median_sorted(values: list[float]) -> float:
@@ -626,39 +1035,68 @@ def _price_signal(
     if budget <= 0:
         return
     value = _ppm(row)
-    baseline = prices.baseline(row)
-    if value is None or baseline is None or not _sale(row):
+    evidence = prices.evidence(row, config["comps"], config["rcn"], config["value"])
+    if value is None or not _sale(row):
         parts.add_missing("brak lokalnego punktu odniesienia dla ceny")
         return
 
-    quantile_max = round(budget * 0.7, 1)
+    value_config = config["value"]
+    quantile_max = round(budget * float(value_config["quantile_share"]), 1)
     comparable_max = round(budget - quantile_max, 1)
-    factor = _price_factor(value, baseline)
-    parts.add(
-        "price_quantile",
-        _price_label(value, baseline),
-        quantile_max * factor,
-        category="price",
-        max_points=quantile_max,
-        source="database",
-        keep_zero=True,
-    )
+    if evidence.baseline is not None:
+        factor = _price_factor(value, evidence.baseline)
+        parts.add(
+            "price_quantile",
+            _price_label(value, evidence.baseline),
+            quantile_max * factor,
+            category="price",
+            max_points=quantile_max,
+            source="database",
+            keep_zero=True,
+        )
+    else:
+        parts.add_missing("brak lokalnego kwantyla ceny")
 
-    comparable, count = prices.comparable(row, config["comps"])
-    if comparable is None or count < int(config["comps"].get("min_count", 5)):
+    if evidence.listing is None or evidence.effective_discount is None:
+        count = evidence.rcn.count if evidence.rcn is not None else 0
         parts.add_missing(f"za mało podobnych ofert do porównania ceny ({count})")
         return
-    discount = (comparable - value) / comparable
-    comparable_factor = _clamp((discount - 0.05) / 0.25)
+
+    zero_discount = float(value_config["zero_discount"])
+    full_discount = float(value_config["full_discount"])
+    comparable_factor = _clamp(
+        (evidence.effective_discount - zero_discount) / (full_discount - zero_discount)
+    )
+    source = "rcn" if evidence.rcn is not None else "database"
+    benchmark_label = (
+        f"RCN n={evidence.rcn.count}"
+        if evidence.rcn is not None
+        else f"ofert n={evidence.listing.count}"
+    )
     parts.add(
         "comparable_discount",
-        f"{max(0.0, round(discount * 100))}% poniżej mediany {count} podobnych ofert",
+        f"{max(0.0, round(evidence.effective_discount * 100))}% poniżej mediany {benchmark_label}",
         comparable_max * comparable_factor,
         category="price",
         max_points=comparable_max,
-        source="database",
+        source=source,
         keep_zero=True,
     )
+
+    if evidence.overpriced:
+        parts.add(
+            "overpriced",
+            f"cena o ponad {round(float(value_config['overpriced_threshold']) * 100)}% "
+            "powyżej mediany podobnych ofert / transakcji",
+            -float(value_config["overpriced_penalty"]),
+            category="penalty",
+            max_points=0.0,
+            source=source,
+        )
+        cap = float(value_config["overpriced_cap"])
+        if parts.cap is None or cap < parts.cap:
+            parts.cap = cap
+            parts.cap_label = "limit dla ceny powyżej rynku"
 
 
 def _opportunity_signal(
@@ -1555,7 +1993,12 @@ def score_row(
             "other",
             {},
             [],
-            {"version": str(config["version"]), "winner": "other", "profiles": {}},
+            {
+                "version": str(config["version"]),
+                "winner": "other",
+                "profiles": {},
+                "priceEvidence": None,
+            },
         )
     signals = _geo_signals(row, config, geo)
     profiles: list[ScoreParts]
@@ -1583,6 +2026,9 @@ def score_row(
         "version": str(config["version"]),
         "winner": winner.profile,
         "profiles": {parts.profile: parts.to_json(value) for parts, value in scored},
+        "priceEvidence": prices.evidence(
+            row, config["comps"], config["rcn"], config["value"]
+        ).as_json(),
     }
     return ScoredListing(
         int(row["id"]),
@@ -1622,18 +2068,50 @@ def score_database(
             "dry_run": dry_run,
             "version": version,
             "profiles": {},
+            "priceEvidence": {
+                "listing": 0,
+                "rcn": 0,
+                "both": 0,
+                "topEligible": 0,
+                "overpriced": 0,
+            },
         }
     geo = geo or GeoContext.load()
     price_rows = list(db.iter_score_rows()) if pending_only or source_id is not None else rows
     prices = PriceModel(price_rows)
+    regions = {_text(row, "voivodeship") for row in price_rows} - {""}
+    object_kinds = {
+        {"flat": "flat", "house": "building", "plot": "plot"}[kind]
+        for row in price_rows
+        if (kind := _text(row, "property_type")) in {"flat", "house", "plot"}
+    }
+    prices.load_rcn(
+        db.iter_rcn_score_rows(
+            document_date_cutoff=_months_ago(int(config["rcn"]["months"])),
+            regions=regions or None,
+            object_kinds=object_kinds or None,
+        )
+    )
     history = db.price_history_stats()
     rent_ppm = _rent_price_samples(price_rows)
     updates: list[tuple[Any, ...]] = []
     distributions: dict[str, list[int]] = defaultdict(list)
+    evidence_counts: dict[str, int] = defaultdict(int)
     now = int(time.time() * 1000)
     for index, row in enumerate(rows, start=1):
         result = score_row(row, config, geo, prices, history, rent_ppm)
         distributions[result.profile].append(result.score)
+        evidence = result.breakdown.get("priceEvidence") or {}
+        if evidence.get("listing") is not None:
+            evidence_counts["listing"] += 1
+        if evidence.get("rcn") is not None:
+            evidence_counts["rcn"] += 1
+        if evidence.get("listing") is not None and evidence.get("rcn") is not None:
+            evidence_counts["both"] += 1
+        if evidence.get("topEligible"):
+            evidence_counts["topEligible"] += 1
+        if evidence.get("overpriced"):
+            evidence_counts["overpriced"] += 1
         updates.append(
             (
                 result.score,
@@ -1663,6 +2141,10 @@ def score_database(
         "updated": 0 if dry_run else len(updates),
         "dry_run": dry_run,
         "profiles": profiles,
+        "priceEvidence": {
+            key: evidence_counts[key]
+            for key in ("listing", "rcn", "both", "topEligible", "overpriced")
+        },
     }
 
 

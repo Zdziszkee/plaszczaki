@@ -397,3 +397,34 @@ body {
     animation: none;
   }
 }
+
+.listing-popup-rcn-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.listing-popup-rcn-summary strong {
+  color: #f59e0b;
+  font-size: 14px;
+}
+
+.listing-popup-rcn-summary span,
+.listing-popup-rcn-samples,
+.listing-popup-rcn-source {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+
+.listing-popup-rcn-samples {
+  display: grid;
+  gap: 3px;
+  margin: 7px 0;
+  padding-left: 14px;
+}
+
+.listing-popup-rcn-source {
+  margin: 7px 0 4px;
+  line-height: 1.4;
+}

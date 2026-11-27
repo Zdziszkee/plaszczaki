@@ -1,5 +1,5 @@
 {
-	"version": "4",
+	"version": "5",
 	"profile_weights": {
 		"kamienica": { "price": 30, "location": 15, "attributes": 45, "nature": 0, "opportunity": 10 },
 		"nowe_mieszkanie": { "price": 30, "location": 30, "attributes": 25, "nature": 0, "opportunity": 15 },
@@ -45,10 +45,36 @@
 	},
 	"comps": {
 		"radius_km": 2.5,
+		"radii_km": [1.0, 2.5, 5.0],
 		"min_count": 5,
+		"max_count": 30,
 		"area_ratio": [0.7, 1.4],
+		"plot_area_ratio": [0.5, 2.0],
+		"rooms_delta": 1,
 		"max_points": 10,
 		"min_discount": 0.08
+	},
+	"rcn": {
+		"months": 24,
+		"min_count": 5,
+		"max_count": 30,
+		"area_ratio": [0.7, 1.4],
+		"plot_area_ratio": [0.5, 2.0],
+		"rooms_delta": 1,
+		"radii_km": {
+			"flat": [1.0, 2.5, 5.0],
+			"building": [2.0, 4.0, 5.0],
+			"plot": [2.0, 4.0, 5.0]
+		}
+	},
+	"value": {
+		"quantile_share": 0.4,
+		"full_discount": 0.25,
+		"zero_discount": 0.05,
+		"overpriced_threshold": 0.1,
+		"overpriced_penalty": 10,
+		"overpriced_cap": 65,
+		"top_min_discount": 0.03
 	},
 	"keywords": {
 		"insulation": ["ociepl", "dociepl", "termomoderniz", "styropian", "welna mineral"],

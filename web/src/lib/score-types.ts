@@ -45,6 +45,34 @@ export type ScoreCategorySummary = {
 	maxPoints: number;
 };
 
+export type PriceComparableSummary = {
+	median: number;
+	p25: number;
+	p75: number;
+	count: number;
+	radiusKm: number;
+	confidence: "low" | "medium" | "high";
+};
+
+export type PriceEvidence = {
+	listing: PriceComparableSummary | null;
+	rcn: PriceComparableSummary | null;
+	baseline: {
+		low: number;
+		median: number;
+		high: number;
+		count: number;
+		level: string;
+	} | null;
+	benchmark: number | null;
+	benchmarkSource: "rcn" | "listings" | "baseline" | null;
+	discount: number | null;
+	effectiveDiscount: number | null;
+	confidence: "low" | "medium" | "high" | null;
+	overpriced: boolean;
+	topEligible: boolean;
+};
+
 export type ScoreProfileBreakdown = {
 	score: number;
 	rawScore: number;
@@ -56,12 +84,14 @@ export type ScoreProfileBreakdown = {
 	penalties: ScoreContribution[];
 	zero: ScoreContribution[];
 	missing: string[];
+	priceEvidence?: PriceEvidence | null;
 };
 
 export type ScoreBreakdown = {
 	version: string;
 	winner: ScoreProfile | "other";
 	profiles: Partial<Record<ScoreProfile, ScoreProfileBreakdown>>;
+	priceEvidence?: PriceEvidence | null;
 };
 
 export const SCORE_PROFILE_WEIGHTS: Record<

@@ -177,6 +177,10 @@ uv run --directory scraper python -m plaszczaki_scraper list-sources
 uv run --directory scraper python -m plaszczaki_scraper audit
 uv run --directory scraper python -m plaszczaki_scraper review-sources --due
 uv run --directory scraper python -m plaszczaki_scraper dedupe --backfill
+uv run --directory scraper python -m plaszczaki_scraper rcn import --region malopolskie --dry-run --limit 100
+uv run --directory scraper python -m plaszczaki_scraper rcn import --region malopolskie
+uv run --directory scraper python -m plaszczaki_scraper rcn sync
+uv run --directory scraper python -m plaszczaki_scraper rcn status
 uv run --directory scraper python -m plaszczaki_scraper verify-schema
 uv run --directory scraper python -m plaszczaki_scraper llm models
 uv run --directory scraper python -m plaszczaki_scraper llm check
@@ -221,6 +225,32 @@ these two voivodeships). Each search page is hydrated immediately and the parsed
 offers are upserted as a batch; unparsed search summaries are never stored. The
 systemd timer runs the incremental `watch --once` job, not a backfill.
 
+### RCN — Rejestr Cen Nieruchomości
+
+RCN is a separate transaction dataset, not another listing source. The importer
+streams the six official GUGiK GeoParquet exports for Małopolskie/Śląskie into
+`rcn_transaction` and `rcn_transaction_object`, using stable IIP identifiers and
+object-level price attribution. Files are cached under `data/cache/rcn/` and
+synchronized conditionally with ETag/Last-Modified. Missing geometry is retained
+but excluded from spatial comparisons.
+
+The map has an optional **Transakcje RCN** layer with property, market and period
+filters. Listing popups show nearby comparable transactions from the last 24
+months. These are orientational comparisons, not appraisals; a transaction price
+can cover multiple properties and county coverage/update latency varies.
+
+Initial import (run each region separately):
+
+```bash
+bun run db:push
+uv run --directory scraper python -m plaszczaki_scraper rcn import --region malopolskie
+uv run --directory scraper python -m plaszczaki_scraper rcn import --region slaskie
+```
+
+The daily `plaszczaki-rcn.timer` runs `rcn sync`. RCN data is free to reuse with
+attribution: **Wykorzystano/opracowano na podstawie materiałów państwowego zasobu
+geodezyjnego i kartograficznego.**
+
 ## Deploy (Podman + Quadlet)
 
 One command stops the running containers, rebuilds both images, installs the
@@ -263,13 +293,14 @@ first `bun run deploy`, mode 0600):
 Images are fully qualified (`docker.io/...`); Quadlets are generated into
 `/run/user/$UID/systemd/generator` and autostart at login via their
 `WantedBy=default.target`. The scraper is a one-shot job — starting it runs once
-and exits. Deploy enables three timers: `plaszczaki-scraper.timer` runs
+and exits. Deploy enables four timers: `plaszczaki-scraper.timer` runs
 `cycle --limit 200` (independent małopolskie/śląskie × rent/sale lanes, plus
 other/national/stealth) every five minutes, `plaszczaki-full.timer` runs
 `run-all --newest --only-non-incremental` nightly for the sources the
-incremental lanes never poll, and `plaszczaki-review.timer` runs the monthly
-parked-source review. There is no separate gdom unit. The scraper image installs
-Patchright Chromium for the stealth lane.
+incremental lanes never poll, `plaszczaki-rcn.timer` runs the daily official RCN
+sync, and `plaszczaki-review.timer` runs the monthly parked-source review. There
+is no separate gdom unit. The scraper image installs Patchright Chromium for the
+stealth lane.
 
 Refresh cadence lives in `scraper/config/sources.json` (`refresh_minutes`) and
 `cycle` reads it directly. `gdom` is not a separate service or quadlet: it runs

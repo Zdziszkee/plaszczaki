@@ -13,6 +13,11 @@ import {
 } from "#/components/ui/card";
 import type { ListingDetails } from "#/lib/listing-details";
 import type { ListingFilters } from "#/lib/listing-filter-types";
+import type {
+	RcnComparables,
+	RcnFeatureCollection,
+	RcnMapFilters,
+} from "#/lib/rcn-types";
 import {
 	LAYER_IDS,
 	type LayerToggles,
@@ -37,6 +42,7 @@ import {
 	PLANNED_RAIL_LINE_LAYERS,
 	sync3d,
 	syncListingLayer,
+	syncRcnLayer,
 } from "./layers";
 import {
 	escapeHtml,
@@ -45,8 +51,10 @@ import {
 	listingPopupHtml,
 } from "./listing-popup";
 import type { ListingFeatureCollection, ListingsMode } from "./listings-types";
+import { rcnPopupHtml } from "./rcn-popup";
 import { pruneBadTileCache, resetTileCache } from "./tile-cache";
 import { useListingsLayer } from "./useListingsLayer";
+import { useRcnLayer } from "./useRcnLayer";
 
 const LISTING_DETAILS_CACHE_TTL_MS = 60_000;
 
@@ -185,28 +193,38 @@ function MissingToken() {
 export default function MapView({
 	toggles,
 	filters,
+	rcnFilters,
 	totalAll,
 }: {
 	toggles: LayerToggles;
 	filters: ListingFilters;
+	rcnFilters: RcnMapFilters;
 	totalAll: number;
 }) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const mapRef = useRef<mapboxgl.Map | null>(null);
 	const popupRef = useRef<mapboxgl.Popup | null>(null);
 	const detailsRequestRef = useRef<AbortController | null>(null);
+	const rcnRequestRef = useRef<AbortController | null>(null);
 	const detailsCacheRef = useRef(
 		new Map<number, { details: ListingDetails; cachedAt: number }>(),
 	);
 	const togglesRef = useRef(toggles);
 	const listingsDataRef = useRef<ListingFeatureCollection | null>(null);
 	const listingsModeRef = useRef<ListingsMode>("clusters");
+	const rcnDataRef = useRef<RcnFeatureCollection | null>(null);
+	const rcnModeRef = useRef<ListingsMode>("clusters");
 	const [map, setMap] = useState<mapboxgl.Map | null>(null);
 	const [elevation, setElevation] = useState<number | null>(null);
 	const listings = useListingsLayer({
 		map,
 		enabled: toggles.listings,
 		filters,
+	});
+	const rcn = useRcnLayer({
+		map,
+		enabled: toggles.rcn,
+		filters: rcnFilters,
 	});
 
 	useEffect(() => {
@@ -235,6 +253,22 @@ export default function MapView({
 			map.off("idle", sync);
 		};
 	}, [map, toggles.listings, listings.data, listings.mode]);
+
+	useEffect(() => {
+		if (!map) return;
+		rcnDataRef.current = rcn.data;
+		rcnModeRef.current = rcn.mode;
+		const sync = () => {
+			if (!map.isStyleLoaded()) return;
+			syncRcnLayer(map, toggles.rcn, rcn.mode, rcn.data ?? undefined);
+			map.off("idle", sync);
+		};
+		sync();
+		map.on("idle", sync);
+		return () => {
+			map.off("idle", sync);
+		};
+	}, [map, toggles.rcn, rcn.data, rcn.mode]);
 
 	useEffect(() => {
 		if (!MAPBOX_TOKEN || !containerRef.current || mapRef.current) return;
@@ -298,6 +332,12 @@ export default function MapView({
 				listingsModeRef.current,
 				listingsDataRef.current ?? undefined,
 			);
+			syncRcnLayer(
+				map,
+				togglesRef.current.rcn,
+				rcnModeRef.current,
+				rcnDataRef.current ?? undefined,
+			);
 		});
 
 		map.on("load", () => {
@@ -324,6 +364,8 @@ export default function MapView({
 		const closePopup = () => {
 			detailsRequestRef.current?.abort();
 			detailsRequestRef.current = null;
+			rcnRequestRef.current?.abort();
+			rcnRequestRef.current = null;
 			const popup = popupRef.current;
 			popupRef.current = null;
 			popup?.remove();
@@ -341,6 +383,7 @@ export default function MapView({
 				className: "listing-popup-container",
 			});
 			let requestController: AbortController | null = null;
+			let rcnController: AbortController | null = null;
 
 			const render = (state: ListingDetailsState) => {
 				if (popupRef.current !== popup) return;
@@ -352,6 +395,42 @@ export default function MapView({
 						?.addEventListener("click", loadDetails);
 				}
 			};
+
+			function loadRcn(id: number, details: ListingDetails) {
+				rcnController?.abort();
+				render({
+					status: "ready",
+					details,
+					rcn: { status: "loading" },
+				});
+				const controller = new AbortController();
+				rcnController = controller;
+				rcnRequestRef.current = controller;
+				fetch(`/api/listings/${id}/rcn`, {
+					signal: controller.signal,
+					headers: { Accept: "application/json" },
+				})
+					.then(async (response) => {
+						if (!response.ok) throw new Error(`HTTP ${response.status}`);
+						return (await response.json()) as RcnComparables;
+					})
+					.then((data) => {
+						if (controller.signal.aborted || popupRef.current !== popup) return;
+						rcnController = null;
+						rcnRequestRef.current = null;
+						render({
+							status: "ready",
+							details,
+							rcn: { status: "ready", data },
+						});
+					})
+					.catch(() => {
+						if (controller.signal.aborted || popupRef.current !== popup) return;
+						rcnController = null;
+						rcnRequestRef.current = null;
+						render({ status: "ready", details, rcn: { status: "error" } });
+					});
+			}
 
 			function loadDetails() {
 				requestController?.abort();
@@ -367,7 +446,7 @@ export default function MapView({
 					cached &&
 					Date.now() - cached.cachedAt < LISTING_DETAILS_CACHE_TTL_MS
 				) {
-					render({ status: "ready", details: cached.details });
+					loadRcn(id, cached.details);
 					return;
 				}
 				detailsCacheRef.current.delete(id);
@@ -394,7 +473,7 @@ export default function MapView({
 						});
 						requestController = null;
 						detailsRequestRef.current = null;
-						render({ status: "ready", details });
+						loadRcn(id, details);
 					})
 					.catch(() => {
 						if (controller.signal.aborted || popupRef.current !== popup) {
@@ -413,6 +492,9 @@ export default function MapView({
 				if (detailsRequestRef.current === controller) {
 					detailsRequestRef.current = null;
 				}
+				rcnController?.abort();
+				rcnController = null;
+				rcnRequestRef.current = null;
 				if (popupRef.current === popup) popupRef.current = null;
 			});
 			popupRef.current = popup;
@@ -468,11 +550,21 @@ export default function MapView({
 						? map.queryRenderedFeatures(point, { layers: clusterLayers })
 								.length > 0
 						: false;
+				const rcnLayers = togglesRef.current.rcn
+					? [LAYER_IDS.rcnCluster, LAYER_IDS.rcnPoint].filter((id) =>
+							map.getLayer(id),
+						)
+					: [];
+				const hoveringRcn =
+					point && rcnLayers.length > 0
+						? map.queryRenderedFeatures(point, { layers: rcnLayers }).length > 0
+						: false;
 				map.getCanvas().style.cursor =
 					hoveringPlanned ||
 					hoveringListing ||
 					hoveringAggregate ||
-					hoveringCluster
+					hoveringCluster ||
+					hoveringRcn
 						? "pointer"
 						: "";
 
@@ -564,6 +656,52 @@ export default function MapView({
 						? geometry.coordinates
 						: [event.lngLat.lng, event.lngLat.lat];
 				showListingPopup(listingProperties, center);
+				return;
+			}
+
+			const rcnLayers = togglesRef.current.rcn
+				? [LAYER_IDS.rcnCluster, LAYER_IDS.rcnPoint].filter((id) =>
+						map.getLayer(id),
+					)
+				: [];
+			const rcnFeature =
+				rcnLayers.length > 0
+					? map.queryRenderedFeatures(event.point, { layers: rcnLayers })[0]
+					: undefined;
+			const rcnProperties = featureProperties(rcnFeature);
+			if (rcnProperties) {
+				const geometry = (
+					rcnFeature as unknown as {
+						geometry?: { type: string; coordinates: [number, number] };
+					}
+				)?.geometry;
+				const center: [number, number] =
+					geometry?.type === "Point"
+						? geometry.coordinates
+						: [event.lngLat.lng, event.lngLat.lat];
+				closePopup();
+				const popup = new mapboxgl.Popup({
+					closeButton: true,
+					offset: 12,
+					maxWidth: "300px",
+				})
+					.setLngLat(center)
+					.setHTML(rcnPopupHtml(rcnProperties))
+					.addTo(map);
+				popupRef.current = popup;
+				popup
+					.getElement()
+					?.querySelector<HTMLButtonElement>("[data-rcn-zoom]")
+					?.addEventListener("click", () => {
+						popup.remove();
+						map.easeTo({
+							center,
+							zoom: Math.max(
+								map.getZoom() + 2,
+								LISTINGS_AGGREGATE_MIN_ZOOM + 1,
+							),
+						});
+					});
 				return;
 			}
 

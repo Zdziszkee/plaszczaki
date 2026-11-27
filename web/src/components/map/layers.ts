@@ -4,7 +4,7 @@ import type {
 	GeoJSONSource,
 	Map as MapboxMap,
 } from "mapbox-gl";
-
+import type { RcnFeatureCollection } from "#/lib/rcn-types";
 import {
 	COLORS,
 	DETAIL_3D_BUILDINGS_MINZOOM,
@@ -52,6 +52,7 @@ const WIND_FARM_SOURCE = "wind-farm";
 const TRAFFIC_SOURCE = "traffic";
 export const LISTINGS_SOURCE = "listings";
 export const LISTINGS_AGG_SOURCE = "listings-aggregate";
+export const RCN_SOURCE = "rcn-transactions";
 
 /** Illustrative turbine positions inside the Margonin wind farm area. */
 const TURBINE_SITES: Array<[number, number]> = [
@@ -1225,6 +1226,95 @@ export function syncListingAggregate(
 	}
 }
 
+function removeRcnLayers(map: MapboxMap): void {
+	removeLayer(map, LAYER_IDS.rcnClusterCount);
+	removeLayer(map, LAYER_IDS.rcnCluster);
+	removeLayer(map, LAYER_IDS.rcnPoint);
+	removeSource(map, RCN_SOURCE);
+}
+
+/** Render viewport RCN clusters or individual transaction points. */
+export function syncRcnLayer(
+	map: MapboxMap,
+	enabled: boolean,
+	mode: ListingsMode,
+	data?: RcnFeatureCollection,
+): void {
+	if (!enabled) {
+		removeRcnLayers(map);
+		return;
+	}
+	removeRcnLayers(map);
+	map.addSource(RCN_SOURCE, {
+		type: "geojson",
+		data: data ?? { type: "FeatureCollection", features: [] },
+	});
+	if (mode === "clusters") {
+		map.addLayer({
+			id: LAYER_IDS.rcnCluster,
+			type: "circle",
+			source: RCN_SOURCE,
+			filter: ["has", "count"],
+			paint: {
+				"circle-color": "#f59e0b",
+				"circle-opacity": 0.75,
+				"circle-stroke-color": "#fef3c7",
+				"circle-stroke-width": 1,
+				"circle-radius": [
+					"interpolate",
+					["linear"],
+					["get", "count"],
+					1,
+					5,
+					50,
+					10,
+					500,
+					18,
+				],
+			},
+		});
+		map.addLayer({
+			id: LAYER_IDS.rcnClusterCount,
+			type: "symbol",
+			source: RCN_SOURCE,
+			filter: ["has", "count"],
+			layout: {
+				"text-field": ["to-string", ["get", "count"]],
+				"text-size": 10,
+				"text-allow-overlap": true,
+			},
+			paint: {
+				"text-color": "#111827",
+				"text-halo-color": "#fef3c7",
+				"text-halo-width": 1,
+			},
+		});
+		return;
+	}
+	map.addLayer({
+		id: LAYER_IDS.rcnPoint,
+		type: "circle",
+		source: RCN_SOURCE,
+		paint: {
+			"circle-color": [
+				"match",
+				["get", "objectKind"],
+				"flat",
+				"#38bdf8",
+				"building",
+				"#a78bfa",
+				"plot",
+				"#f59e0b",
+				"#94a3b8",
+			],
+			"circle-opacity": 0.8,
+			"circle-stroke-color": "#0f172a",
+			"circle-stroke-width": 0.8,
+			"circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 3, 15, 6],
+		},
+	});
+}
+
 /** Switch between aggregate cells and individual listings. */
 export function syncListingLayer(
 	map: MapboxMap,
@@ -1306,6 +1396,9 @@ export function applyToggles(map: MapboxMap, toggles: LayerToggles): void {
 	setVisibility(map, LAYER_IDS.listingScoreLabel, toggles.listings);
 	setVisibility(map, LAYER_IDS.listingAggregate, toggles.listings);
 	setVisibility(map, LAYER_IDS.listingAggregateCount, toggles.listings);
+	setVisibility(map, LAYER_IDS.rcnCluster, toggles.rcn);
+	setVisibility(map, LAYER_IDS.rcnClusterCount, toggles.rcn);
+	setVisibility(map, LAYER_IDS.rcnPoint, toggles.rcn);
 
 	setVisibility(map, LAYER_IDS.contourLine, toggles.contours);
 	setVisibility(map, LAYER_IDS.contourLabel, toggles.contours);

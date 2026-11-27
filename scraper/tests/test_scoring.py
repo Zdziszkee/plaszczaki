@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import sqlite3
+from datetime import date
 from typing import Any
 
 from plaszczaki_scraper.geodata import GeoContext
@@ -65,6 +66,30 @@ def _row(**overrides: Any) -> sqlite3.Row:
     connection.execute(f"INSERT INTO row VALUES ({placeholders})", tuple(values.values()))
     cursor = connection.execute("SELECT * FROM row")
     result = cursor.fetchone()
+    connection.close()
+    assert result is not None
+    return result
+
+
+def _rcn_row(**overrides: Any) -> sqlite3.Row:
+    values: dict[str, Any] = {
+        "key": "rcn:1",
+        "kind": "flat",
+        "lat": 50.061,
+        "lng": 19.936,
+        "area": 40,
+        "ppm": 20_000,
+        "market": "secondary",
+        "rooms": 2,
+        "document_date": date.today().isoformat(),
+    }
+    values.update(overrides)
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    connection.execute(f"CREATE TABLE row ({', '.join(values)})")
+    placeholders = ",".join("?" for _ in values)
+    connection.execute(f"INSERT INTO row VALUES ({placeholders})", tuple(values.values()))
+    result = connection.execute("SELECT * FROM row").fetchone()
     connection.close()
     assert result is not None
     return result
@@ -553,8 +578,168 @@ def test_price_points_are_monotonic_and_profile_scaled() -> None:
             if item["code"] == "price_quantile"
         )
 
-    assert quantile_points(cheap_result, "nowe_mieszkanie") == 21.0
+    assert quantile_points(cheap_result, "nowe_mieszkanie") == 12.0
     assert quantile_points(expensive_result, "nowe_mieszkanie") == 0.0
     assert quantile_points(cheap_result, "nowe_mieszkanie") <= (
-        CONFIG["profile_weights"]["nowe_mieszkanie"]["price"] * 0.7
+        CONFIG["profile_weights"]["nowe_mieszkanie"]["price"] * CONFIG["value"]["quantile_share"]
     )
+
+
+def test_rcn_transactions_are_used_for_price_evidence() -> None:
+    target = _row(price_pln=600_000, price_per_m2_pln=15_000, canonical_key="target")
+    listings = [
+        _row(
+            id=index + 2,
+            external_id=str(index + 2),
+            price_pln=800_000,
+            price_per_m2_pln=20_000,
+            canonical_key=f"listing:{index}",
+        )
+        for index in range(8)
+    ]
+    prices = PriceModel([target, *listings])
+    prices.load_rcn(_rcn_row(key=f"rcn:{index}", ppm=20_000) for index in range(8))
+
+    evidence = prices.evidence(target, CONFIG["comps"], CONFIG["rcn"], CONFIG["value"])
+    assert evidence.rcn is not None
+    assert evidence.rcn.count == 8
+    assert evidence.benchmark_source == "rcn"
+    assert evidence.effective_discount == 0.25
+    assert evidence.top_eligible is True
+
+    result = score_row(target, CONFIG, GeoContext(), prices, {}, {})
+    assert result.breakdown["priceEvidence"] == evidence.as_json()
+    profile = result.breakdown["profiles"][result.profile]
+    comparable = next(
+        item for item in profile["contributions"] if item["code"] == "comparable_discount"
+    )
+    assert comparable["source"] == "rcn"
+    assert "RCN" in comparable["label"]
+
+
+def test_rcn_comparables_match_market_and_room_count() -> None:
+    target = _row(market="secondary", rooms=2, canonical_key="target")
+    prices = PriceModel([target])
+    rows = [
+        *(_rcn_row(key=f"primary:{index}", market="primary", ppm=5_000) for index in range(5)),
+        *(_rcn_row(key=f"rooms:{index}", rooms=4, ppm=7_000) for index in range(5)),
+        *(_rcn_row(key=f"match:{index}", ppm=20_000) for index in range(5)),
+    ]
+    prices.load_rcn(rows)
+
+    evidence = prices.evidence(target, CONFIG["comps"], CONFIG["rcn"], CONFIG["value"])
+    assert evidence.rcn is not None
+    assert evidence.rcn.count == 5
+    assert evidence.rcn.median == 20_000
+
+
+def test_effective_discount_uses_the_smaller_verified_advantage() -> None:
+    target = _row(price_pln=600_000, price_per_m2_pln=15_000, canonical_key="target")
+    listings = [
+        _row(
+            id=index + 2,
+            external_id=str(index + 2),
+            price_pln=1_000_000,
+            price_per_m2_pln=25_000,
+            canonical_key=f"listing:{index}",
+        )
+        for index in range(5)
+    ]
+    prices = PriceModel([target, *listings])
+    prices.load_rcn(_rcn_row(key=f"rcn:{index}", ppm=20_000) for index in range(5))
+
+    evidence = prices.evidence(target, CONFIG["comps"], CONFIG["rcn"], CONFIG["value"])
+    assert evidence.listing is not None and evidence.listing.median == 25_000
+    assert evidence.rcn is not None and evidence.rcn.median == 20_000
+    assert evidence.effective_discount == 0.25
+
+
+def test_rcn_plot_and_house_kinds_use_property_specific_matching() -> None:
+    plot = _row(
+        property_type="plot",
+        area_m2=None,
+        land_area_m2=1000,
+        price_pln=200_000,
+        price_per_m2_pln=200,
+        canonical_key="plot",
+    )
+    prices = PriceModel([plot])
+    prices.load_rcn(
+        _rcn_row(key=f"plot:{index}", kind="plot", area=1800, ppm=300) for index in range(5)
+    )
+    plot_evidence = prices.evidence(plot, CONFIG["comps"], CONFIG["rcn"], CONFIG["value"])
+    assert plot_evidence.rcn is not None
+    assert plot_evidence.rcn.count == 5
+    assert plot_evidence.rcn.median == 300
+
+    house = _row(
+        property_type="house",
+        area_m2=100,
+        price_pln=800_000,
+        price_per_m2_pln=8_000,
+        canonical_key="house",
+    )
+    prices.load_rcn(
+        _rcn_row(key=f"house:{index}", kind="building", area=100, ppm=10_000) for index in range(5)
+    )
+    house_evidence = prices.evidence(house, CONFIG["comps"], CONFIG["rcn"], CONFIG["value"])
+    assert house_evidence.rcn is not None
+    assert house_evidence.rcn.count == 5
+    assert house_evidence.rcn.median == 10_000
+
+
+def test_baseline_excludes_the_target_listing() -> None:
+    target = _row(price_pln=4_000_000, price_per_m2_pln=100_000, canonical_key="target")
+    comps = [
+        _row(
+            id=index + 2,
+            external_id=str(index + 2),
+            price_pln=800_000,
+            price_per_m2_pln=20_000,
+            canonical_key=f"comp:{index}",
+        )
+        for index in range(20)
+    ]
+    baseline = PriceModel([target, *comps]).baseline(target)
+    assert baseline is not None
+    assert baseline.count == 20
+    assert baseline.median == 20_000
+
+
+def test_overpriced_listing_is_penalized_and_capped() -> None:
+    target = _row(price_pln=1_200_000, price_per_m2_pln=30_000, canonical_key="target")
+    comps = [
+        _row(
+            id=index + 2,
+            external_id=str(index + 2),
+            price_pln=800_000,
+            price_per_m2_pln=20_000,
+            canonical_key=f"comp:{index}",
+        )
+        for index in range(8)
+    ]
+    result = score_row(target, CONFIG, GeoContext(), PriceModel([target, *comps]), {}, {})
+
+    assert result.score <= CONFIG["value"]["overpriced_cap"]
+    assert result.breakdown["priceEvidence"]["overpriced"] is True
+    assert result.breakdown["priceEvidence"]["topEligible"] is False
+    assert any(
+        reason["code"] == "overpriced"
+        for profile in result.breakdown["profiles"].values()
+        for reason in profile["penalties"]
+    )
+
+
+def test_missing_comparables_do_not_earn_full_price_points_or_top_eligibility() -> None:
+    result = _score(_row())
+    evidence = result.breakdown["priceEvidence"]
+    assert evidence["listing"] is None
+    assert evidence["rcn"] is None
+    assert evidence["topEligible"] is False
+    for profile in result.breakdown["profiles"].values():
+        price_points = sum(
+            reason["points"]
+            for reason in [*profile["contributions"], *profile["zero"]]
+            if reason["category"] == "price"
+        )
+        assert price_points == 0

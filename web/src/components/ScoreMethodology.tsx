@@ -112,9 +112,11 @@ export default function ScoreMethodology() {
 					<CardHeader>
 						<CardTitle className="text-base">Cena i wartość</CardTitle>
 						<CardDescription className="leading-6">
-							70% budżetu ceny pochodzi z lokalnych kwantyli, a 30% z porównania
-							z podobnymi ofertami. Poniżej dolnego kwantyla wynik jest
-							maksymalny; powyżej górnego nie dostaje już punktów.
+							40% budżetu ceny pochodzi z lokalnych kwantyli, a 60% z porównania
+							z podobnymi ofertami i transakcjami RCN. Gdy są dostępne oba
+							źródła, używamy mniejszej zweryfikowanej przewagi cenowej. Pełnych
+							punktów za porównanie nie przyznajemy bez wystarczającej liczby
+							komparablów.
 						</CardDescription>
 					</CardHeader>
 				</Card>

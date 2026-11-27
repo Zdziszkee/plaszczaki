@@ -1,0 +1,1 @@
+CREATE INDEX `rcn_object_comparable_geo_idx` ON `rcn_transaction_object` (`object_kind`,`geo_cell_lat`,`geo_cell_lng`,`exclusion_reason`);
