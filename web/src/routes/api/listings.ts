@@ -8,29 +8,13 @@ import {
 	combineConditions,
 } from "#/lib/listing-filters";
 import { activeRankingConfigData } from "#/lib/ranking.server";
-import {
-	type RankingConfig,
-	type RankingListing,
-	scoreListing,
-} from "#/lib/ranking-engine";
-import { createDefaultRankingConfig } from "#/lib/ranking-spec";
-import type { ScoreProfile } from "#/lib/ranking-types";
+import { type RankingListing, scoreListing } from "#/lib/ranking-engine";
 import { sourceColor } from "#/lib/source-colors";
 
 function numberParam(value: string | null): number | undefined {
 	if (!value) return undefined;
 	const parsed = Number(value);
 	return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function rankingProfile(
-	propertyType: string,
-	selected?: ScoreProfile,
-): ScoreProfile {
-	if (selected) return selected;
-	if (propertyType === "house") return "dom_kolej";
-	if (propertyType === "plot") return "dzialka_kolej";
-	return "kamienica";
 }
 
 export const Route = createFileRoute("/api/listings")({
@@ -112,34 +96,16 @@ export const Route = createFileRoute("/api/listings")({
 				const needsRanking =
 					returnAll ||
 					filters.sort === "score" ||
-					filters.minScore !== undefined ||
-					filters.scoreProfile !== undefined;
+					filters.minScore !== undefined;
 				const rows = needsRanking
 					? await rowsQuery
 					: await rowsQuery.limit(limit);
 
-				const profileKeys = new Set(
-					rows.map((row) =>
-						rankingProfile(row.propertyType, filters.scoreProfile),
-					),
-				);
-				const configEntries = await Promise.all(
-					Array.from(
-						profileKeys,
-						async (profile) =>
-							[profile, await activeRankingConfigData(profile)] as const,
-					),
-				);
-				const configs = new Map<ScoreProfile, RankingConfig>(configEntries);
+				const profile = "universal" as const;
+				const config = await activeRankingConfigData();
 
 				const features = rows.flatMap((row) => {
 					if (row.lat === null || row.lng === null) return [];
-					const profile = rankingProfile(
-						row.propertyType,
-						filters.scoreProfile,
-					);
-					const config =
-						configs.get(profile) ?? createDefaultRankingConfig(profile);
 					const rankingListing: RankingListing = {
 						...row,
 						publishedAt: row.publishedAt?.getTime() ?? null,
@@ -155,7 +121,7 @@ export const Route = createFileRoute("/api/listings")({
 					) {
 						return [];
 					}
-					if (filters.scoreProfile && breakdown?.eligible === false) return [];
+					if (breakdown?.eligible === false) return [];
 					const reasons = breakdown
 						? [
 								...breakdown.contributions

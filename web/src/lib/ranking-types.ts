@@ -15,7 +15,8 @@ export type RankingCategoryWeights = Partial<
 	Record<RankingBudgetCategory, number>
 >;
 
-export const RANKING_PROFILES = [
+export const UNIVERSAL_SCORE_PROFILE = "universal" as const;
+export const LEGACY_SCORE_PROFILES = [
 	"kamienica",
 	"nowe_mieszkanie",
 	"dzialka_kolej",
@@ -24,7 +25,10 @@ export const RANKING_PROFILES = [
 	"dzialka_airbnb",
 ] as const;
 
+export const RANKING_PROFILES = [UNIVERSAL_SCORE_PROFILE] as const;
+
 export type ScoreProfile = (typeof RANKING_PROFILES)[number];
+export type LegacyScoreProfile = (typeof LEGACY_SCORE_PROFILES)[number];
 
 export type RankingCenter = "krakow" | "katowice";
 export type RankingBooleanFilter = "any" | "yes" | "no";
@@ -69,10 +73,22 @@ export type RankingProfileSignals = {
 	penalties: Record<string, number | null>;
 };
 
-/** JSON payload written by the scraper's signals-v1 extraction step. */
+/** Distances are straight-line kilometres; null means the data is unavailable. */
+export type RankingGeoSignals = {
+	rail_station: number | null;
+	tram_stop: number | null;
+	lake: number | null;
+	river: number | null;
+	forest: number | null;
+};
+
+/** JSON payload written by the scraper. v1 remains readable during migration. */
 export type RankingSignals = {
-	version: "signals-v1";
-	profiles: Partial<Record<ScoreProfile, RankingProfileSignals>>;
+	version: "signals-v1" | "signals-v2";
+	profiles: Partial<
+		Record<ScoreProfile | LegacyScoreProfile, RankingProfileSignals>
+	>;
+	geo?: RankingGeoSignals;
 	metrics: {
 		ceiling_height_m: number | null;
 		large_windows: boolean | null;
@@ -205,6 +221,8 @@ export type RankingConfig = {
 	categoryWeights: Record<RankingCategory, number>;
 	signalWeights: Record<string, number>;
 	penaltyWeights: Record<string, number>;
+	/** Shares within the location category; always normalized to 100. */
+	distanceWeights: import("#/lib/ranking-weights").DistanceWeights;
 	filters: RankingFilters;
 	options: RankingOptions;
 };

@@ -3,14 +3,16 @@ import {
 	BUILDING_TYPE_GROUPS,
 	BUILDING_TYPE_OPTIONS,
 	CITY_CENTERS,
-	DEFAULT_RANKING_CONFIG,
+	createDefaultDistanceWeights,
+	createDefaultRankingConfig,
 	getRankingProfileSpec,
 	RANKING_CATEGORY_LABELS,
 	type RankingRuleCondition,
 } from "#/lib/ranking-spec";
 import {
+	LEGACY_SCORE_PROFILES,
+	type LegacyScoreProfile,
 	RANKING_CATEGORIES,
-	RANKING_PROFILES,
 	type RankedListing,
 	type RankingBooleanFilter,
 	type RankingBreakdown,
@@ -21,22 +23,25 @@ import {
 	type RankingContribution,
 	type RankingDate,
 	type RankingFilters,
+	type RankingGeoSignals,
 	type RankingListing,
 	type RankingOptions,
 	type RankingProfileSignals,
 	type RankingResult,
+	type RankingSignals,
 	type RankingSort,
 	type RankingSummary,
-	type ScoreProfile,
+	UNIVERSAL_SCORE_PROFILE,
 } from "#/lib/ranking-types";
+import {
+	DISTANCE_SIGNAL_CODES,
+	type DistanceWeights,
+	normalizeDistanceWeights,
+	normalizeRankingCategoryWeights,
+	RANKING_BUDGET_CATEGORIES,
+} from "#/lib/ranking-weights";
 
-const BUDGET_CATEGORIES = [
-	"price",
-	"location",
-	"attributes",
-	"nature",
-	"opportunity",
-] as const;
+const BUDGET_CATEGORIES = RANKING_BUDGET_CATEGORIES;
 
 const PROPERTY_TYPES = new Set([
 	"flat",
@@ -201,25 +206,7 @@ export function listingLargeWindows(listing: RankingListing): boolean | null {
 export function normalizeCategoryWeights(
 	weights: RankingCategoryWeights,
 ): Record<RankingCategory, number> {
-	const normalized: Record<RankingCategory, number> = {
-		price: 0,
-		location: 0,
-		attributes: 0,
-		nature: 0,
-		opportunity: 0,
-		penalty: 0,
-	};
-	let total = 0;
-	for (const category of BUDGET_CATEGORIES) {
-		const value = nonNegativeNumber(weights[category]) ?? 0;
-		normalized[category] = value;
-		total += value;
-	}
-	if (total <= 0) return normalized;
-	for (const category of BUDGET_CATEGORIES) {
-		normalized[category] = (normalized[category] / total) * 100;
-	}
-	return normalized;
+	return normalizeRankingCategoryWeights(weights);
 }
 
 function sanitizeCategoryWeights(
@@ -437,48 +424,135 @@ function sanitizeOptions(value: unknown): RankingOptions {
 	};
 }
 
+function sanitizeDistanceWeights(value: unknown): DistanceWeights {
+	const defaults = createDefaultDistanceWeights();
+	if (!isRecord(value)) return defaults;
+	const weights = { ...defaults };
+	for (const code of DISTANCE_SIGNAL_CODES) {
+		weights[code] = nonNegativeNumber(value[code]) ?? defaults[code];
+	}
+	return normalizeDistanceWeights(weights);
+}
+
+function legacyProfileForPropertyType(
+	propertyType: string,
+): LegacyScoreProfile {
+	if (propertyType === "house") return "dom_kolej";
+	if (propertyType === "plot") return "dzialka_kolej";
+	return "kamienica";
+}
+
+const LEGACY_SIGNAL_ALIASES: Readonly<Record<string, readonly string[]>> = {
+	building_age: ["old_house"],
+	building_character: ["traditional_material"],
+	condition: ["primary_market"],
+	commute: ["walkability"],
+};
+
+function mergedLegacySignals(
+	signals: RankingSignals | null | undefined,
+	propertyType: string,
+): RankingProfileSignals {
+	const profiles = signals?.profiles;
+	if (!profiles) return { signals: {}, penalties: {} };
+	const universal = profiles[UNIVERSAL_SCORE_PROFILE];
+	const legacyNames: readonly LegacyScoreProfile[] = [
+		legacyProfileForPropertyType(propertyType),
+		...LEGACY_SCORE_PROFILES.filter(
+			(profile) => profile !== legacyProfileForPropertyType(propertyType),
+		),
+	];
+	const result: RankingProfileSignals = universal
+		? {
+				signals: { ...universal.signals },
+				penalties: { ...universal.penalties },
+			}
+		: { signals: {}, penalties: {} };
+	for (const name of legacyNames) {
+		const profile = profiles[name];
+		if (!profile) continue;
+		for (const [code, value] of Object.entries(profile.signals)) {
+			if (result.signals[code] !== undefined && result.signals[code] !== null) {
+				continue;
+			}
+			result.signals[code] = value;
+		}
+		for (const [code, value] of Object.entries(profile.penalties)) {
+			if (
+				result.penalties[code] !== undefined &&
+				result.penalties[code] !== null
+			) {
+				continue;
+			}
+			result.penalties[code] = value;
+		}
+	}
+	return result;
+}
+
+function listingSignalValue(
+	listing: RankingListing,
+	code: string,
+): number | null {
+	const values = mergedLegacySignals(
+		listing.scoreSignals,
+		listing.propertyType,
+	).signals;
+	const candidates = [
+		signalValue(values, code),
+		...(LEGACY_SIGNAL_ALIASES[code] ?? []).map((fallback) =>
+			signalValue(values, fallback),
+		),
+	].filter((value): value is number => value !== null);
+	return candidates.length > 0 ? Math.max(...candidates) : null;
+}
+
+const LEGACY_DISTANCE_FALLBACKS: Readonly<
+	Record<keyof RankingGeoSignals, readonly [string, number, number]>
+> = {
+	rail_station: ["station", 3, 7],
+	tram_stop: ["commute", 0.3, 2.7],
+	lake: ["water", 0.3, 2.7],
+	river: ["water", 0.3, 2.7],
+	forest: ["forest", 0.2, 2.8],
+};
+
+function listingGeoDistance(
+	listing: RankingListing,
+	code: keyof RankingGeoSignals,
+): number | null {
+	const geo = listing.scoreSignals?.geo;
+	const direct = finiteNumber(geo?.[code]);
+	if (direct !== null) return direct;
+
+	// v1 did not store raw distances. Recover the full-score endpoint of its
+	// monotonic curve; text-only evidence cannot provide an exact distance.
+	const [signalCode, fullDistance, decayRange] =
+		LEGACY_DISTANCE_FALLBACKS[code];
+	const value = listingSignalValue(listing, signalCode);
+	return value === null || value >= 1
+		? null
+		: fullDistance + (1 - value) * decayRange;
+}
+
 /** Validate untrusted JSON and return a complete, independent configuration. */
 export function sanitizeRankingConfig(value: unknown): RankingConfig {
 	const input = isRecord(value) ? value : {};
-	const defaultProfile = DEFAULT_RANKING_CONFIG.profile;
-	const profileText = nonEmptyString(input.profile);
-	const profile = (RANKING_PROFILES as readonly string[]).includes(
-		profileText ?? "",
-	)
-		? (profileText as ScoreProfile)
-		: defaultProfile;
-	const defaults = getRankingProfileSpec(profile);
-	const defaultConfig = {
-		...DEFAULT_RANKING_CONFIG,
-		profile,
-		categoryWeights: { ...defaults.categoryWeights, penalty: 0 },
-		signalWeights: Object.fromEntries(
-			defaults.signals.map((signal) => [signal.code, signal.defaultWeight]),
-		),
-		penaltyWeights: Object.fromEntries(
-			defaults.penalties.map((penalty) => [
-				penalty.code,
-				penalty.defaultWeight,
-			]),
-		),
-	};
-
+	const defaults = createDefaultRankingConfig();
 	return {
-		version: nonEmptyString(input.version) ?? "ranking-v1",
-		profile,
+		version: "ranking-v2",
+		profile: UNIVERSAL_SCORE_PROFILE,
 		categoryWeights: sanitizeCategoryWeights(
 			input.categoryWeights,
-			defaultConfig.categoryWeights,
+			defaults.categoryWeights,
 		),
-		signalWeights: sanitizeWeights(
-			input.signalWeights,
-			defaultConfig.signalWeights,
-		),
+		signalWeights: sanitizeWeights(input.signalWeights, defaults.signalWeights),
 		penaltyWeights: sanitizeWeights(
 			input.penaltyWeights,
-			defaultConfig.penaltyWeights,
+			defaults.penaltyWeights,
 		),
-		filters: sanitizeFilters(input.filters, DEFAULT_RANKING_CONFIG.filters),
+		distanceWeights: sanitizeDistanceWeights(input.distanceWeights),
+		filters: sanitizeFilters(input.filters, defaults.filters),
 		options: sanitizeOptions(input.options),
 	};
 }
@@ -741,13 +815,14 @@ function signalValue(
 
 function ruleValue(
 	profileSignals: RankingProfileSignals | undefined,
+	listing: RankingListing,
 	condition: Extract<
 		RankingRuleCondition,
 		{ signal: string } | { penalty: string }
 	>,
 ): number | boolean | string | null {
 	if ("signal" in condition) {
-		return signalValue(profileSignals?.signals, condition.signal);
+		return listingSignalValue(listing, condition.signal);
 	}
 	return signalValue(profileSignals?.penalties, condition.penalty);
 }
@@ -778,7 +853,7 @@ function matchesCondition(
 		return condition.op === "in" ? included : !included;
 	}
 
-	const value = ruleValue(profileSignals, condition);
+	const value = ruleValue(profileSignals, listing, condition);
 	const present = value !== null;
 	if (condition.op === "present") return present;
 	if (condition.op === "missing") return !present;
@@ -809,19 +884,54 @@ function categoryBudget(
 	return weights[category];
 }
 
+const DISTANCE_CURVES: Readonly<Record<string, readonly [number, number]>> = {
+	rail_station: [1.0, 10.0],
+	tram_stop: [0.3, 3.0],
+	lake: [0.3, 3.0],
+	river: [0.2, 3.0],
+	forest: [0.2, 3.0],
+	city_center: [0.5, 10.0],
+};
+
+function distanceFactor(
+	distanceKm: number | null,
+	code: string,
+): number | null {
+	if (distanceKm === null || distanceKm < 0) return null;
+	const curve = DISTANCE_CURVES[code];
+	if (!curve) return null;
+	const [full, zero] = curve;
+	return roundPoints(
+		Math.max(0, Math.min(1, (zero - distanceKm) / (zero - full))),
+	);
+}
+
 function scoreListingWithConfig(
 	listing: RankingListing,
 	config: RankingConfig,
 ): RankingBreakdown {
 	const spec = getRankingProfileSpec(config.profile);
-	const profileSignals = listing.scoreSignals?.profiles?.[config.profile];
+	const profileSignals = mergedLegacySignals(
+		listing.scoreSignals,
+		listing.propertyType,
+	);
 	const categoryWeights = normalizeCategoryWeights(config.categoryWeights);
+	const distanceWeights = normalizeDistanceWeights(config.distanceWeights);
+	const signalWeights = { ...config.signalWeights };
+	const distanceDenominator = DISTANCE_SIGNAL_CODES.reduce(
+		(sum, code) => sum + (distanceWeights[code] ?? 0),
+		0,
+	);
+	for (const code of DISTANCE_SIGNAL_CODES) {
+		signalWeights[code] = distanceDenominator > 0 ? distanceWeights[code] : 0;
+	}
+
 	const categoryDenominators = new Map<RankingCategory, number>();
 	for (const category of BUDGET_CATEGORIES) {
 		let denominator = 0;
 		for (const signal of spec.signals) {
 			if (signal.scored === false || signal.category !== category) continue;
-			denominator += config.signalWeights[signal.code] ?? signal.defaultWeight;
+			denominator += signalWeights[signal.code] ?? signal.defaultWeight;
 		}
 		categoryDenominators.set(category, denominator);
 	}
@@ -833,12 +943,22 @@ function scoreListingWithConfig(
 
 	for (const signal of spec.signals) {
 		if (signal.scored === false) continue;
-		const weight = config.signalWeights[signal.code] ?? signal.defaultWeight;
+		const weight = signalWeights[signal.code] ?? signal.defaultWeight;
 		const denominator = categoryDenominators.get(signal.category) ?? 0;
 		const budget = categoryBudget(categoryWeights, signal.category);
 		const effectiveMaxPoints =
 			denominator > 0 ? (budget * weight) / denominator : 0;
-		const rawValue = signalValue(profileSignals?.signals, signal.code);
+		const distanceCode = DISTANCE_SIGNAL_CODES.find(
+			(code) => code === signal.code,
+		);
+		const rawValue = distanceCode
+			? distanceFactor(
+					distanceCode === "city_center"
+						? distanceFromCenter(listing, config.filters.center)
+						: listingGeoDistance(listing, distanceCode),
+					distanceCode,
+				)
+			: listingSignalValue(listing, signal.code);
 		if (rawValue === null && weight > 0 && budget > 0)
 			missing.push(signal.label);
 		const points = roundPoints(
@@ -862,7 +982,7 @@ function scoreListingWithConfig(
 
 	for (const penalty of spec.penalties) {
 		const weight = config.penaltyWeights[penalty.code] ?? penalty.defaultWeight;
-		const rawValue = signalValue(profileSignals?.penalties, penalty.code);
+		const rawValue = signalValue(profileSignals.penalties, penalty.code);
 		const points = roundPoints(rawValue === null ? 0 : -weight * rawValue);
 		const contribution: RankingContribution = {
 			code: penalty.code,

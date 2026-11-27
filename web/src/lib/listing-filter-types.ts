@@ -20,15 +20,6 @@ export const PROPERTY_TYPES = [
 ] as const;
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 
-export const SCORE_PROFILES = [
-	"kamienica",
-	"nowe_mieszkanie",
-	"dzialka_kolej",
-	"dom_airbnb",
-	"dom_kolej",
-	"dzialka_airbnb",
-] as const;
-export type ScoreProfile = (typeof SCORE_PROFILES)[number];
 export const LISTING_SORTS = ["newest", "score"] as const;
 export type ListingSort = (typeof LISTING_SORTS)[number];
 
@@ -45,7 +36,6 @@ export type ListingFilters = {
 	minPrice?: number;
 	maxPrice?: number;
 	minScore?: number;
-	scoreProfile?: ScoreProfile;
 	sort?: ListingSort;
 };
 
@@ -59,7 +49,6 @@ export type BBox = {
 const OFFER_TYPE_SET = new Set<string>(OFFER_TYPES);
 const PROPERTY_TYPE_SET = new Set<string>(PROPERTY_TYPES);
 const POSTED_WITHIN_SET = new Set<string>(POSTED_WITHIN_VALUES);
-const SCORE_PROFILE_SET = new Set<string>(SCORE_PROFILES);
 const LISTING_SORT_SET = new Set<string>(LISTING_SORTS);
 
 function nonEmptyString(value: unknown): string | undefined {
@@ -110,10 +99,6 @@ export function sanitizeListingFilters(value: unknown): ListingFilters {
 	if (minScore !== undefined) {
 		filters.minScore = Math.max(0, Math.min(100, Math.trunc(minScore)));
 	}
-	const scoreProfile = nonEmptyString(input.scoreProfile);
-	if (scoreProfile && SCORE_PROFILE_SET.has(scoreProfile)) {
-		filters.scoreProfile = scoreProfile as ScoreProfile;
-	}
 	const sort = nonEmptyString(input.sort);
 	if (sort && LISTING_SORT_SET.has(sort)) {
 		filters.sort = sort as ListingSort;
@@ -141,7 +126,6 @@ export function parseListingFilters(search: URLSearchParams): ListingFilters {
 		minPrice: search.get("minPrice"),
 		maxPrice: search.get("maxPrice"),
 		minScore: search.get("minScore"),
-		scoreProfile: search.get("scoreProfile"),
 		sort: search.get("sort"),
 	});
 }
@@ -194,7 +178,6 @@ export function filtersToSearchParams(
 	if (filters.minScore !== undefined) {
 		params.set("minScore", String(filters.minScore));
 	}
-	if (filters.scoreProfile) params.set("scoreProfile", filters.scoreProfile);
 	if (filters.sort) params.set("sort", filters.sort);
 	return params;
 }

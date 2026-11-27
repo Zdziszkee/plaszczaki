@@ -3,7 +3,13 @@
 		"gate_km": 3.0,
 		"decay_km": 10.0,
 		"destinations": ["krakow", "katowice", "warszawa", "wroclaw"],
-		"frequency_cap_trips_per_week": 140
+		"frequency_cap_trips_per_week": 140,
+		"distance_full_km": 1.0,
+		"distance_zero_km": 10.0
+	},
+	"tram": {
+		"distance_full_km": 0.3,
+		"distance_zero_km": 3.0
 	},
 	"planned_rail": {
 		"radius_km": 3.0,
@@ -15,7 +21,8 @@
 	},
 	"nature": {
 		"forest": { "full_m": 200, "zero_m": 3000, "text_factor": 0.65 },
-		"water": { "full_m": 300, "zero_m": 3000, "text_factor": 0.65 }
+		"lake": { "full_m": 300, "zero_m": 3000, "text_factor": 0.65 },
+		"river": { "full_m": 200, "zero_m": 3000, "text_factor": 0.65 }
 	},
 	"new_flat": {
 		"commute_full_km": 0.3,
@@ -102,6 +109,8 @@
 		],
 		"plot_negative": ["rolna", "rolne", "lesna", "lesne", "siedliskow", "rekreacyjn", "ogrodowa", "ogrodowe"],
 		"nature_forest": ["przy lesie", "obok lasu", "w lesie", "nad lesiem", "z lasem", "lasem", "lesie", "lasu", "puszczy", "boru"],
+		"nature_lake": ["nad jeziorem", "przy jeziorze", "obok jeziora", "jezior", "staw", "zalew", "zbiornik"],
+		"nature_river": ["nad rzeka", "przy rzece", "rzeki", "rzeka", "strumien", "potok", "widok na wode", "linia brzegowa"],
 		"nature_water": ["nad jeziorem", "przy jeziorze", "obok jeziora", "jezior", "nad rzeka", "przy rzece", "rzeki", "staw", "zalew", "widok na wode", "linia brzegowa"],
 		"nature_mountains": ["w gorach", "przy gorach", "widok na gory", "gorski", "gorskie", "gorska", "gorskim", "tatry", "beskid", "pieniny", "gorce", "podgorze"],
 		"airbnb": ["airbnb", "booking", "krotkoterminowy", "najem krotkoterminowy", "pensjonat", "agroturystyk", "turystyczn", "siedlisko", "letniskowy", "wakacyjny", "pod inwestycje", "inwestycyjn", "apartamenty"],

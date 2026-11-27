@@ -29,7 +29,7 @@ from plaszczaki_scraper.normalize import normalize_text
 
 logger = logging.getLogger(__name__)
 
-SIGNALS_VERSION = "signals-v1"
+SIGNALS_VERSION = "signals-v2"
 
 PROFILE_NAMES = (
     "kamienica",
@@ -50,8 +50,12 @@ SIGNAL_CODES = (
     "planned_rail",
     "station_gate",
     "station_data_available",
+    "rail_station",
+    "tram_stop",
     "forest",
     "water",
+    "lake",
+    "river",
     "mountains",
     "tourist_area",
     "elevation",
@@ -901,11 +905,17 @@ class GeoSignals:
     weekly_trips: float = 0.0
     station_gate: bool | None = None
     station_data_available: bool | None = None
+    rail_station_km: float | None = None
+    tram_stop_km: float | None = None
     planned_factor: float = 0.0
     planned_label: str | None = None
     forest_km: float | None = None
+    lake_km: float | None = None
+    river_km: float | None = None
     water_km: float | None = None
     forest_data_available: bool = False
+    lake_data_available: bool = False
+    river_data_available: bool = False
     water_data_available: bool = False
     mountain: str | None = None
     tourist: bool | None = None
@@ -926,11 +936,13 @@ def _geo_signals(row: sqlite3.Row, config: dict[str, Any], geo: GeoContext) -> G
     if property_type in {"house", "plot"}:
         result.station_data_available = bool(geo.stations)
         result.forest_data_available = bool(geo.forest)
+        result.lake_data_available = bool(geo.lake)
+        result.river_data_available = bool(geo.river)
         result.water_data_available = bool(geo.water)
 
     if property_type in {"flat", "house"}:
         result.commute_data_available = bool(geo.stations) or any(
-            poi.get("cat") == "transit" for poi in geo.pois
+            poi.get("cat") in {"transit", "rail_station", "tram_stop"} for poi in geo.pois
         )
 
     if lat is None or lng is None:
@@ -957,14 +969,34 @@ def _geo_signals(row: sqlite3.Row, config: dict[str, Any], geo: GeoContext) -> G
             lat, lng, config["planned_rail"]
         )
 
+    rail_radius = float(config["rail"]["distance_zero_km"])
+    rail_station = geo.nearest_station(lat, lng, radius_km=rail_radius)
+    if rail_station is not None:
+        result.rail_station_km = round(rail_station[1], 2)
+    rail_poi = geo.nearest_poi(lat, lng, rail_radius, categories=("rail_station",))
+    if rail_poi is not None and (
+        result.rail_station_km is None or rail_poi[1] < result.rail_station_km
+    ):
+        result.rail_station_km = round(rail_poi[1], 2)
+
+    tram = config["tram"]
+    tram_radius = float(tram["distance_zero_km"])
+    tram_stop = geo.nearest_poi(lat, lng, tram_radius, categories=("tram_stop",))
+    if tram_stop is not None:
+        result.tram_stop_km = round(tram_stop[1], 2)
+
     if property_type in {"house", "plot"}:
         nature = config["nature"]
-        for kind in ("forest", "water"):
+        for kind in ("forest", "lake", "river"):
             settings = nature[kind]
             distance = geo.nature_distance_km(
                 lat, lng, kind, radius_km=float(settings["zero_m"]) / 1000
             )
             setattr(result, f"{kind}_km", round(distance, 2) if distance is not None else None)
+        water_distances = [
+            distance for distance in (result.lake_km, result.river_km) if distance is not None
+        ]
+        result.water_km = min(water_distances) if water_distances else None
 
         for region in config["mountain_regions"]:
             min_lng, min_lat, max_lng, max_lat = region["bbox"]
@@ -984,7 +1016,12 @@ def _geo_signals(row: sqlite3.Row, config: dict[str, Any], geo: GeoContext) -> G
             result.walkability = geo.walkability(lat, lng)
         commute = config["new_flat"]
         station = geo.nearest_station(lat, lng, radius_km=float(commute["commute_zero_km"]))
-        transit = geo.nearest_transit(lat, lng, radius_km=float(commute["commute_zero_km"]))
+        transit = geo.nearest_transit(
+            lat,
+            lng,
+            radius_km=float(commute["commute_zero_km"]),
+            categories=("transit", "rail_station", "tram_stop"),
+        )
         candidates: list[tuple[float, str]] = []
         if station is not None:
             candidates.append((station[1], f"stacja {station[0].get('name') or 'kolejowa'}"))
@@ -998,7 +1035,10 @@ def _geo_signals(row: sqlite3.Row, config: dict[str, Any], geo: GeoContext) -> G
 
 
 def _nature_factor(
-    distance: float | None, available: bool, text: bool, settings: dict[str, Any]
+    distance: float | None,
+    available: bool | None,
+    text: bool,
+    settings: dict[str, Any],
 ) -> Factor:
     geo_factor = (
         _distance_factor(
@@ -1313,6 +1353,13 @@ def extract_signals_row(
         return {
             "version": SIGNALS_VERSION,
             "profiles": profiles,
+            "geo": {
+                "rail_station_km": None,
+                "tram_stop_km": None,
+                "lake_km": None,
+                "river_km": None,
+                "forest_km": None,
+            },
             "metrics": metrics,
             "priceEvidence": None,
         }
@@ -1341,9 +1388,28 @@ def extract_signals_row(
         "comparable_discount": comparable_discount,
         **opportunity,
     }
+    transit_distance_known = (
+        geo_signals.rail_station_km is not None or geo_signals.tram_stop_km is not None
+    )
     for profile in profiles.values():
         profile["signals"].update(common)
         profile["penalties"]["overpriced"] = overpriced
+        for kind, distance in (
+            ("rail_station", geo_signals.rail_station_km),
+            ("tram_stop", geo_signals.tram_stop_km),
+        ):
+            settings = config["rail"] if kind == "rail_station" else config["tram"]
+            profile["signals"][kind] = (
+                _distance_factor(
+                    distance,
+                    float(settings["distance_full_km"]),
+                    float(settings["distance_zero_km"]),
+                )
+                if distance is not None
+                else 0.0
+                if transit_distance_known
+                else None
+            )
 
     building = _building_type(row)
     material = _material(row)
@@ -1505,7 +1571,9 @@ def extract_signals_row(
         )
 
     forest_text = _has(text, keywords["nature_forest"])
-    water_text = _has(text, keywords["nature_water"])
+    water_text = _has(text, keywords.get("nature_water", []))
+    lake_text = _has(text, keywords.get("nature_lake", []))
+    river_text = _has(text, keywords.get("nature_river", []))
     mountain_text = _has(text, keywords["nature_mountains"])
     nature = {
         "forest": _nature_factor(
@@ -1518,7 +1586,19 @@ def extract_signals_row(
             geo_signals.water_km,
             geo_signals.water_data_available,
             water_text,
-            config["nature"]["water"],
+            config["nature"].get("water", config["nature"]["lake"]),
+        ),
+        "lake": _nature_factor(
+            geo_signals.lake_km,
+            geo_signals.lake_data_available,
+            lake_text or water_text,
+            config["nature"]["lake"],
+        ),
+        "river": _nature_factor(
+            geo_signals.river_km,
+            geo_signals.river_data_available,
+            river_text or water_text,
+            config["nature"]["river"],
         ),
         "mountains": (
             1.0
@@ -1595,6 +1675,9 @@ def extract_signals_row(
         profiles["dzialka_kolej"]["signals"]["fenced"] = _boolean_factor(row["fenced"])
         profiles["dzialka_airbnb"]["signals"].update(plot_signals)
         profiles["dzialka_airbnb"]["signals"]["airbnb"] = airbnb
+        for profile_name in PROFILE_NAMES:
+            profiles[profile_name]["signals"]["lake"] = nature["lake"]
+            profiles[profile_name]["signals"]["river"] = nature["river"]
         for profile_name in ("dzialka_kolej", "dzialka_airbnb"):
             profiles[profile_name]["penalties"]["non_building_plot"] = (
                 1.0 if negative and not building_plot else 0.0 if building_plot else None
@@ -1606,6 +1689,13 @@ def extract_signals_row(
     return {
         "version": SIGNALS_VERSION,
         "profiles": profiles,
+        "geo": {
+            "rail_station_km": geo_signals.rail_station_km,
+            "tram_stop_km": geo_signals.tram_stop_km,
+            "lake_km": geo_signals.lake_km,
+            "river_km": geo_signals.river_km,
+            "forest_km": geo_signals.forest_km,
+        },
         "metrics": metrics,
         "priceEvidence": evidence.as_json() if evidence is not None else None,
     }
@@ -1634,6 +1724,7 @@ def _compact_payload(payload: dict[str, Any], property_type: str) -> dict[str, A
     return {
         "version": payload["version"],
         "profiles": profiles,
+        "geo": payload.get("geo"),
         "metrics": payload["metrics"],
         "priceEvidence": payload["priceEvidence"],
     }

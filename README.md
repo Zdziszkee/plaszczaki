@@ -144,15 +144,25 @@ attributes and the beginning of its description.
 
 ### Ranking ofert
 
-`/oferty` is a configurable replacement for the old daily top-offer list. It combines
-hard filters (area, price per m², building type, ceiling height, distance from Kraków
-or Katowice centre, amenities and more) with per-signal scoring weights. Presets are
-stored in SQLite and can be activated, exported or imported.
+`/oferty` is the single main ranking page for flats, houses and plots. Its distance
+sliders cover railway stations, tram stops, lakes/reservoirs, rivers/streams, forests
+and the selected Kraków or Katowice city centre. Category weights and distance weights
+are redistributed live and always total 100%. Hard filters and detailed attribute
+weights remain available in collapsible sections. Presets are stored in SQLite and
+can be activated, exported or imported; legacy profile presets are migrated on read.
 
 The Python sidecar only extracts versioned `listing.score_signals`. The TanStack Start
-app owns the declarative profile specification, score calculation, presets and live
-ranking. Run `uv run --directory scraper python -m plaszczaki_scraper signals` after
-schema changes or to backfill all listings.
+app owns the universal ranking specification, score calculation, presets and live
+ranking. Refresh geodata and backfill all listings to enable the new distance data:
+
+```bash
+uv run --directory scraper python -m plaszczaki_scraper geodata --part poi --force
+uv run --directory scraper python -m plaszczaki_scraper geodata --part nature --force
+uv run --directory scraper python -m plaszczaki_scraper signals
+```
+
+`signals-v2` stores raw geo distances shared by all property types. Existing
+`signals-v1` rows remain scoreable while the backfill runs.
 
 ### Database
 

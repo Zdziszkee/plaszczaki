@@ -21,22 +21,26 @@ import { Separator } from "#/components/ui/separator";
 import { Slider } from "#/components/ui/slider";
 import {
 	createDefaultRankingConfig,
+	DISTANCE_SIGNAL_LABELS,
 	RANKING_PROFILE_SPECS,
 	type RankingSignalSpec,
 } from "#/lib/ranking-spec";
 import type {
+	RankingBudgetCategory,
 	RankingCategory,
 	RankingConfig,
 	RankingFilters,
 } from "#/lib/ranking-types";
+import {
+	DISTANCE_SIGNAL_CODES,
+	type DistanceSignalCode,
+	normalizeDistanceWeights,
+	RANKING_BUDGET_CATEGORIES,
+	redistributeDistanceWeights,
+	redistributePercentageWeights,
+} from "#/lib/ranking-weights";
 
-const CATEGORY_ORDER: RankingCategory[] = [
-	"price",
-	"location",
-	"attributes",
-	"nature",
-	"opportunity",
-];
+const CATEGORY_ORDER: RankingBudgetCategory[] = [...RANKING_BUDGET_CATEGORIES];
 
 const CATEGORY_LABELS: Record<RankingCategory, string> = {
 	price: "Cena i wartość",
@@ -218,12 +222,16 @@ function WeightSlider({
 	label,
 	value,
 	onChange,
-	max = 40,
+	max = 100,
+	step = 1,
+	suffix = "%",
 }: {
 	label: string;
 	value: number;
 	onChange: (value: number) => void;
 	max?: number;
+	step?: number;
+	suffix?: string;
 }) {
 	const id = useId();
 	return (
@@ -233,15 +241,17 @@ function WeightSlider({
 					{label}
 				</FieldLabel>
 				<span className="font-mono text-[11px] text-muted-foreground">
-					{value.toFixed(1)}
+					{value.toFixed(step < 1 ? 1 : 0)}
+					{suffix}
 				</span>
 			</div>
 			<Slider
 				id={id}
+				aria-label={label}
 				value={[value]}
 				min={0}
 				max={max}
-				step={0.5}
+				step={step}
 				onValueChange={([next]) => onChange(next ?? 0)}
 			/>
 		</Field>
@@ -265,13 +275,48 @@ export default function RankingControls({
 		(total, category) => total + config.categoryWeights[category],
 		0,
 	);
+	const distanceWeights = normalizeDistanceWeights(config.distanceWeights);
+	const setCategoryWeight = (
+		category: RankingBudgetCategory,
+		value: number,
+	) => {
+		const weights = redistributePercentageWeights(
+			CATEGORY_ORDER,
+			config.categoryWeights,
+			category,
+			value,
+		);
+		onChange({ ...config, categoryWeights: { ...weights, penalty: 0 } });
+	};
+	const setDistanceWeight = (code: DistanceSignalCode, value: number) => {
+		onChange({
+			...config,
+			distanceWeights: redistributeDistanceWeights(
+				distanceWeights,
+				code,
+				value,
+			),
+		});
+	};
 	const signalMax = (signal: RankingSignalSpec) => {
+		const distanceCode = DISTANCE_SIGNAL_CODES.find(
+			(code) => code === signal.code,
+		);
+		if (distanceCode) {
+			return (
+				(config.categoryWeights.location * distanceWeights[distanceCode]) / 100
+			);
+		}
 		const categoryBudget =
 			categoryTotal > 0
 				? (config.categoryWeights[signal.category] / categoryTotal) * 100
 				: 0;
 		const weights = spec.signals
-			.filter((item) => item.category === signal.category)
+			.filter(
+				(item) =>
+					item.category === signal.category &&
+					!(DISTANCE_SIGNAL_CODES as readonly string[]).includes(item.code),
+			)
 			.reduce(
 				(total, item) => total + (config.signalWeights[item.code] ?? 0),
 				0,
@@ -299,6 +344,43 @@ export default function RankingControls({
 					<RotateCcwIcon />
 				</Button>
 			</div>
+
+			<ControlGroup title="Odległości i lokalizacja" defaultOpen>
+				<p className="text-xs leading-5 text-muted-foreground">
+					Wyższa wartość oznacza większy wpływ bliskości na wynik. Odległości są
+					liczone w linii prostej.
+				</p>
+				{DISTANCE_SIGNAL_CODES.map((code) => (
+					<WeightSlider
+						key={code}
+						label={`${DISTANCE_SIGNAL_LABELS[code]} · maks. ${((config.categoryWeights.location * distanceWeights[code]) / 100).toFixed(1)} pkt`}
+						value={distanceWeights[code]}
+						onChange={(value) => setDistanceWeight(code, value)}
+					/>
+				))}
+				<p className="text-[11px] leading-4 text-muted-foreground">
+					Wagi odległości zawsze sumują się do 100% udziału w kategorii
+					lokalizacji ({config.categoryWeights.location} pkt).
+				</p>
+				<Field>
+					<FieldLabel htmlFor="ranking-center">Centrum miasta</FieldLabel>
+					<select
+						id="ranking-center"
+						className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+						value={config.filters.center ?? ""}
+						onChange={(event) =>
+							filterPatch({
+								center: (event.target.value ||
+									null) as RankingFilters["center"],
+							})
+						}
+					>
+						<option value="">Bez oceny centrum</option>
+						<option value="krakow">Kraków — Rynek Główny</option>
+						<option value="katowice">Katowice — Rynek</option>
+					</select>
+				</Field>
+			</ControlGroup>
 
 			<ControlGroup title="Zakres ofert" defaultOpen>
 				<CheckboxGroup
@@ -390,7 +472,7 @@ export default function RankingControls({
 				/>
 			</ControlGroup>
 
-			<ControlGroup title="Budynek i wnętrze" defaultOpen>
+			<ControlGroup title="Budynek i wnętrze">
 				<CheckboxGroup
 					legend="Typ budynku"
 					options={BUILDING_OPTIONS}
@@ -522,25 +604,7 @@ export default function RankingControls({
 				))}
 			</ControlGroup>
 
-			<ControlGroup title="Odległość od centrum">
-				<Field>
-					<FieldLabel htmlFor="ranking-center">Centrum</FieldLabel>
-					<select
-						id="ranking-center"
-						className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-						value={config.filters.center ?? ""}
-						onChange={(event) =>
-							filterPatch({
-								center: (event.target.value ||
-									null) as RankingFilters["center"],
-							})
-						}
-					>
-						<option value="">Bez filtra</option>
-						<option value="krakow">Kraków — Rynek Główny</option>
-						<option value="katowice">Katowice — Rynek</option>
-					</select>
-				</Field>
+			<ControlGroup title="Maksymalna odległość od centrum">
 				<Field>
 					<FieldLabel htmlFor="ranking-center-distance">
 						Maksymalna odległość
@@ -569,28 +633,27 @@ export default function RankingControls({
 						key={category}
 						label={CATEGORY_LABELS[category]}
 						value={config.categoryWeights[category]}
-						max={60}
-						onChange={(value) =>
-							onChange({
-								...config,
-								categoryWeights: {
-									...config.categoryWeights,
-									[category]: value,
-								},
-							})
-						}
+						onChange={(value) => setCategoryWeight(category, value)}
 					/>
 				))}
+				<div className="flex items-center justify-between gap-3 font-mono text-[11px] text-muted-foreground">
+					<span>Suma wag kategorii</span>
+					<span>{categoryTotal}%</span>
+				</div>
 				<p className="text-[11px] leading-4 text-muted-foreground">
-					Wagi są normalizowane do 100 punktów. Zmiana jednej kategorii zmienia
-					udział pozostałych.
+					Wagi są zawsze rozdzielane do 100 punktów — zmiana jednej
+					automatycznie aktualizuje pozostałe.
 				</p>
 			</ControlGroup>
 
-			<ControlGroup title="Wagi atrybutów" defaultOpen>
+			<ControlGroup title="Wagi atrybutów">
 				{CATEGORY_ORDER.map((category) => {
 					const signals = spec.signals.filter(
-						(signal) => signal.category === category,
+						(signal) =>
+							signal.category === category &&
+							!(DISTANCE_SIGNAL_CODES as readonly string[]).includes(
+								signal.code,
+							),
 					);
 					if (signals.length === 0) return null;
 					return (

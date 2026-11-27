@@ -64,10 +64,12 @@ area["ISO3166-2"="PL-12"]->.malopolskie;
   way["natural"="wood"](area.slaskie);
   way["natural"="water"]["water"~"^(lake|reservoir|pond)$"](area.slaskie);
   way["landuse"="reservoir"](area.slaskie);
+  way["waterway"~"^(river|stream|canal)$"](area.slaskie);
   way["landuse"="forest"](area.malopolskie);
   way["natural"="wood"](area.malopolskie);
   way["natural"="water"]["water"~"^(lake|reservoir|pond)$"](area.malopolskie);
   way["landuse"="reservoir"](area.malopolskie);
+  way["waterway"~"^(river|stream|canal)$"](area.malopolskie);
 );
 out geom;"""
 
@@ -83,6 +85,18 @@ area["ISO3166-2"="PL-12"]->.malopolskie;
   node["shop"~"^(supermarket|convenience|greengrocer|bakery|butcher|deli)$"](area.malopolskie);
   node["amenity"~"^(restaurant|cafe|fast_food|pharmacy|clinic|doctors|school|kindergarten)$"](area.malopolskie);
   node["leisure"~"^(park|playground|garden)$"](area.malopolskie);
+  node["highway"="bus_stop"](area.malopolskie);
+  node["railway"~"^(station|halt|tram_stop)$"](area.malopolskie);
+);
+out;
+"""
+
+TRANSIT_QUERY = """[out:json][timeout:300];
+area["ISO3166-2"="PL-24"]->.slaskie;
+area["ISO3166-2"="PL-12"]->.malopolskie;
+(
+  node["highway"="bus_stop"](area.slaskie);
+  node["railway"~"^(station|halt|tram_stop)$"](area.slaskie);
   node["highway"="bus_stop"](area.malopolskie);
   node["railway"~"^(station|halt|tram_stop)$"](area.malopolskie);
 );
@@ -110,6 +124,8 @@ POI_CATEGORIES: dict[str, tuple[str, ...]] = {
     "education": ("school", "kindergarten"),
     "leisure": ("park", "playground", "garden"),
     "transit": ("bus_stop", "station", "halt", "tram_stop"),
+    "rail_station": ("station", "halt"),
+    "tram_stop": ("tram_stop",),
 }
 
 
@@ -562,7 +578,14 @@ def _read_shapefile_rings(base: Path, transformer: Transformer) -> list[list[lis
     return rings
 
 
-def _fetch_bdot_nature(*, force: bool) -> tuple[list[list[list[float]]], list[list[list[float]]]]:
+def _fetch_bdot_nature(
+    *, force: bool
+) -> tuple[
+    list[list[list[float]]],
+    list[list[list[float]]],
+    list[list[list[float]]],
+    list[list[list[float]]],
+]:
     root = cache_dir() / "bdot10k"
     root.mkdir(parents=True, exist_ok=True)
     transformer = Transformer.from_crs("EPSG:2180", "EPSG:4326", always_xy=True)
@@ -612,13 +635,24 @@ def _fetch_bdot_nature(*, force: bool) -> tuple[list[list[list[float]]], list[li
                 forest.extend(rings)
             else:
                 water.extend(rings)
-    return forest, water
+    # BDOT's combined water layer is retained as the legacy aggregate. Separate
+    # lake/river geometry comes from OSM so the new sliders remain meaningful.
+    osm_forest, osm_water, osm_lake, osm_river = _fetch_osm_nature()
+    del osm_forest, osm_water
+    return forest, water, osm_lake, osm_river
 
 
-def _fetch_osm_nature() -> tuple[list[list[list[float]]], list[list[list[float]]]]:
+def _fetch_osm_nature() -> tuple[
+    list[list[list[float]]],
+    list[list[list[float]]],
+    list[list[list[float]]],
+    list[list[list[float]]],
+]:
     payload = _overpass(NATURE_QUERY)
     forest: list[list[list[float]]] = []
     water: list[list[list[float]]] = []
+    lake: list[list[list[float]]] = []
+    river: list[list[list[float]]] = []
     for element in payload.get("elements", []):
         if element.get("type") != "way" or not element.get("geometry"):
             continue
@@ -627,11 +661,16 @@ def _fetch_osm_nature() -> tuple[list[list[list[float]]], list[list[list[float]]
         if len(ring) < 3:
             continue
         kind = tags.get("landuse") or tags.get("natural") or ""
+        waterway = tags.get("waterway")
         if kind in {"forest", "wood"}:
             forest.append(ring)
-        elif kind in {"water", "reservoir"}:
+        elif kind in {"water", "reservoir"} or waterway in {"riverbank", "dock"}:
             water.append(ring)
-    return forest, water
+            lake.append(ring)
+        elif waterway in {"river", "stream", "canal"}:
+            water.append(ring)
+            river.append(ring)
+    return forest, water, lake, river
 
 
 def fetch_nature(*, force: bool = False) -> dict[str, Any]:
@@ -639,40 +678,53 @@ def fetch_nature(*, force: bool = False) -> dict[str, Any]:
     cached: dict[str, Any] | None = None
     if path.exists():
         cached = json.loads(path.read_text(encoding="utf-8"))
-        if not force and cached.get("source") == "BDOT10k":
+        if (
+            not force
+            and cached.get("source") == "BDOT10k"
+            and "lake" in cached
+            and "river" in cached
+        ):
             return {
                 "source": "BDOT10k",
                 "forest": len(cached["forest"]),
+                "lake": len(cached.get("lake", [])),
+                "river": len(cached.get("river", [])),
                 "water": len(cached["water"]),
                 "cached": True,
             }
     try:
-        forest, water = _fetch_bdot_nature(force=force)
+        forest, water, lake, river = _fetch_bdot_nature(force=force)
         if not forest and not water:
             raise RuntimeError("BDOT10k returned no forest/water polygons")
         source = "BDOT10k"
     except Exception:
         logger.warning("BDOT10k nature import failed; falling back to OSM", exc_info=True)
-        if cached is not None and not force:
+        if cached is not None and not force and "lake" in cached and "river" in cached:
             return {
                 "source": cached.get("source", "OSM"),
                 "forest": len(cached["forest"]),
+                "lake": len(cached.get("lake", [])),
+                "river": len(cached.get("river", [])),
                 "water": len(cached["water"]),
                 "cached": True,
                 "fallback": True,
             }
-        forest, water = _fetch_osm_nature()
+        forest, water, lake, river = _fetch_osm_nature()
         source = "OSM"
     result = {
         "source": source,
         "generated_at": int(time.time() * 1000),
         "forest": forest,
+        "lake": lake,
+        "river": river,
         "water": water,
     }
     _write_json(path, result)
     return {
         "source": source,
         "forest": len(forest),
+        "lake": len(lake),
+        "river": len(river),
         "water": len(water),
         "output": str(path),
     }
@@ -686,25 +738,61 @@ def _poi_category(tags: dict[str, str]) -> str | None:
     return None
 
 
-def fetch_poi(*, force: bool = False) -> dict[str, Any]:
-    path = cache_dir() / "poi.json"
-    if path.exists() and not force:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        return {"pois": len(payload["pois"]), "cached": True}
-    payload = _overpass(POI_QUERY)
+def _transit_category(tags: dict[str, str]) -> str | None:
+    if tags.get("railway") == "tram_stop":
+        return "tram_stop"
+    if tags.get("railway") in {"station", "halt"}:
+        return "rail_station"
+    if tags.get("highway") == "bus_stop":
+        return "transit"
+    return None
+
+
+def _poi_elements(payload: dict[str, Any]) -> list[dict[str, Any]]:
     pois: list[dict[str, Any]] = []
     for element in payload.get("elements", []):
         if element.get("type") != "node":
             continue
-        category = _poi_category(element.get("tags", {}))
+        tags = element.get("tags", {})
+        category = _transit_category(tags) or _poi_category(tags)
         if category is None:
             continue
         pois.append(
-            {"lat": round(element["lat"], 5), "lng": round(element["lon"], 5), "cat": category}
+            {
+                "lat": round(element["lat"], 5),
+                "lng": round(element["lon"], 5),
+                "cat": category,
+                "name": tags.get("name"),
+            }
         )
-    result = {"generated_at": int(time.time() * 1000), "pois": pois}
+    return pois
+
+
+def fetch_poi(*, force: bool = False) -> dict[str, Any]:
+    path = cache_dir() / "poi.json"
+    cached: dict[str, Any] | None = None
+    if path.exists():
+        cached = json.loads(path.read_text(encoding="utf-8"))
+        if not force and any(
+            poi.get("cat") in {"rail_station", "tram_stop"} for poi in cached.get("pois", [])
+        ):
+            return {"pois": len(cached["pois"]), "cached": True}
+    payload = _overpass(POI_QUERY)
+    pois = _poi_elements(payload)
+    transit_path = cache_dir() / "transit.json"
+    if transit_path.exists() and not force:
+        transit = json.loads(transit_path.read_text(encoding="utf-8"))
+    else:
+        transit = _overpass(TRANSIT_QUERY)
+        _write_json(
+            transit_path,
+            {"generated_at": int(time.time() * 1000), "elements": transit.get("elements", [])},
+        )
+    pois.extend(_poi_elements(transit))
+    unique = {(poi["lat"], poi["lng"], poi["cat"]): poi for poi in pois}
+    result = {"generated_at": int(time.time() * 1000), "pois": list(unique.values())}
     _write_json(path, result)
-    return {"pois": len(pois), "output": str(path)}
+    return {"pois": len(result["pois"]), "output": str(path)}
 
 
 def fetch_elevation(points: list[tuple[float, float]], *, rps: float = 1.0) -> dict[str, Any]:
@@ -848,6 +936,10 @@ class GeoContext:
     station_index: GridIndex = field(default_factory=GridIndex)
     forest: list[list[list[float]]] = field(default_factory=list)
     forest_index: GridIndex = field(default_factory=GridIndex)
+    lake: list[list[list[float]]] = field(default_factory=list)
+    lake_index: GridIndex = field(default_factory=GridIndex)
+    river: list[list[list[float]]] = field(default_factory=list)
+    river_index: GridIndex = field(default_factory=GridIndex)
     water: list[list[list[float]]] = field(default_factory=list)
     water_index: GridIndex = field(default_factory=GridIndex)
     pois: list[dict[str, Any]] = field(default_factory=list)
@@ -875,22 +967,31 @@ class GeoContext:
         if nature_path.exists():
             payload = json.loads(nature_path.read_text(encoding="utf-8"))
             context.forest = payload.get("forest", [])
+            context.lake = payload.get("lake", [])
+            context.river = payload.get("river", [])
             context.water = payload.get("water", [])
-            for index, ring in enumerate(context.forest):
-                xs = [point[0] for point in ring]
-                ys = [point[1] for point in ring]
-                context.forest_index.add(index, min(ys), min(xs), max(ys), max(xs))
-            for index, ring in enumerate(context.water):
-                xs = [point[0] for point in ring]
-                ys = [point[1] for point in ring]
-                context.water_index.add(index, min(ys), min(xs), max(ys), max(xs))
+            for kind in ("forest", "lake", "river", "water"):
+                rings = getattr(context, kind)
+                index = getattr(context, f"{kind}_index")
+                for ring_index, ring in enumerate(rings):
+                    xs = [point[0] for point in ring]
+                    ys = [point[1] for point in ring]
+                    index.add(ring_index, min(ys), min(xs), max(ys), max(xs))
 
-        poi_path = cache / "poi.json"
-        if poi_path.exists():
-            payload = json.loads(poi_path.read_text(encoding="utf-8"))
-            context.pois = payload.get("pois", [])
-            for index, poi in enumerate(context.pois):
-                context.poi_index.add(index, poi["lat"], poi["lng"], poi["lat"], poi["lng"])
+        context.pois = []
+        transit_path = cache / "transit.json"
+        for source_path in (cache / "poi.json", transit_path):
+            if not source_path.exists():
+                continue
+            payload = json.loads(source_path.read_text(encoding="utf-8"))
+            if source_path == transit_path:
+                context.pois.extend(_poi_elements(payload))
+            else:
+                context.pois.extend(payload.get("pois", []))
+        unique = {(poi["lat"], poi["lng"], poi["cat"]): poi for poi in context.pois}
+        context.pois = list(unique.values())
+        for index, poi in enumerate(context.pois):
+            context.poi_index.add(index, poi["lat"], poi["lng"], poi["lat"], poi["lng"])
 
         elevation_path = cache / "elevation.json"
         if elevation_path.exists():
@@ -957,23 +1058,35 @@ class GeoContext:
         lat: float,
         lng: float,
         radius_km: float = 3.0,
+        categories: tuple[str, ...] = ("transit",),
     ) -> tuple[dict[str, Any], float] | None:
-        """Nearest OSM bus/tram/rail stop within ``radius_km``."""
+        """Nearest matching OSM transit stop within ``radius_km``."""
         best: tuple[dict[str, Any], float] | None = None
         for index in self.poi_index.query(lat, lng, radius_km):
             poi = self.pois[index]
-            if poi.get("cat") != "transit":
+            if poi.get("cat") not in categories:
                 continue
             distance = haversine_km(lat, lng, poi["lat"], poi["lng"])
             if distance <= radius_km and (best is None or distance < best[1]):
                 best = (poi, distance)
         return best
 
+    def nearest_poi(
+        self,
+        lat: float,
+        lng: float,
+        radius_km: float = 3.0,
+        categories: tuple[str, ...] = ("transit",),
+    ) -> tuple[dict[str, Any], float] | None:
+        return self.nearest_transit(lat, lng, radius_km, categories)
+
     def nature_distance_km(
         self, lat: float, lng: float, kind: str, radius_km: float = 3.0
     ) -> float | None:
-        rings = self.forest if kind == "forest" else self.water
-        index = self.forest_index if kind == "forest" else self.water_index
+        rings = getattr(self, kind, None)
+        index = getattr(self, f"{kind}_index", None)
+        if rings is None or index is None:
+            return None
         best: float | None = None
         for ring_index in index.query(lat, lng, radius_km):
             distance = ring_distance_km(lat, lng, rings[ring_index])
@@ -1012,15 +1125,36 @@ class GeoContext:
         return round(best, 6), label
 
     def walkability(self, lat: float, lng: float, radius_km: float = 1.0) -> float:
-        weights = {"grocery": 3, "food": 3, "health": 2, "education": 2, "leisure": 2, "transit": 2}
-        caps = {"grocery": 2, "food": 10, "health": 5, "education": 5, "leisure": 5, "transit": 10}
+        weights: dict[str, int] = {
+            "grocery": 3,
+            "food": 3,
+            "health": 2,
+            "education": 2,
+            "leisure": 2,
+            "transit": 2,
+        }
+        caps: dict[str, int] = {
+            "grocery": 2,
+            "food": 10,
+            "health": 5,
+            "education": 5,
+            "leisure": 5,
+            "transit": 10,
+        }
         decayed: dict[str, float] = {}
         for index in self.poi_index.query(lat, lng, radius_km):
             poi = self.pois[index]
             distance = haversine_km(lat, lng, poi["lat"], poi["lng"])
             if distance > radius_km:
                 continue
-            category = poi["cat"]
+            raw_category = poi["cat"]
+            category = (
+                "transit"
+                if raw_category in {"transit", "rail_station", "tram_stop"}
+                else raw_category
+            )
+            if category not in weights:
+                continue
             decayed[category] = decayed.get(category, 0.0) + max(0.0, 1.0 - distance / radius_km)
         raw = sum(weights[cat] * min(decayed.get(cat, 0.0), caps[cat]) for cat in weights)
         maximum = sum(weights[cat] * caps[cat] for cat in weights)

@@ -5,19 +5,12 @@ import { listing, source } from "#/db/schema";
 import type { ListingDetails } from "#/lib/listing-details";
 import { activeRankingConfigData } from "#/lib/ranking.server";
 import { type RankingListing, scoreListing } from "#/lib/ranking-engine";
-import type { ScoreProfile } from "#/lib/ranking-types";
 
 const DESCRIPTION_PREVIEW_LENGTH = 600;
 
 function parseListingId(value: string): number | null {
 	const id = Number(value);
 	return Number.isSafeInteger(id) && id > 0 ? id : null;
-}
-
-function rankingProfile(propertyType: string): ScoreProfile {
-	if (propertyType === "house") return "dom_kolej";
-	if (propertyType === "plot") return "dzialka_kolej";
-	return "kamienica";
 }
 
 function descriptionPreview(value: string | null): string | null {
@@ -121,8 +114,8 @@ export const Route = createFileRoute("/api/listings/$id")({
 					);
 				}
 
-				const profile = rankingProfile(row.propertyType);
-				const config = await activeRankingConfigData(profile);
+				const profile = "universal" as const;
+				const config = await activeRankingConfigData();
 				const rankingListing: RankingListing = {
 					...row,
 					publishedAt: row.publishedAt?.getTime() ?? null,

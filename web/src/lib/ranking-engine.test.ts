@@ -17,6 +17,7 @@ import {
 	RANKING_PROFILE_SPECS,
 } from "./ranking-spec";
 import type {
+	LegacyScoreProfile,
 	PriceEvidence,
 	RankingBudgetCategory,
 	RankingConfig,
@@ -34,17 +35,19 @@ function profileSignals(
 }
 
 function signals(
-	profile: ScoreProfile,
+	profile: ScoreProfile | LegacyScoreProfile,
 	values: RankingProfileSignals = profileSignals(),
 	metrics: RankingSignals["metrics"] = {
 		ceiling_height_m: null,
 		large_windows: null,
 	},
 	priceEvidence: PriceEvidence | null = null,
+	geo?: RankingSignals["geo"],
 ): RankingSignals {
 	return {
-		version: "signals-v1",
+		version: geo ? "signals-v2" : "signals-v1",
 		profiles: { [profile]: values },
+		geo,
 		metrics,
 		priceEvidence,
 	};
@@ -77,12 +80,13 @@ function listing(overrides: Partial<RankingListing> = {}): RankingListing {
 }
 
 function isolatedConfig(
-	profile: ScoreProfile,
+	profile: ScoreProfile | LegacyScoreProfile,
 	category: RankingBudgetCategory,
 	signalWeights: Record<string, number>,
 	penaltyWeights: Record<string, number> = {},
 ): RankingConfig {
-	const config = createDefaultRankingConfig(profile);
+	const config = createDefaultRankingConfig("universal");
+	void profile;
 	for (const key of [
 		"price",
 		"location",
@@ -96,6 +100,14 @@ function isolatedConfig(
 		config.signalWeights[code] = 0;
 	for (const code of Object.keys(config.penaltyWeights))
 		config.penaltyWeights[code] = 0;
+	config.distanceWeights = {
+		rail_station: 0,
+		tram_stop: 0,
+		lake: 0,
+		river: 0,
+		forest: 0,
+		city_center: 1,
+	};
 	Object.assign(config.signalWeights, signalWeights);
 	Object.assign(config.penaltyWeights, penaltyWeights);
 	config.filters.resultLimit = 5000;
@@ -118,9 +130,9 @@ function priceEvidence(confidence: PriceEvidence["confidence"]): PriceEvidence {
 }
 
 describe("ranking configuration", () => {
-	it("exports six declarative profile specs and the integration constants", () => {
-		expect(Object.keys(RANKING_PROFILE_SPECS)).toHaveLength(6);
-		expect(DEFAULT_RANKING_CONFIG.profile).toBe("kamienica");
+	it("exports one universal profile spec and the integration constants", () => {
+		expect(Object.keys(RANKING_PROFILE_SPECS)).toEqual(["universal"]);
+		expect(DEFAULT_RANKING_CONFIG.profile).toBe("universal");
 		expect(DEFAULT_RANKING_CONFIG.filters.resultLimit).toBe(25);
 		expect(DEFAULT_RANKING_CONFIG.filters.elevator).toBe("any");
 		expect(DEFAULT_RANKING_CONFIG.filters.parking).toBe("any");
@@ -144,6 +156,60 @@ describe("ranking configuration", () => {
 		expect(
 			Object.values(normalized).reduce((sum, value) => sum + value, 0),
 		).toBe(100);
+	});
+
+	it("scores v2 geo distances and migrates legacy profiles", () => {
+		const config = isolatedConfig("kamienica", "location", {});
+		config.distanceWeights = {
+			rail_station: 50,
+			tram_stop: 10,
+			lake: 10,
+			river: 10,
+			forest: 10,
+			city_center: 10,
+		};
+		const result = scoreListing(
+			listing({
+				scoreSignals: {
+					version: "signals-v2",
+					profiles: {},
+					geo: {
+						rail_station: 1,
+						tram_stop: 3,
+						lake: 3,
+						river: 3,
+						forest: 3,
+					},
+					metrics: { ceiling_height_m: null, large_windows: null },
+					priceEvidence: null,
+				},
+			}),
+			config,
+		);
+		expect(result.score).toBe(60);
+
+		const legacy = scoreListing(
+			listing({
+				propertyType: "house",
+				scoreSignals: signals("dom_kolej", profileSignals({ ceiling: 1 })),
+			}),
+			isolatedConfig("dom_kolej", "attributes", { ceiling: 1 }),
+		);
+		expect(legacy.score).toBe(100);
+
+		const mixedVersion = scoreListing(
+			listing({
+				scoreSignals: {
+					...signals("universal", profileSignals()),
+					profiles: {
+						universal: profileSignals(),
+						kamienica: profileSignals({ ceiling: 1 }),
+					},
+				},
+			}),
+			isolatedConfig("kamienica", "attributes", { ceiling: 1 }),
+		);
+		expect(mixedVersion.score).toBe(100);
 	});
 
 	it("normalizes signal weights within the selected category budget", () => {
@@ -194,14 +260,14 @@ describe("ranking configuration", () => {
 		const snapshot = structuredClone(input);
 		const config = sanitizeRankingConfig(input);
 		expect(input).toEqual(snapshot);
-		expect(config.profile).toBe("nowe_mieszkanie");
-		expect(config.version).toBe("ranking-v1");
+		expect(config.profile).toBe("universal");
+		expect(config.version).toBe("ranking-v2");
 		expect(config.filters.propertyTypes).toEqual(["flat"]);
 		expect(config.filters.offerTypes).toEqual(["sale", "auction"]);
 		expect(config.filters.priceMin).toBe(5);
 		expect(config.filters.priceMax).toBe(10);
 		expect(config.filters.resultLimit).toBe(25);
-		expect(config.filters.center).toBeNull();
+		expect(config.filters.center).toBe("krakow");
 		expect(config.filters.elevator).toBe("yes");
 		expect(config.filters.parking).toBe("no");
 		expect(config.filters.districtHeating).toBe("any");
@@ -313,48 +379,14 @@ describe("ranking score", () => {
 		).toBe(100);
 	});
 
-	it("applies declarative property and station eligibility rules", () => {
-		const wrongType = scoreListing(
-			listing({ propertyType: "house" }),
-			createDefaultRankingConfig("kamienica"),
-		);
-		expect(wrongType.eligible).toBe(false);
-		expect(wrongType.score).toBe(0);
-
-		const rail = scoreListing(
-			listing({
-				propertyType: "house",
-				scoreSignals: signals(
-					"dom_kolej",
-					profileSignals({ station_gate: 0, station_data_available: 1 }),
-				),
-			}),
-			createDefaultRankingConfig("dom_kolej"),
-		);
-		expect(rail.eligible).toBe(false);
-		expect(rail.cap).toBe(0);
-		expect(
-			rail.appliedRules.some((rule) => rule.code === "station_gate_failed"),
-		).toBe(true);
-	});
-
-	it("keeps unknown plot building rights eligible but unresolved", () => {
-		const result = scoreListing(
-			listing({
-				propertyType: "plot",
-				scoreSignals: signals(
-					"dzialka_kolej",
-					profileSignals({ building_plot: 0 }, { non_building_plot: 0 }),
-				),
-			}),
-			createDefaultRankingConfig("dzialka_kolej"),
-		);
-		expect(result.eligible).toBeNull();
-		expect(
-			result.appliedRules.some(
-				(rule) => rule.code === "building_rights_unknown",
-			),
-		).toBe(true);
+	it("scores flats, houses and plots with the same universal configuration", () => {
+		for (const propertyType of ["flat", "house", "plot"]) {
+			const result = scoreListing(
+				listing({ propertyType }),
+				createDefaultRankingConfig(),
+			);
+			expect(result.eligible).not.toBe(false);
+		}
 	});
 });
 

@@ -138,6 +138,13 @@ def test_payload_has_all_profiles_and_only_bounded_normalized_factors() -> None:
     assert tuple(payload["profiles"]) == PROFILE_NAMES
     assert "score" not in payload
     assert "winner" not in payload
+    assert payload["geo"] == {
+        "rail_station_km": None,
+        "tram_stop_km": None,
+        "lake_km": None,
+        "river_km": None,
+        "forest_km": None,
+    }
     assert json.loads(json.dumps(payload)) == payload
     for profile in payload["profiles"].values():
         assert set(profile) == {"signals", "penalties"}
@@ -393,6 +400,7 @@ def test_flat_walkability_and_commute_are_normalized_geo_signals() -> None:
         pois=[
             {"lat": 50.061, "lng": 19.936, "cat": "grocery"},
             {"lat": 50.0611, "lng": 19.9361, "cat": "transit"},
+            {"lat": 50.0612, "lng": 19.9362, "cat": "tram_stop"},
         ],
         stations=[
             {
@@ -406,12 +414,15 @@ def test_flat_walkability_and_commute_are_normalized_geo_signals() -> None:
     )
     geo.poi_index.add(0, 50.061, 19.936, 50.061, 19.936)
     geo.poi_index.add(1, 50.0611, 19.9361, 50.0611, 19.9361)
+    geo.poi_index.add(2, 50.0612, 19.9362, 50.0612, 19.9362)
     geo.station_index.add(0, 50.062, 19.937, 50.062, 19.937)
     nearby = _extract(row, geo=geo)
 
     assert _profile(without, "nowe_mieszkanie")["signals"]["walkability"] is None
     assert _profile(nearby, "nowe_mieszkanie")["signals"]["walkability"] > 0
     assert _profile(nearby, "nowe_mieszkanie")["signals"]["commute"] == 1.0
+    assert nearby["geo"]["rail_station_km"] == pytest.approx(0.13, abs=0.01)
+    assert nearby["geo"]["tram_stop_km"] == pytest.approx(0.02, abs=0.01)
 
 
 def test_house_rail_signals_include_distance_frequency_gate_near_and_planned_rail() -> None:
@@ -482,15 +493,23 @@ def test_nature_geo_and_elevation_are_normalized() -> None:
     ring = [[19.95, 49.299], [19.951, 49.299], [19.951, 49.3], [19.95, 49.3]]
     geo = GeoContext(
         forest=[ring],
+        lake=[ring],
+        river=[ring],
         water=[ring],
         elevation={"49.2990,19.9500": 600.0},
     )
     geo.forest_index.add(0, 49.299, 19.95, 49.3, 19.951)
+    geo.lake_index.add(0, 49.299, 19.95, 49.3, 19.951)
+    geo.river_index.add(0, 49.299, 19.95, 49.3, 19.951)
     geo.water_index.add(0, 49.299, 19.95, 49.3, 19.951)
-    signals = _profile(_extract(row, geo=geo), "dom_airbnb")["signals"]
+    payload = _extract(row, geo=geo)
+    signals = _profile(payload, "dom_airbnb")["signals"]
 
     assert signals["forest"] == 1.0
     assert signals["water"] == 1.0
+    assert signals["lake"] == 1.0
+    assert payload["geo"]["lake_km"] == 0.0
+    assert payload["geo"]["river_km"] == 0.0
     assert signals["mountains"] == 1.0
     assert signals["tourist_area"] == 1.0
     assert signals["elevation"] == 0.5

@@ -1,5 +1,4 @@
 import type { ListingDetails, ListingScoreReason } from "#/lib/listing-details";
-import type { ScoreProfile } from "#/lib/listing-filter-types";
 import { SCORE_PROFILE_LABELS } from "#/lib/ranking-spec";
 import type { RcnComparables } from "#/lib/rcn-types";
 import { sourceColor } from "#/lib/source-colors";
@@ -685,8 +684,7 @@ export function listingPopupHtml(
 	const score = numberValue(summary.score);
 	const profile =
 		typeof summary.scoreProfile === "string"
-			? (SCORE_PROFILE_LABELS[summary.scoreProfile as ScoreProfile] ??
-				summary.scoreProfile)
+			? SCORE_PROFILE_LABELS.universal
 			: "";
 	const rawReasons = Array.isArray(summary.scoreReasons)
 		? summary.scoreReasons

@@ -28,8 +28,8 @@ function presetRow(row: typeof rankingPreset.$inferSelect): RankingPresetDto {
 	return {
 		id: row.id,
 		name: row.name,
-		profile: row.profile as ScoreProfile,
-		config: row.config,
+		profile: "universal",
+		config: sanitizeRankingConfig(row.config),
 		isActive: row.isActive,
 		updatedAt: row.updatedAt.toISOString(),
 	};
@@ -43,18 +43,16 @@ export async function listRankingPresetsData(): Promise<RankingPresetDto[]> {
 	return rows.map(presetRow);
 }
 
-export async function activeRankingConfigData(
-	profile: ScoreProfile,
-): Promise<RankingConfig> {
+export async function activeRankingConfigData(): Promise<RankingConfig> {
 	const [preset] = await db
 		.select()
 		.from(rankingPreset)
-		.where(
-			and(eq(rankingPreset.profile, profile), eq(rankingPreset.isActive, true)),
-		)
+		.where(eq(rankingPreset.isActive, true))
 		.orderBy(desc(rankingPreset.updatedAt))
 		.limit(1);
-	return preset?.config ?? createDefaultRankingConfig(profile);
+	return preset
+		? sanitizeRankingConfig(preset.config)
+		: createDefaultRankingConfig();
 }
 
 export async function rankingPageData(
@@ -185,14 +183,13 @@ export async function rankingInitialData(input: {
 	profile?: ScoreProfile;
 	presetId?: number;
 }): Promise<RankingInitialData> {
-	const profile = input.profile ?? "kamienica";
+	const profile = "universal" as const;
 	const presets = await listRankingPresetsData();
-	const profilePresets = presets.filter((preset) => preset.profile === profile);
 	const selected =
-		profilePresets.find((preset) => preset.id === input.presetId) ??
-		profilePresets.find((preset) => preset.isActive) ??
+		presets.find((preset) => preset.id === input.presetId) ??
+		presets.find((preset) => preset.isActive) ??
 		null;
-	const config = selected?.config ?? createDefaultRankingConfig(profile);
+	const config = selected?.config ?? createDefaultRankingConfig();
 	const result = await rankingPageData({ config });
 	return {
 		profile,
@@ -211,7 +208,7 @@ export async function saveRankingPresetData(input: {
 		.insert(rankingPreset)
 		.values({
 			name: input.name,
-			profile: input.config.profile,
+			profile: "universal",
 			config: input.config,
 		})
 		.returning();
@@ -227,10 +224,7 @@ export async function activateRankingPresetData(
 		.where(eq(rankingPreset.id, id))
 		.limit(1);
 	if (!preset) throw new Error("Preset nie istnieje");
-	await db
-		.update(rankingPreset)
-		.set({ isActive: false })
-		.where(eq(rankingPreset.profile, preset.profile));
+	await db.update(rankingPreset).set({ isActive: false });
 	await db
 		.update(rankingPreset)
 		.set({ isActive: true })

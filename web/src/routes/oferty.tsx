@@ -44,24 +44,12 @@ import {
 	type RankingResult,
 	sanitizeRankingConfig,
 } from "#/lib/ranking-engine";
-import {
-	RANKING_PROFILE_SPECS,
-	SCORE_PROFILE_LABELS,
-} from "#/lib/ranking-spec";
-import type { RankedListing, ScoreProfile } from "#/lib/ranking-types";
+import { SCORE_PROFILE_LABELS } from "#/lib/ranking-spec";
+import type { RankedListing } from "#/lib/ranking-types";
 
 type RankingSearch = {
-	profile?: ScoreProfile;
 	presetId?: number;
 };
-
-const PROFILES = Object.keys(RANKING_PROFILE_SPECS) as ScoreProfile[];
-
-function validProfile(value: unknown): ScoreProfile | undefined {
-	return typeof value === "string" && PROFILES.includes(value as ScoreProfile)
-		? (value as ScoreProfile)
-		: undefined;
-}
 
 function validPresetId(value: unknown): number | undefined {
 	const parsed = typeof value === "number" ? value : Number(value);
@@ -94,15 +82,7 @@ function PropertyIcon({ type }: { type: string }) {
 	return <BuildingIcon className="size-10 opacity-30" />;
 }
 
-function ResultCard({
-	item,
-	rank,
-	profile,
-}: {
-	item: RankedListing;
-	rank: number;
-	profile: ScoreProfile;
-}) {
+function ResultCard({ item, rank }: { item: RankedListing; rank: number }) {
 	const listing = item.listing;
 	const area =
 		listing.propertyType === "plot" ? listing.landAreaM2 : listing.areaM2;
@@ -136,7 +116,7 @@ function ResultCard({
 			</CardContent>
 			<CardHeader className="gap-2 px-4 pt-4">
 				<div className="flex flex-wrap gap-1.5">
-					<Badge variant="secondary">{SCORE_PROFILE_LABELS[profile]}</Badge>
+					<Badge variant="secondary">{SCORE_PROFILE_LABELS.universal}</Badge>
 					{listing.buildingType && (
 						<Badge variant="outline">{listing.buildingType}</Badge>
 					)}
@@ -213,17 +193,17 @@ function RankingWorkbench({
 	initialResult,
 	presets,
 	selectedPresetId,
-	profile,
 }: {
 	initialConfig: RankingConfig;
 	initialResult: RankingResult;
 	presets: RankingPresetDto[];
 	selectedPresetId: number | null;
-	profile: ScoreProfile;
 }) {
 	const navigate = useNavigate({ from: "/oferty" });
 	const router = useRouter();
-	const [config, setConfig] = useState(initialConfig);
+	const [config, setConfig] = useState(() =>
+		sanitizeRankingConfig(initialConfig),
+	);
 	const [result, setResult] = useState(initialResult);
 	const [loading, setLoading] = useState(false);
 	const [previewError, setPreviewError] = useState(false);
@@ -232,6 +212,7 @@ function RankingWorkbench({
 	const [message, setMessage] = useState<string | null>(null);
 	const fileRef = useRef<HTMLInputElement>(null);
 	const previewTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const previewAbort = useRef<AbortController | null>(null);
 	const previewRequest = useRef(0);
 
 	const updateConfig = (next: RankingConfig) => {
@@ -241,26 +222,40 @@ function RankingWorkbench({
 		previewTimeout.current = setTimeout(async () => {
 			const request = ++previewRequest.current;
 			setLoading(true);
+			const controller = new AbortController();
+			previewAbort.current?.abort();
+			previewAbort.current = controller;
 			try {
-				const nextResult = await getRankingPage({ data: { config: next } });
+				const nextResult = await getRankingPage({
+					data: { config: next },
+					fetch: (input, init) =>
+						fetch(input, { ...init, signal: controller.signal }),
+				});
 				if (request === previewRequest.current) setResult(nextResult);
-			} catch {
-				if (request === previewRequest.current) setPreviewError(true);
+			} catch (error) {
+				if (
+					request === previewRequest.current &&
+					!(error instanceof DOMException && error.name === "AbortError")
+				) {
+					setPreviewError(true);
+				}
+				if (request === previewRequest.current && controller.signal.aborted) {
+					setLoading(false);
+				}
 			} finally {
 				if (request === previewRequest.current) setLoading(false);
 			}
 		}, 180);
 	};
-	const profilePresets = presets.filter((preset) => preset.profile === profile);
-	const selectedPreset = profilePresets.find(
+	const selectedPreset = presets.find(
 		(preset) => preset.id === selectedPresetId,
 	);
 
 	const selectPreset = (id: number | null) => {
+		if (previewTimeout.current) clearTimeout(previewTimeout.current);
+		previewAbort.current?.abort();
 		navigate({
-			search: (previous) => ({
-				...previous,
-				profile,
+			search: () => ({
 				presetId: id ?? undefined,
 			}),
 		});
@@ -276,7 +271,9 @@ function RankingWorkbench({
 			setPresetName("");
 			setMessage(`Zapisano preset „${preset.name}”.`);
 			navigate({
-				search: (previous) => ({ ...previous, profile, presetId: preset.id }),
+				search: () => ({
+					presetId: preset.id,
+				}),
 			});
 		} catch (error) {
 			setMessage(
@@ -329,7 +326,7 @@ function RankingWorkbench({
 		const url = URL.createObjectURL(blob);
 		const anchor = document.createElement("a");
 		anchor.href = url;
-		anchor.download = `ranking-${config.profile}.json`;
+		anchor.download = "ranking.json";
 		anchor.click();
 		URL.revokeObjectURL(url);
 	};
@@ -341,12 +338,6 @@ function RankingWorkbench({
 		try {
 			const parsed: unknown = JSON.parse(await file.text());
 			const next = sanitizeRankingConfig(parsed);
-			if (next.profile !== profile) {
-				setMessage(
-					`Ten preset należy do profilu ${SCORE_PROFILE_LABELS[next.profile]}.`,
-				);
-				return;
-			}
 			updateConfig(next);
 			setMessage("Wczytano konfigurację.");
 		} catch {
@@ -376,7 +367,7 @@ function RankingWorkbench({
 								}
 							>
 								<option value="">Konfiguracja domyślna</option>
-								{profilePresets.map((preset) => (
+								{presets.map((preset) => (
 									<option key={preset.id} value={preset.id}>
 										{preset.name}
 										{preset.isActive ? " · aktywny" : ""}
@@ -457,12 +448,9 @@ function RankingWorkbench({
 					<div>
 						<h2 className="text-2xl font-semibold tracking-tight">Wyniki</h2>
 						<p className="text-xs text-muted-foreground">
-							{result.totalMatched.toLocaleString("pl-PL")} po filtrach ·{" "}
-							{result.totalScored.toLocaleString("pl-PL")} punktowanych ·{" "}
-							{result.items.length.toLocaleString("pl-PL")} wyświetlonych
-							{result.excludedMissing > 0
-								? ` · ${result.excludedMissing.toLocaleString("pl-PL")} z brakującymi danymi`
-								: ""}
+							{loading
+								? "Przeliczam wyniki dla nowych wag…"
+								: `${result.totalMatched.toLocaleString("pl-PL")} po filtrach · ${result.totalScored.toLocaleString("pl-PL")} punktowanych · ${result.items.length.toLocaleString("pl-PL")} wyświetlonych${result.excludedMissing > 0 ? ` · ${result.excludedMissing.toLocaleString("pl-PL")} z brakującymi danymi` : ""}`}
 						</p>
 					</div>
 					<div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -471,7 +459,14 @@ function RankingWorkbench({
 					</div>
 				</div>
 
-				{result.totalMatched === 0 ? (
+				{loading ? (
+					<Card className="border-dashed py-12 text-center">
+						<CardContent className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
+							<Spinner />
+							Dopasowujemy oferty do nowych kryteriów.
+						</CardContent>
+					</Card>
+				) : result.totalMatched === 0 ? (
 					<Card className="border-dashed py-12 text-center">
 						<CardContent className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
 							<SlidersHorizontalIcon className="size-8 opacity-40" />
@@ -485,12 +480,7 @@ function RankingWorkbench({
 				) : (
 					<div className="flex flex-col gap-4">
 						{result.items.map((item, index) => (
-							<ResultCard
-								key={item.listing.id}
-								item={item}
-								rank={index + 1}
-								profile={config.profile}
-							/>
+							<ResultCard key={item.listing.id} item={item} rank={index + 1} />
 						))}
 					</div>
 				)}
@@ -501,11 +491,9 @@ function RankingWorkbench({
 
 export const Route = createFileRoute("/oferty")({
 	validateSearch: (search: Record<string, unknown>): RankingSearch => ({
-		profile: validProfile(search.profile),
 		presetId: validPresetId(search.presetId),
 	}),
 	loaderDeps: ({ search }) => ({
-		profile: search.profile,
 		presetId: search.presetId,
 	}),
 	loader: async ({ deps }) => await getRankingInitialData({ data: deps }),
@@ -536,7 +524,6 @@ function RankingPending() {
 
 function RankingPage() {
 	const data = Route.useLoaderData();
-	const navigate = useNavigate({ from: "/oferty" });
 	return (
 		<main className="mx-auto w-full max-w-[1600px] px-4 py-10 sm:py-14">
 			<div className="flex flex-col gap-6 border-b border-border pb-8 lg:flex-row lg:items-end lg:justify-between">
@@ -552,9 +539,9 @@ function RankingPage() {
 						Ustaw kryteria. Zobacz najlepsze oferty.
 					</h1>
 					<p className="max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-						Wybierz zakres ofert i wagę każdej cechy. Możesz filtrować po
-						metrażu, cenie za m², typie budynku, wysokości sufitów i odległości
-						od centrum, a ranking przeliczy się automatycznie.
+						Ustaw wagę odległości do kolejki, tramwaju, jeziora, rzeki, lasu i
+						centrum miasta. Suwaki zawsze sumują się do 100%, a wyniki
+						przeliczają się automatycznie.
 					</p>
 				</div>
 				<Button asChild variant="outline">
@@ -565,32 +552,9 @@ function RankingPage() {
 				</Button>
 			</div>
 
-			<nav aria-label="Profile rankingu" className="mt-6 flex flex-wrap gap-1">
-				{PROFILES.map((profile) => (
-					<Button
-						key={profile}
-						variant={data.profile === profile ? "secondary" : "ghost"}
-						size="sm"
-						aria-current={data.profile === profile ? "page" : undefined}
-						onClick={() =>
-							navigate({
-								search: (previous) => ({
-									...previous,
-									profile,
-									presetId: undefined,
-								}),
-							})
-						}
-					>
-						{SCORE_PROFILE_LABELS[profile]}
-					</Button>
-				))}
-			</nav>
-
 			<div className="mt-6">
 				<RankingWorkbench
-					key={`${data.profile}-${data.selectedPresetId ?? "default"}`}
-					profile={data.profile}
+					key={data.selectedPresetId ?? "default"}
 					initialConfig={data.config}
 					initialResult={data.result}
 					presets={data.presets}

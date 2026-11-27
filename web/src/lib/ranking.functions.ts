@@ -24,7 +24,9 @@ function pageInput(value: unknown): { config: unknown } {
 	return { config: input.config };
 }
 
-class ValueError extends Error {}
+class ValueError extends Error {
+	override name = "ValueError";
+}
 
 export const getRankingInitialData = createServerFn({ method: "GET" })
 	.validator((value: unknown) => {
@@ -33,17 +35,7 @@ export const getRankingInitialData = createServerFn({ method: "GET" })
 		const presetId = input.presetId;
 		return {
 			profile:
-				typeof profile === "string" &&
-				[
-					"kamienica",
-					"nowe_mieszkanie",
-					"dzialka_kolej",
-					"dom_airbnb",
-					"dom_kolej",
-					"dzialka_airbnb",
-				].includes(profile)
-					? (profile as ScoreProfile)
-					: undefined,
+				profile === "universal" ? ("universal" as ScoreProfile) : undefined,
 			presetId:
 				typeof presetId === "number" &&
 				Number.isInteger(presetId) &&

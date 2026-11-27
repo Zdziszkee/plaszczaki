@@ -303,7 +303,7 @@ def test_extract_signals_database_supports_pending_limit_source_and_dry_run(
             "SELECT score_signals, score_signals_version, score_signals_at FROM listing ORDER BY id"
         ).fetchall()
         payload = json.loads(rows[0]["score_signals"])
-        assert payload["version"] == "signals-v1"
+        assert payload["version"] == "signals-v2"
         assert set(payload["profiles"]) == {"kamienica", "nowe_mieszkanie"}
         assert all(
             value is not None
@@ -311,7 +311,7 @@ def test_extract_signals_database_supports_pending_limit_source_and_dry_run(
             for group in ("signals", "penalties")
             for value in profile[group].values()
         )
-        assert rows[0]["score_signals_version"] == "signals-v1"
+        assert rows[0]["score_signals_version"] == "signals-v2"
         assert rows[0]["score_signals_at"] is not None
         assert rows[1]["score_signals"] is None
 

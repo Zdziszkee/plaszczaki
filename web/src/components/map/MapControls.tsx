@@ -32,9 +32,7 @@ import type {
 	ListingFilters,
 	OfferType,
 	PostedWithin,
-	ScoreProfile,
 } from "#/lib/listing-filter-types";
-import { SCORE_PROFILE_LABELS } from "#/lib/ranking-spec";
 import type { RcnMapFilters } from "#/lib/rcn-types";
 import { sourceColor } from "#/lib/source-colors";
 import { cn } from "#/lib/utils";
@@ -94,15 +92,6 @@ const OFFER_TYPE_OPTIONS: Array<{
 	{ value: "rent", label: "Wynajem" },
 	{ value: "auction", label: "Aukcje" },
 	{ value: undefined, label: "Wszystkie" },
-];
-
-const SCORE_PROFILE_OPTIONS: Array<{ value: ScoreProfile; label: string }> = [
-	{ value: "kamienica", label: SCORE_PROFILE_LABELS.kamienica },
-	{ value: "nowe_mieszkanie", label: SCORE_PROFILE_LABELS.nowe_mieszkanie },
-	{ value: "dzialka_kolej", label: SCORE_PROFILE_LABELS.dzialka_kolej },
-	{ value: "dom_airbnb", label: SCORE_PROFILE_LABELS.dom_airbnb },
-	{ value: "dom_kolej", label: SCORE_PROFILE_LABELS.dom_kolej },
-	{ value: "dzialka_airbnb", label: SCORE_PROFILE_LABELS.dzialka_airbnb },
 ];
 
 export default function MapControls({
@@ -384,30 +373,6 @@ export default function MapControls({
 									</select>
 								</label>
 							</div>
-							<label className="flex flex-col gap-1 text-xs">
-								<span className="text-muted-foreground">
-									Profil atrakcyjności
-								</span>
-								<select
-									id="listing-score-profile"
-									className={selectClass}
-									value={filters.scoreProfile ?? ""}
-									onChange={(event) =>
-										onFiltersChange({
-											scoreProfile: event.target.value
-												? (event.target.value as ScoreProfile)
-												: undefined,
-										})
-									}
-								>
-									<option value="">Wszystkie profile</option>
-									{SCORE_PROFILE_OPTIONS.map((option) => (
-										<option key={option.value} value={option.value}>
-											{option.label}
-										</option>
-									))}
-								</select>
-							</label>
 							<div className="grid grid-cols-2 gap-2">
 								<label
 									htmlFor="listing-min-price"
