@@ -518,10 +518,14 @@ function rcnComparablesHtml(state: ListingRcnState | undefined): string {
 		data.sameAddress.length > 0
 			? `<div class="listing-popup-muted">Ten sam adres: ${data.sameAddress.length} wcześniejszych transakcji.</div>`
 			: "";
+	const confidenceLabels = { high: "wysoka", medium: "średnia", low: "niska" };
+	const confidence = data.confidence
+		? ` · pewność ${confidenceLabels[data.confidence]}`
+		: "";
 	return `<section class="listing-popup-section" aria-labelledby="listing-rcn-title">
 		<h3 id="listing-rcn-title" class="listing-popup-section-title">Porównanie RCN</h3>
 		<div class="listing-popup-rcn-summary"><strong>${median === null ? "—" : `${formatPln(median)}/m²`}</strong><span>mediana ważona · ${data.count} transakcji</span></div>
-		<div class="listing-popup-muted">${escapeHtml(range)} · promień ${data.radiusKm} km · ${data.months} mies.</div>
+		<div class="listing-popup-muted">${escapeHtml(range)} · promień ${data.radiusKm} km · ${data.months} mies.${confidence}</div>
 		${sameAddress}
 		${samples ? `<ul class="listing-popup-rcn-samples">${samples}</ul>` : ""}
 		${importedLabel ? `<div class="listing-popup-muted">Import RCN: ${escapeHtml(importedLabel)}</div>` : ""}

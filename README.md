@@ -238,6 +238,8 @@ The map has an optional **Transakcje RCN** layer with property, market and perio
 filters. Listing popups show nearby comparable transactions from the last 24
 months. These are orientational comparisons, not appraisals; a transaction price
 can cover multiple properties and county coverage/update latency varies.
+Residential-building matches are marked low confidence because RCN does not
+reliably distinguish detached houses from multi-family buildings.
 
 Initial import (run each region separately):
 
