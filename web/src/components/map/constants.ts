@@ -58,6 +58,8 @@ export const COLORS = {
 	listingRent: "#fbbf24",
 	listingAuction: "#f472b6",
 	listingOther: "#94a3b8",
+	listingAggregate: "#18181b",
+	listingAggregateLabel: "#ffffff",
 	rcnCluster: "#f59e0b",
 	rcnClusterLabel: "#111827",
 	label: "#e2e8f0",

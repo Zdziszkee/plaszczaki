@@ -1,13 +1,9 @@
 export type AggregateMapTheme = {
-	primary: string;
-	primaryForeground: string;
 	background: string;
 	ring: string;
 };
 
 const FALLBACK_THEME: AggregateMapTheme = {
-	primary: "#fafafa",
-	primaryForeground: "#18181b",
 	background: "#09090b",
 	ring: "#52525b",
 };
@@ -34,14 +30,6 @@ export function readAggregateMapTheme(): AggregateMapTheme {
 	if (typeof document === "undefined") return FALLBACK_THEME;
 	const styles = getComputedStyle(document.documentElement);
 	return {
-		primary: resolveCssColor(
-			styles.getPropertyValue("--primary"),
-			FALLBACK_THEME.primary,
-		),
-		primaryForeground: resolveCssColor(
-			styles.getPropertyValue("--primary-foreground"),
-			FALLBACK_THEME.primaryForeground,
-		),
 		background: resolveCssColor(
 			styles.getPropertyValue("--background"),
 			FALLBACK_THEME.background,

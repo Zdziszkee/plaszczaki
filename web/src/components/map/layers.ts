@@ -1099,12 +1099,12 @@ export function syncAggregateTheme(map: MapboxMap): void {
 			map,
 			LAYER_IDS.listingAggregate,
 			theme,
-			theme.primary,
+			COLORS.listingAggregate,
 		);
 		map.setPaintProperty(
 			LAYER_IDS.listingAggregateCount,
 			"text-color",
-			theme.primaryForeground,
+			COLORS.listingAggregateLabel,
 		);
 	}
 	if (map.getLayer(LAYER_IDS.rcnCluster)) {
@@ -1274,7 +1274,7 @@ export function syncListingAggregate(
 			id: LAYER_IDS.listingAggregate,
 			type: "circle",
 			source: LISTINGS_AGG_SOURCE,
-			paint: aggregateCirclePaint(theme, theme.primary),
+			paint: aggregateCirclePaint(theme, COLORS.listingAggregate),
 		});
 	}
 
@@ -1294,7 +1294,7 @@ export function syncListingAggregate(
 				"text-allow-overlap": true,
 				"text-ignore-placement": true,
 			},
-			paint: aggregateCountPaint(theme.primaryForeground),
+			paint: aggregateCountPaint(COLORS.listingAggregateLabel),
 		});
 	}
 }
