@@ -12,6 +12,7 @@ import {
 	LandPlotIcon,
 	MapIcon,
 } from "lucide-react";
+import { useId, useState } from "react";
 import ScoreBreakdown from "#/components/ScoreBreakdown";
 import ScoreMethodology from "#/components/ScoreMethodology";
 import { Badge } from "#/components/ui/badge";
@@ -410,15 +411,14 @@ function TopOffersPending() {
 }
 
 function OfferCard({ offer, rank }: { offer: TopOffer; rank: number }) {
+	const [breakdownOpen, setBreakdownOpen] = useState(false);
+	const breakdownId = useId();
 	const group = PROPERTY_GROUPS.find(
 		(item) => item.type === offer.propertyType,
 	);
 	const breakdown = offer.scoreProfile
 		? offer.scoreBreakdown?.profiles[offer.scoreProfile]
 		: null;
-	const reasons = (breakdown?.contributions ?? [])
-		.filter((reason) => reason.points > 0)
-		.slice(0, 3);
 	const location = [offer.district, offer.city].filter(Boolean).join(" · ");
 	const area = offer.propertyType === "plot" ? offer.landAreaM2 : offer.areaM2;
 	const FallbackIcon =
@@ -449,9 +449,30 @@ function OfferCard({ offer, rank }: { offer: TopOffer; rank: number }) {
 					<Badge className="bg-background/85 font-mono text-[10px] text-foreground backdrop-blur">
 						#{String(rank).padStart(2, "0")}
 					</Badge>
-					<Badge className="gap-1 bg-primary text-primary-foreground">
-						<AwardIcon className="size-3" />
-						{offer.score}/100
+					<Badge
+						asChild
+						className="group cursor-pointer bg-background/85 font-mono text-[10px] text-foreground backdrop-blur hover:bg-background/95 disabled:cursor-default disabled:opacity-60"
+					>
+						<button
+							type="button"
+							data-state={breakdownOpen ? "open" : "closed"}
+							aria-expanded={breakdownOpen}
+							aria-controls={breakdownOpen ? breakdownId : undefined}
+							aria-label={
+								breakdown
+									? `${breakdownOpen ? "Ukryj" : "Pokaż"} rozbicie wyniku ${offer.score}/100`
+									: "Rozbicie wyniku niedostępne"
+							}
+							disabled={!breakdown}
+							onClick={() => setBreakdownOpen((current) => !current)}
+						>
+							<AwardIcon data-icon="inline-start" />
+							{offer.score}/100
+							<ChevronDownIcon
+								data-icon="inline-end"
+								className="transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none"
+							/>
+						</button>
 					</Badge>
 				</div>
 			</CardContent>
@@ -503,25 +524,13 @@ function OfferCard({ offer, rank }: { offer: TopOffer; rank: number }) {
 						{offer.buildYear !== null && <div>rok {offer.buildYear}</div>}
 					</div>
 				</div>
-				{reasons.length > 0 && (
-					<ul className="flex flex-col gap-1.5 border-t pt-3 text-xs text-muted-foreground">
-						{reasons.map((reason) => (
-							<li
-								key={reason.code}
-								className="flex items-start justify-between gap-2"
-							>
-								<span>{reason.label}</span>
-								<span className="shrink-0 font-mono text-foreground">
-									+{reason.points.toFixed(1).replace(".", ",")}
-								</span>
-							</li>
-						))}
-					</ul>
-				)}
 				<ScoreBreakdown
 					breakdown={breakdown}
 					score={offer.score}
 					priceEvidence={offer.scoreBreakdown?.priceEvidence}
+					open={breakdownOpen}
+					onOpenChange={setBreakdownOpen}
+					contentId={breakdownId}
 				/>
 			</CardContent>
 			<CardFooter className="flex-wrap justify-between gap-2 px-4 pt-3 pb-4">

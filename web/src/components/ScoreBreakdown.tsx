@@ -45,12 +45,18 @@ const CATEGORY_ORDER: readonly ScoreCategoryCode[] = [
 function ContributionRow({
 	label,
 	points,
+	maxPoints,
 	negative = false,
+	zero = false,
 }: {
 	label: string;
 	points: number;
+	maxPoints: number;
 	negative?: boolean;
+	zero?: boolean;
 }) {
+	const sign = zero ? "" : negative ? "−" : "+";
+
 	return (
 		<li className="flex items-start justify-between gap-3 text-xs leading-5">
 			<span className="text-muted-foreground">{label}</span>
@@ -61,8 +67,12 @@ function ContributionRow({
 						: "shrink-0 font-mono font-medium text-foreground"
 				}
 			>
-				{negative ? "−" : "+"}
+				{sign}
 				{formatScorePoints(Math.abs(points))}
+				<span className="text-muted-foreground">
+					{" / "}
+					{formatScorePoints(maxPoints)}
+				</span>
 			</span>
 		</li>
 	);
@@ -72,10 +82,16 @@ export default function ScoreBreakdown({
 	breakdown,
 	score,
 	priceEvidence,
+	open,
+	onOpenChange,
+	contentId,
 }: {
 	breakdown: ScoreProfileBreakdown | null | undefined;
 	score: number;
 	priceEvidence?: PriceEvidence | null;
+	open?: boolean;
+	onOpenChange?: (open: boolean) => void;
+	contentId?: string;
 }) {
 	if (!breakdown) {
 		return (
@@ -96,12 +112,12 @@ export default function ScoreBreakdown({
 	const capped = breakdown.cap !== null && breakdown.rawScore > breakdown.cap;
 
 	return (
-		<Collapsible className="border-t">
+		<Collapsible className="border-t" open={open} onOpenChange={onOpenChange}>
 			<CollapsibleTrigger className="group flex w-full items-center justify-between gap-3 py-3 text-left text-xs font-medium">
-				<span>Dlaczego {score} pkt?</span>
+				<span>Dlaczego {score}/100?</span>
 				<ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none" />
 			</CollapsibleTrigger>
-			<CollapsibleContent className="flex flex-col gap-4 pb-4">
+			<CollapsibleContent id={contentId} className="flex flex-col gap-4 pb-4">
 				{breakdown.eligible === false && (
 					<Badge variant="destructive">Profil nie spełnia wymagań</Badge>
 				)}
@@ -157,41 +173,44 @@ export default function ScoreBreakdown({
 					</div>
 				)}
 
-				<ul className="flex flex-col gap-3">
-					{categories.map((category) => (
-						<li key={category.code} className="flex flex-col gap-1.5">
-							<div className="flex items-center justify-between gap-3 text-xs">
-								<span className="font-medium">{category.label}</span>
-								<span className="font-mono text-muted-foreground">
-									{formatScorePoints(category.points)} / {category.maxPoints}
-								</span>
-							</div>
-							<progress
-								value={Math.max(0, category.points)}
-								max={Math.max(1, category.maxPoints)}
-								aria-label={`${category.label}: ${formatScorePoints(category.points)} z ${category.maxPoints} punktów`}
-								className="h-1.5 w-full appearance-none overflow-hidden rounded-full bg-muted [&::-moz-progress-bar]:rounded-full [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-primary"
-							/>
-						</li>
-					))}
-				</ul>
-
-				{contributions.length > 0 && (
-					<div className="flex flex-col gap-2">
-						<p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-							Punkty w szczegółach
-						</p>
-						<ul className="flex flex-col gap-1.5">
-							{contributions.map((reason) => (
-								<ContributionRow
-									key={reason.code}
-									label={reason.label}
-									points={reason.points}
+				<p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+					Punkty według kategorii
+				</p>
+				<ul className="flex flex-col gap-4">
+					{categories.map((category) => {
+						const categoryContributions = contributions.filter(
+							(reason) => reason.category === category.code,
+						);
+						return (
+							<li key={category.code} className="flex flex-col gap-1.5">
+								<div className="flex items-center justify-between gap-3 text-xs">
+									<span className="font-medium">{category.label}</span>
+									<span className="font-mono text-muted-foreground">
+										{formatScorePoints(category.points)} / {category.maxPoints}
+									</span>
+								</div>
+								<progress
+									value={Math.max(0, category.points)}
+									max={Math.max(1, category.maxPoints)}
+									aria-label={`${category.label}: ${formatScorePoints(category.points)} z ${category.maxPoints} punktów`}
+									className="h-1.5 w-full appearance-none overflow-hidden rounded-full bg-muted [&::-moz-progress-bar]:rounded-full [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-primary"
 								/>
-							))}
-						</ul>
-					</div>
-				)}
+								{categoryContributions.length > 0 && (
+									<ul className="ml-3 flex flex-col gap-1.5 border-l pl-3">
+										{categoryContributions.map((reason) => (
+											<ContributionRow
+												key={reason.code}
+												label={reason.label}
+												points={reason.points}
+												maxPoints={reason.maxPoints}
+											/>
+										))}
+									</ul>
+								)}
+							</li>
+						);
+					})}
+				</ul>
 
 				{breakdown.penalties.length > 0 && (
 					<div className="flex flex-col gap-2">
@@ -204,6 +223,7 @@ export default function ScoreBreakdown({
 									key={reason.code}
 									label={reason.label}
 									points={reason.points}
+									maxPoints={reason.maxPoints}
 									negative
 								/>
 							))}
@@ -222,6 +242,8 @@ export default function ScoreBreakdown({
 									key={reason.code}
 									label={reason.label}
 									points={0}
+									maxPoints={reason.maxPoints}
+									zero
 								/>
 							))}
 						</ul>
