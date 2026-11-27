@@ -21,6 +21,14 @@ def _database(tmp_path: Path) -> Database:
     path = tmp_path / "audit.db"
     connection = sqlite3.connect(path)
     connection.executescript("\n".join(item.read_text(encoding="utf-8") for item in migrations))
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(listing)").fetchall()}
+    for name, declaration in (
+        ("score_signals", "text"),
+        ("score_signals_version", "text"),
+        ("score_signals_at", "integer"),
+    ):
+        if name not in columns:
+            connection.execute(f"ALTER TABLE listing ADD COLUMN {name} {declaration}")
     connection.commit()
     connection.close()
     db = Database(path)

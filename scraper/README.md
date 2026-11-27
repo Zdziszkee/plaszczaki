@@ -83,9 +83,9 @@ uv run python -m plaszczaki_scraper geodata --part gtfs --force
 uv run python -m plaszczaki_scraper geodata --part nature --force
 uv run python -m plaszczaki_scraper geodata --part poi --force
 uv run python -m plaszczaki_scraper geodata --part elevation
-uv run python -m plaszczaki_scraper score --dry-run
-uv run python -m plaszczaki_scraper score
-uv run python -m plaszczaki_scraper score --pending
+uv run python -m plaszczaki_scraper signals --dry-run
+uv run python -m plaszczaki_scraper signals
+uv run python -m plaszczaki_scraper signals --pending
 uv run python -m plaszczaki_scraper rcn import --region malopolskie --dry-run --limit 100
 uv run python -m plaszczaki_scraper rcn import --region malopolskie
 uv run python -m plaszczaki_scraper rcn sync
@@ -262,6 +262,8 @@ geodezyjnego i kartograficznego”.
 - `config/regions.json` — Małopolskie/Śląskie, TERYT codes, bboxes and place lists.
 - `config/rcn.json` — official RCN export URL pattern, object layers, streaming
   batch size, spatial grid and comparable-sale defaults.
+- `config/signals.json` — deterministic extraction thresholds and keyword lists;
+  it contains no profile weights, point budgets, caps, or final-score settings.
 
 `PLASZCZAKI_CONFIG_DIR` overrides the config directory and
 `PLASZCZAKI_SOURCES_CONFIG` points directly at a `sources.json` file.
@@ -286,24 +288,34 @@ snapshots and run stats stay intact; the map endpoints select one representative
 per key (complete data first, then newest). The scraper checks the expected tables/columns at startup and fails with
 a clear message if the migration has not been applied.
 
-## Attractiveness scoring
+## Signal extraction and web-owned ranking
 
-`score` is deterministic and training-free. It writes six independent 0–100
-profiles to `listing` (`kamienica`, `nowe_mieszkanie`, `dzialka_kolej`,
-`dom_airbnb`, `dom_kolej`, `dzialka_airbnb`) plus the best score and Polish
-explanations. Every profile has an explicit 100-point budget in
-`config/scoring.json`; price, location, attributes, nature and market opportunity
-are scaled to that budget. `score_breakdown` stores all contributions, penalties,
-caps, eligibility and missing-data notes needed to reconstruct the final score.
+`signals` is deterministic and training-free. It writes the `signals-v1` JSON
+payload to `listing.score_signals`, with `score_signals_version` and
+`score_signals_at` bookkeeping. The legacy `score` command remains as an alias,
+but it runs signal extraction too. Python does not calculate profile weights,
+caps, eligibility, a winning profile, or final scores; the web TypeScript ranking
+engine owns all of that.
+
+Each payload contains six profile slots (`kamienica`, `nowe_mieszkanie`,
+`dzialka_kolej`, `dom_airbnb`, `dom_kolej`, `dzialka_airbnb`). Every slot has
+normalized `signals` and `penalties` in the 0–1 range, with `null` for unknown or
+inapplicable evidence. Structured metrics include `ceiling_height_m` and
+`large_windows`. Large windows require explicit Polish text evidence; ordinary
+or small window wording produces `false`, and no window wording stays `null`.
+Ceiling height uses the canonical field first, then explicit dimensions from the
+description. Generic “wysokie sufity” text yields a half-strength ceiling signal
+but does not invent a height or charm.
 
 Inputs include canonical attributes, listing text, local price quantiles, matched
 nearby asking prices and comparable transactions from the latest successful RCN
 snapshots, auction discounts, days on market, price cuts, gross rental yield, GTFS
 rail service, BDOT10k forest/water data, OSM POIs, mountain regions and the map's
-planned-rail snapshots. `score_breakdown.priceEvidence` stores both benchmarks,
-their counts/radii/confidence and the conservative effective discount used by the
-score. Changed listings are invalidated automatically and rescored by `watch`,
-`run` and `run-all`; use `score --pending` for a manual catch-up.
+planned-rail snapshots. `priceEvidence` preserves the listing/RCN benchmarks,
+counts, radii, confidence and conservative effective discount. Changed listings
+are invalidated automatically and re-extracted by `watch`, `run` and `run-all`;
+use `signals --pending` for a manual catch-up. The old score columns remain in the
+schema for migration compatibility but are not read or written by this pipeline.
 
 `geodata` refreshes the open-data cache under `data/cache/`. GTFS comes from
 PolishTrainsGTFS (PolRegio, PKP Intercity, Koleje Śląskie/Małopolskie and other
@@ -312,16 +324,14 @@ a fallback, and POIs come from OpenStreetMap. Missing cache files degrade
 to neutral geo signals rather than failing the scrape.
 
 `llm enrich` extracts objective facts from public descriptions with any approved
-OpenCode Go `-free` model and caches them in `llm_job`. `llm rerank` re-ranks the
-deterministic shortlist using the user's preference profile. No model training
-is performed. Set `OPENCODE_API_KEY` to enable these optional commands.
+OpenCode Go `-free` model and caches them in `llm_job`. `llm rerank` optionally
+re-ranks recent signal-enriched offers using the user's preference profile. No
+model training is performed. Set `OPENCODE_API_KEY` to enable these commands.
 
-The web app exposes the score in map popups and filters, and `/oferty` shows up to
-25 sale/auction offers first seen each day in three columns: apartments, houses and
-plots. Only offers with matched nearby listings and a verified positive price
-advantage qualify; when RCN is available, the smaller of the listing and RCN
-discounts is used. Houses and plots can be ranked independently for Airbnb or rail
-proximity, and every card exposes its full score and price-evidence breakdown.
+The web app applies its configurable weights and rules to `score_signals` in map
+popups and filters. `/oferty` uses the same ranking engine for sale/auction offers;
+price evidence can be required or filtered by confidence without moving score
+calculation into Python.
 
 ## LLM lane
 

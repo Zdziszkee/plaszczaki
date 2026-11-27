@@ -1,0 +1,154 @@
+{
+	"rail": {
+		"gate_km": 3.0,
+		"decay_km": 10.0,
+		"destinations": ["krakow", "katowice", "warszawa", "wroclaw"],
+		"frequency_cap_trips_per_week": 140
+	},
+	"planned_rail": {
+		"radius_km": 3.0,
+		"status_factors": {
+			"construction": 1.0,
+			"proposed": 0.5,
+			"schematic": 0.25
+		}
+	},
+	"nature": {
+		"forest": { "full_m": 200, "zero_m": 3000, "text_factor": 0.65 },
+		"water": { "full_m": 300, "zero_m": 3000, "text_factor": 0.65 }
+	},
+	"new_flat": {
+		"commute_full_km": 0.3,
+		"commute_zero_km": 3.0
+	},
+	"comps": {
+		"radius_km": 2.5,
+		"radii_km": [1.0, 2.5, 5.0],
+		"min_count": 5,
+		"max_count": 30,
+		"area_ratio": [0.7, 1.4],
+		"plot_area_ratio": [0.5, 2.0],
+		"rooms_delta": 1
+	},
+	"rcn": {
+		"months": 24,
+		"min_count": 5,
+		"max_count": 30,
+		"area_ratio": [0.7, 1.4],
+		"plot_area_ratio": [0.5, 2.0],
+		"rooms_delta": 1,
+		"radii_km": {
+			"flat": [1.0, 2.5, 5.0],
+			"building": [2.0, 4.0, 5.0],
+			"plot": [2.0, 4.0, 5.0]
+		}
+	},
+	"value": {
+		"full_discount": 0.25,
+		"zero_discount": 0.05,
+		"overpriced_threshold": 0.1,
+		"top_min_discount": 0.03
+	},
+	"opportunity": {
+		"auction_full_discount": 0.30,
+		"auction_later_round_factor": 0.6,
+		"days_full": 30,
+		"days_half": 7,
+		"days_recent": 1,
+		"price_cut_full_drop": 0.20,
+		"rental_yield_full_percent": 10.0
+	},
+	"keywords": {
+		"insulation": ["ociepl", "dociepl", "termomoderniz", "styropian", "welna mineral"],
+		"new_windows": [
+			"nowe okna",
+			"nowe okno",
+			"nowa stolarka",
+			"okna wymienione",
+			"wymienione okna",
+			"wymiana okien",
+			"wymieniono okna",
+			"stolarka wymieniona",
+			["okna", "wymienion"],
+			["okna", "nowe pcv"]
+		],
+		"charm": [
+			"klimatyczn",
+			"z klimatem",
+			"z dusza",
+			"przedwojenn",
+			"secesyjn",
+			"sztukateri",
+			"oryginaln",
+			"z charakterem",
+			"urok",
+			"stylow",
+			"vintage",
+			"retro",
+			"zabytkow",
+			"historyczn",
+			"stare budownictwo"
+		],
+		"tenement": ["kamienic"],
+		"prefab": ["wielka plyta", "wielkiej plyty", "prefabrykowan", "budownictwo systemowe"],
+		"plot_building": [
+			"budowlan",
+			"mpzp",
+			"miejscowy plan zagospodarowania",
+			"warunki zabudowy",
+			"pod zabudowe",
+			"zabudowy jednorodzinnej",
+			"pozwolenie na budowe"
+		],
+		"plot_negative": ["rolna", "rolne", "lesna", "lesne", "siedliskow", "rekreacyjn", "ogrodowa", "ogrodowe"],
+		"nature_forest": ["przy lesie", "obok lasu", "w lesie", "nad lesiem", "z lasem", "lasem", "lesie", "lasu", "puszczy", "boru"],
+		"nature_water": ["nad jeziorem", "przy jeziorze", "obok jeziora", "jezior", "nad rzeka", "przy rzece", "rzeki", "staw", "zalew", "widok na wode", "linia brzegowa"],
+		"nature_mountains": ["w gorach", "przy gorach", "widok na gory", "gorski", "gorskie", "gorska", "gorskim", "tatry", "beskid", "pieniny", "gorce", "podgorze"],
+		"airbnb": ["airbnb", "booking", "krotkoterminowy", "najem krotkoterminowy", "pensjonat", "agroturystyk", "turystyczn", "siedlisko", "letniskowy", "wakacyjny", "pod inwestycje", "inwestycyjn", "apartamenty"],
+		"old_house": ["przedwojenn", "stary dom", "drewnian", "zabytkow", "historyczn", "do remontu", "do odnowienia", "siedlisko", "tradycyjn", "ceglan", "skansen"]
+	},
+	"tourist_cities": [
+		"Zakopane",
+		"Bukowina Tatrzańska",
+		"Białka Tatrzańska",
+		"Kościelisko",
+		"Krynica-Zdrój",
+		"Muszyna",
+		"Piwniczna-Zdrój",
+		"Szczawnica",
+		"Rabka-Zdrój",
+		"Ustroń",
+		"Wisła",
+		"Szczyrk",
+		"Żywiec",
+		"Korbielów",
+		"Jeleśnia",
+		"Zawoja",
+		"Stryszawa",
+		"Sucha Beskidzka",
+		"Mszana Dolna",
+		"Limanowa",
+		"Nowy Targ",
+		"Czorsztyn",
+		"Niedzica",
+		"Krościenko",
+		"Ochotnica Dolna",
+		"Rytro",
+		"Stary Sącz",
+		"Tylicz",
+		"Żegiestów",
+		"Biecz",
+		"Ciężkowice"
+	],
+	"mountain_regions": [
+		{ "name": "Tatry", "bbox": [19.75, 49.17, 20.25, 49.45] },
+		{ "name": "Pieniny", "bbox": [20.2, 49.35, 20.6, 49.5] },
+		{ "name": "Beskid Sądecki", "bbox": [20.4, 49.3, 21.0, 49.75] },
+		{ "name": "Gorce", "bbox": [19.9, 49.45, 20.35, 49.7] },
+		{ "name": "Beskid Wyspowy", "bbox": [19.9, 49.55, 20.5, 49.9] },
+		{ "name": "Beskid Żywiecki", "bbox": [19.0, 49.35, 19.65, 49.75] },
+		{ "name": "Beskid Śląski", "bbox": [18.75, 49.55, 19.15, 49.85] },
+		{ "name": "Beskid Mały", "bbox": [19.1, 49.65, 19.55, 49.9] },
+		{ "name": "Jura Krakowsko-Częstochowska", "bbox": [19.3, 50.0, 20.0, 50.6] }
+	]
+}

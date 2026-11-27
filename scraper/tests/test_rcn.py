@@ -8,11 +8,10 @@ import pytest
 
 from plaszczaki_scraper.config import repo_root
 from plaszczaki_scraper.db import Database
-from plaszczaki_scraper.geodata import GeoContext
 from plaszczaki_scraper.rcn.config import load_rcn_config
 from plaszczaki_scraper.rcn.normalize import is_residential_building, normalize_row
 from plaszczaki_scraper.rcn.rcn_db import RcnDatabase
-from plaszczaki_scraper.scoring import load_scoring_config, score_database
+from plaszczaki_scraper.signals import extract_signals_database, load_signals_config
 
 
 def _migration_sql() -> str:
@@ -25,6 +24,14 @@ def _database(tmp_path: Path) -> Database:
     path = tmp_path / "test.db"
     connection = sqlite3.connect(path)
     connection.executescript(_migration_sql())
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(listing)").fetchall()}
+    for name, declaration in (
+        ("score_signals", "text"),
+        ("score_signals_version", "text"),
+        ("score_signals_at", "integer"),
+    ):
+        if name not in columns:
+            connection.execute(f"ALTER TABLE listing ADD COLUMN {name} {declaration}")
     connection.commit()
     connection.close()
     return Database(path)
@@ -229,7 +236,7 @@ def test_rcn_database_upsert_comparables_and_reconcile(tmp_path: Path) -> None:
         assert db.conn.execute("SELECT count(*) FROM rcn_transaction").fetchone()[0] == 1
 
 
-def test_score_rows_use_only_the_latest_successful_rcn_snapshot(tmp_path: Path) -> None:
+def test_signal_rows_use_only_the_latest_successful_rcn_snapshot(tmp_path: Path) -> None:
     with _database(tmp_path) as db:
         rcn = RcnDatabase(db.conn)
         successful = rcn.start_import(
@@ -278,7 +285,7 @@ def test_score_rows_use_only_the_latest_successful_rcn_snapshot(tmp_path: Path) 
         )
 
         rows = list(
-            db.iter_rcn_score_rows(
+            db.iter_rcn_signal_rows(
                 document_date_cutoff="2000-01-01",
                 regions={"malopolskie"},
                 object_kinds={"flat"},
@@ -287,7 +294,7 @@ def test_score_rows_use_only_the_latest_successful_rcn_snapshot(tmp_path: Path) 
         assert [row["key"] for row in rows] == [old_object["object_key"]]
 
 
-def test_score_database_loads_successful_rcn_transactions(tmp_path: Path) -> None:
+def test_signal_database_loads_successful_rcn_transactions(tmp_path: Path) -> None:
     with _database(tmp_path) as db:
         db.conn.execute(
             "INSERT INTO source (id, label, homepage_url, adapter, enabled, created_at) "
@@ -339,11 +346,11 @@ def test_score_database_loads_successful_rcn_transactions(tmp_path: Path) -> Non
             skipped_rows=0,
         )
 
-        report = score_database(db, config=load_scoring_config(), geo=GeoContext())
+        report = extract_signals_database(db, config=load_signals_config())
         assert report["priceEvidence"]["rcn"] == 1
-        row = db.conn.execute("SELECT score_breakdown FROM listing").fetchone()
+        row = db.conn.execute("SELECT score_signals FROM listing").fetchone()
         assert row is not None
-        assert json.loads(row["score_breakdown"])["priceEvidence"]["rcn"] is not None
+        assert json.loads(row["score_signals"])["priceEvidence"]["rcn"] is not None
 
 
 def test_flat_can_use_property_price_with_supporting_plot_and_building(tmp_path: Path) -> None:

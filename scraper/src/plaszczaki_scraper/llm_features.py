@@ -2,7 +2,8 @@
 
 Descriptions are public listing text. Extracted facts are cached in ``llm_job``
 by input hash + prompt version + model, and merged into ``listing.extra`` under
-``scoring_features``. This module never trains a model and can run without an
+``scoring_features`` for the deterministic signal extractor. This module never
+trains a model and can run without an
 API key (it then reports that enrichment is unavailable).
 """
 
@@ -23,8 +24,9 @@ from plaszczaki_scraper.llm import (
     fetch_models,
     free_models,
 )
+from plaszczaki_scraper.signals import extract_signals_database
 
-PROMPT_VERSION = "charm-v1"
+PROMPT_VERSION = "signals-v1"
 
 FEATURE_SYSTEM_PROMPT = """You extract objective facts from a public Polish real-estate listing.
 Return exactly one JSON object and nothing else. Use true only when explicitly
@@ -38,8 +40,9 @@ when unknown. Never guess. Schema:
   "building_plot": true|false|null,
   "evidence": ["short Polish quote 1", "short Polish quote 2"]
 }
-Charm means original/old character: pre-war tenement, high ceilings, original
-details, traditional wooden/brick house, or similar. Do not mark charm merely
+Charm means original/old character: pre-war tenement, original details,
+traditional wooden/brick house, or similar. High ceilings alone are not charm.
+Do not mark charm merely
 because the listing uses marketing words like 'premium' or 'modern'.
 airbnb_potential means an old/characterful house or plot in a tourist/nature
 setting that plausibly suits a small guesthouse. building_plot means MPZP/WZ,
@@ -59,7 +62,7 @@ candidates for this exact user profile:
 Return exactly one JSON object:
 {"recommendations":[{"id":123,"why":"krótkie uzasadnienie po polsku","watch_out":"ryzyko lub null"}]}
 Order by overall attractiveness. Do not invent facts. Use at most 20 candidates.
-Prefer diverse property types if scores are close. Never rank a large-panel block
+Prefer diverse property types if signal evidence is similarly strong. Never rank a large-panel block
 above a characterful old building solely for a small price difference."""
 
 
@@ -173,7 +176,7 @@ def enrich_listings(
     dry_run: bool = False,
     property_types: tuple[str, ...] = ("flat", "house", "plot"),
 ) -> dict[str, Any]:
-    """Extract scoring facts from descriptions using any approved free model."""
+    """Extract objective signal facts from descriptions using an approved free model."""
     if not api_key():
         raise LLMConfigError("OPENCODE_API_KEY is not set; LLM enrichment is unavailable")
     models = _job_models()
@@ -266,15 +269,13 @@ def enrich_listings(
         changed_ids.append(int(row["id"]))
         report["enriched"] += 1
     if changed_ids and not dry_run:
-        db.invalidate_scores(changed_ids)
-        report["scoring"] = _rescore(db)
+        db.invalidate_signals(changed_ids)
+        report["signals"] = _extract_signals(db)
     return report
 
 
-def _rescore(db: Any) -> dict[str, Any]:
-    from plaszczaki_scraper.scoring import score_database
-
-    return score_database(db, pending_only=True)
+def _extract_signals(db: Any) -> dict[str, Any]:
+    return extract_signals_database(db, pending_only=True)
 
 
 def rerank_top(
@@ -284,7 +285,7 @@ def rerank_top(
     candidate_limit: int = 50,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """LLM re-rank the deterministic shortlist; cache result in llm_job."""
+    """LLM re-rank recent signal-enriched offers; cache the result in llm_job."""
     if not api_key():
         raise LLMConfigError("OPENCODE_API_KEY is not set; LLM re-ranking is unavailable")
     models = _job_models()
@@ -292,11 +293,12 @@ def rerank_top(
         raise LLMConfigError("no approved -free models are available")
     rows = db.conn.execute(
         """
-        SELECT id, title, description, property_type, score, score_profile,
-               score_reasons, city, price_pln, area_m2, land_area_m2
+        SELECT id, title, description, property_type, score_signals,
+               city, price_pln, area_m2, land_area_m2
         FROM listing
-        WHERE score >= 45 AND offer_type IN ('sale', 'auction')
-        ORDER BY score DESC, first_seen_at DESC
+        WHERE score_signals IS NOT NULL AND score_signals_at IS NOT NULL
+          AND offer_type IN ('sale', 'auction')
+        ORDER BY first_seen_at DESC
         LIMIT ?
         """,
         (candidate_limit,),
@@ -307,9 +309,7 @@ def rerank_top(
             "title": row["title"],
             "description": str(row["description"] or "")[:1800],
             "type": row["property_type"],
-            "score": row["score"],
-            "profile": row["score_profile"],
-            "reasons": json.loads(row["score_reasons"]) if row["score_reasons"] else [],
+            "signals": json.loads(row["score_signals"]),
             "city": row["city"],
             "price_pln": row["price_pln"],
             "area_m2": row["area_m2"],

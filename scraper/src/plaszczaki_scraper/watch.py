@@ -28,7 +28,7 @@ from plaszczaki_scraper.models import Listing
 from plaszczaki_scraper.regions import RegionRegistry
 from plaszczaki_scraper.robots import default_cache_dir
 from plaszczaki_scraper.runner import RunMode, Runner, RunOptions
-from plaszczaki_scraper.scoring import score_database
+from plaszczaki_scraper.signals import extract_signals_database
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +178,7 @@ def run_watch_once(
     offer_types: Sequence[str] = (),
     region_ids: Sequence[str] | None = None,
     mode_lane: str = "",
-    score_pending: bool = True,
+    signals_pending: bool = True,
 ) -> dict[str, Any]:
     """Run one watch pass over the due sources.
 
@@ -278,10 +278,10 @@ def run_watch_once(
 
         results.append({"source_id": source.id, "mode": mode, **result})
 
-    scoring = None
-    if not dry_run and score_pending:
-        scoring = score_database(db, pending_only=True)
-    return {"sources": len(results), "results": results, "scoring": scoring}
+    signals = None
+    if not dry_run and signals_pending:
+        signals = extract_signals_database(db, pending_only=True)
+    return {"sources": len(results), "results": results, "signals": signals}
 
 
 def plan_watch_lanes(
@@ -408,11 +408,11 @@ def run_watch_lanes(
             offer_types=lane["offer_types"],
             region_ids=lane["region_ids"],
             mode_lane=lane.get("mode_lane", ""),
-            score_pending=False,
+            signals_pending=False,
         )
         passes.append({"lane": lane["key"], **report})
-    scoring = None if dry_run else score_database(db, pending_only=True)
-    return {"lanes": len(passes), "passes": passes, "scoring": scoring}
+    signals = None if dry_run else extract_signals_database(db, pending_only=True)
+    return {"lanes": len(passes), "passes": passes, "signals": signals}
 
 
 def watch_loop(

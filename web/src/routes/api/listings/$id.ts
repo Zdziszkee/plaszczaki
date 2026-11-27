@@ -3,12 +3,21 @@ import { eq } from "drizzle-orm";
 import { db } from "#/db";
 import { listing, source } from "#/db/schema";
 import type { ListingDetails } from "#/lib/listing-details";
+import { activeRankingConfigData } from "#/lib/ranking.server";
+import { type RankingListing, scoreListing } from "#/lib/ranking-engine";
+import type { ScoreProfile } from "#/lib/ranking-types";
 
 const DESCRIPTION_PREVIEW_LENGTH = 600;
 
 function parseListingId(value: string): number | null {
 	const id = Number(value);
 	return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+function rankingProfile(propertyType: string): ScoreProfile {
+	if (propertyType === "house") return "dom_kolej";
+	if (propertyType === "plot") return "dzialka_kolej";
+	return "kamienica";
 }
 
 function descriptionPreview(value: string | null): string | null {
@@ -98,12 +107,7 @@ export const Route = createFileRoute("/api/listings/$id")({
 						auctionDate: listing.auctionDate,
 						auctionRound: listing.auctionRound,
 						caseNumber: listing.caseNumber,
-						score: listing.score,
-						scoreProfile: listing.scoreProfile,
-						scores: listing.scores,
-						scoreReasons: listing.scoreReasons,
-						scoreBreakdown: listing.scoreBreakdown,
-						scoreVersion: listing.scoreVersion,
+						scoreSignals: listing.scoreSignals,
 					})
 					.from(listing)
 					.innerJoin(source, eq(source.id, listing.sourceId))
@@ -116,6 +120,27 @@ export const Route = createFileRoute("/api/listings/$id")({
 						{ status: 404 },
 					);
 				}
+
+				const profile = rankingProfile(row.propertyType);
+				const config = await activeRankingConfigData(profile);
+				const rankingListing: RankingListing = {
+					...row,
+					publishedAt: row.publishedAt?.getTime() ?? null,
+					firstSeenAt: row.firstSeenAt.getTime(),
+				};
+				const breakdown = row.scoreSignals
+					? scoreListing(rankingListing, config)
+					: null;
+				const score = breakdown?.score ?? null;
+				const reasons = breakdown
+					? [
+							...breakdown.contributions
+								.filter((reason) => reason.points > 0)
+								.sort((a, b) => b.points - a.points)
+								.slice(0, 6),
+							...breakdown.penalties.slice(0, 2),
+						].map(({ code, label, points }) => ({ code, label, points }))
+					: [];
 
 				const details: ListingDetails = {
 					id: row.id,
@@ -179,12 +204,12 @@ export const Route = createFileRoute("/api/listings/$id")({
 					auctionDate: row.auctionDate?.toISOString() ?? null,
 					auctionRound: row.auctionRound,
 					caseNumber: row.caseNumber,
-					score: row.score,
-					scoreProfile: row.scoreProfile,
-					scores: row.scores,
-					scoreReasons: row.scoreReasons,
-					scoreBreakdown: row.scoreBreakdown,
-					scoreVersion: row.scoreVersion,
+					score,
+					scoreProfile: profile,
+					scores: score === null ? null : { [profile]: score },
+					scoreReasons: reasons,
+					scoreBreakdown: null,
+					scoreVersion: row.scoreSignals?.version ?? null,
 				};
 
 				return Response.json(details, {

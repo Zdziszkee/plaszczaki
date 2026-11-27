@@ -8,7 +8,7 @@ import {
 	text,
 	uniqueIndex,
 } from "drizzle-orm/sqlite-core";
-import type { ScoreBreakdown } from "#/lib/score-types";
+import type { RankingConfig, RankingSignals } from "#/lib/ranking-types";
 
 export const todos = sqliteTable("todos", {
 	id: integer({ mode: "number" }).primaryKey({
@@ -204,7 +204,14 @@ export const listing = sqliteTable(
 
 		canonicalKey: text("canonical_key"),
 
-		// Attractiveness scoring, owned by the scraper's `score` command.
+		// Signal extraction is owned by the scraper; ranking is computed by the web app.
+		scoreSignals: text("score_signals", {
+			mode: "json",
+		}).$type<RankingSignals>(),
+		scoreSignalsVersion: text("score_signals_version"),
+		scoreSignalsAt: integer("score_signals_at", { mode: "timestamp_ms" }),
+
+		// Deprecated legacy columns retained only for a zero-downtime migration.
 		score: integer("score"),
 		scoreProfile: text("score_profile"),
 		scores: text("scores", { mode: "json" }).$type<Record<string, number>>(),
@@ -213,7 +220,7 @@ export const listing = sqliteTable(
 		>(),
 		scoreBreakdown: text("score_breakdown", {
 			mode: "json",
-		}).$type<ScoreBreakdown>(),
+		}).$type<unknown>(),
 		scoredAt: integer("scored_at", { mode: "timestamp_ms" }),
 		scoreVersion: text("score_version"),
 	},
@@ -229,9 +236,30 @@ export const listing = sqliteTable(
 			table.offerType,
 		),
 		index("listing_geo_idx").on(table.lat, table.lng),
-		index("listing_score_idx").on(table.propertyType, table.score),
+		index("listing_signals_idx").on(table.propertyType, table.scoreSignalsAt),
 		index("listing_first_seen_idx").on(table.firstSeenAt),
 	],
+);
+
+export const rankingPreset = sqliteTable(
+	"ranking_preset",
+	{
+		id: integer("id").primaryKey({ autoIncrement: true }),
+		name: text("name").notNull(),
+		profile: text("profile").notNull(),
+		config: text("config", { mode: "json" }).$type<RankingConfig>().notNull(),
+		isActive: integer("is_active", { mode: "boolean" })
+			.default(false)
+			.notNull(),
+		createdAt: integer("created_at", { mode: "timestamp_ms" })
+			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+			.notNull(),
+		updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+			.$onUpdate(() => new Date())
+			.notNull(),
+	},
+	(table) => [index("ranking_preset_profile_idx").on(table.profile)],
 );
 
 export const listingSnapshot = sqliteTable("listing_snapshot", {

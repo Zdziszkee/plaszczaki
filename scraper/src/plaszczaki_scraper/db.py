@@ -75,6 +75,17 @@ TRACKED_COLUMNS = tuple(
     column for column in LISTING_COLUMNS if column not in {"source_id", "external_id"}
 )
 
+# Explicit projection for signal extraction. Legacy score columns are deliberately
+# excluded so new code cannot read or write them.
+SIGNAL_INPUT_COLUMNS = (
+    "id",
+    *LISTING_COLUMNS,
+    "first_seen_at",
+    "score_signals",
+    "score_signals_version",
+    "score_signals_at",
+)
+
 EXPECTED_SCHEMA: dict[str, set[str]] = {
     "source": {"id", "label", "homepage_url", "adapter", "enabled", "created_at"},
     "listing": {
@@ -89,6 +100,9 @@ EXPECTED_SCHEMA: dict[str, set[str]] = {
         "score_breakdown",
         "scored_at",
         "score_version",
+        "score_signals",
+        "score_signals_version",
+        "score_signals_at",
     },
     "listing_snapshot": {
         "id",
@@ -496,7 +510,7 @@ class Database:
         assignments = ", ".join(f"{column} = ?" for column in columns)
         with self.conn:
             self.conn.execute(
-                f"UPDATE listing SET {assignments}, scored_at = NULL WHERE source_id = ? AND external_id = ?",
+                f"UPDATE listing SET {assignments}, score_signals_at = NULL WHERE source_id = ? AND external_id = ?",
                 (*values, listing.source_id, listing.external_id),
             )
         return True
@@ -532,7 +546,7 @@ class Database:
         if updates:
             with self.conn:
                 self.conn.executemany(
-                    "UPDATE listing SET canonical_key = ? WHERE id = ?",
+                    "UPDATE listing SET canonical_key = ?, score_signals_at = NULL WHERE id = ?",
                     updates,
                 )
         return len(updates)
@@ -591,7 +605,7 @@ class Database:
                 """
                 UPDATE listing
                 SET lat = ?, lng = ?, geo_source = ?,
-                    canonical_key = coalesce(?, canonical_key), scored_at = NULL
+                    canonical_key = coalesce(?, canonical_key), score_signals_at = NULL
                 WHERE source_id = ? AND external_id = ?
                 """,
                 (lat, lng, geo_source, canonical_key, source_id, external_id),
@@ -642,7 +656,7 @@ class Database:
         assignments = ", ".join(f"{column} = ?" for column in values)
         params: list[Any] = [*values.values(), now, old["id"]]
         self.conn.execute(
-            f"UPDATE listing SET {assignments}, last_seen_at = ?, scored_at = NULL WHERE id = ?",
+            f"UPDATE listing SET {assignments}, last_seen_at = ?, score_signals_at = NULL WHERE id = ?",
             params,
         )
         if old["price_pln"] != values["price_pln"]:
@@ -771,38 +785,41 @@ class Database:
         for row in rows:
             yield _row_to_listing(row)
 
-    def iter_score_rows(
+    def iter_signal_rows(
         self,
         *,
         source_id: str | None = None,
         limit: int | None = None,
         pending_only: bool = False,
-        score_version: str | None = None,
+        signals_version: str | None = None,
     ) -> Iterable[sqlite3.Row]:
-        """Raw rows (with id and bookkeeping) for the scoring command.
+        """Read canonical inputs for signal extraction, excluding legacy scores.
 
-        Pending rows include unscored listings and rows produced by an older
-        scoring configuration. Without a requested version, ``pending_only``
-        keeps its original meaning: only listings invalidated by a data update.
+        Pending rows include listings invalidated by a data update and rows with
+        missing or older signal payloads when ``signals_version`` is supplied.
         """
         conditions: list[str] = []
         params: list[Any] = []
         if source_id is not None:
             conditions.append("source_id = ?")
             params.append(source_id)
-        if pending_only and score_version is not None:
-            conditions.append("(scored_at IS NULL OR score_version IS NULL OR score_version != ?)")
-            params.append(score_version)
+        if pending_only and signals_version is not None:
+            conditions.append(
+                "(score_signals_at IS NULL OR score_signals IS NULL "
+                "OR score_signals_version IS NULL OR score_signals_version != ?)"
+            )
+            params.append(signals_version)
         elif pending_only:
-            conditions.append("scored_at IS NULL")
+            conditions.append("score_signals_at IS NULL")
         where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
-        sql = f"SELECT * FROM listing{where} ORDER BY id"
+        columns = ", ".join(SIGNAL_INPUT_COLUMNS)
+        sql = f"SELECT {columns} FROM listing{where} ORDER BY id"
         if limit is not None:
             sql += " LIMIT ?"
             params.append(limit)
         yield from self.conn.execute(sql, params).fetchall()
 
-    def iter_rcn_score_rows(
+    def iter_rcn_signal_rows(
         self,
         *,
         document_date_cutoff: str,
@@ -853,30 +870,29 @@ class Database:
             params,
         )
 
-    def update_scores(self, updates: list[tuple[Any, ...]]) -> int:
-        """Persist score, profile, per-profile scores, reasons, breakdown, time, version, id."""
+    def update_signals(self, updates: list[tuple[str, str, int, int]]) -> int:
+        """Persist signal JSON, version, extraction timestamp and listing id."""
         if not updates:
             return 0
         with self.conn:
             self.conn.executemany(
                 """
                 UPDATE listing
-                SET score = ?, score_profile = ?, scores = ?, score_reasons = ?,
-                    score_breakdown = ?, scored_at = ?, score_version = ?
+                SET score_signals = ?, score_signals_version = ?, score_signals_at = ?
                 WHERE id = ?
                 """,
                 updates,
             )
         return len(updates)
 
-    def invalidate_scores(self, listing_ids: list[int]) -> int:
-        """Mark listings for rescoring after enrichment changes their input."""
+    def invalidate_signals(self, listing_ids: list[int]) -> int:
+        """Mark listings for signal re-extraction after enrichment changes inputs."""
         if not listing_ids:
             return 0
         placeholders = ",".join("?" for _ in listing_ids)
         with self.conn:
             cursor = self.conn.execute(
-                f"UPDATE listing SET scored_at = NULL WHERE id IN ({placeholders})",
+                f"UPDATE listing SET score_signals_at = NULL WHERE id IN ({placeholders})",
                 listing_ids,
             )
         return cursor.rowcount

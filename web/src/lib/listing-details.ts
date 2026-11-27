@@ -1,5 +1,3 @@
-import type { ScoreBreakdown } from "#/lib/score-types";
-
 export type ListingScoreReason = {
 	code: string;
 	label: string;
@@ -73,6 +71,6 @@ export type ListingDetails = {
 	scoreProfile: string | null;
 	scores: Record<string, number> | null;
 	scoreReasons: ListingScoreReason[] | null;
-	scoreBreakdown: ScoreBreakdown | null;
+	scoreBreakdown: unknown | null;
 	scoreVersion: string | null;
 };

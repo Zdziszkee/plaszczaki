@@ -6,7 +6,7 @@ import ThemeToggle from "./ThemeToggle";
 const NAV_LINKS = [
 	{ to: "/", label: "Start", exact: true },
 	{ to: "/map", label: "Mapa", exact: false },
-	{ to: "/oferty", label: "Top oferty", exact: false },
+	{ to: "/oferty", label: "Ranking ofert", exact: false },
 ] as const;
 
 export default function Header() {

@@ -6,14 +6,31 @@ import { parseBbox, parseListingFilters } from "#/lib/listing-filter-types";
 import {
 	buildListingConditions,
 	combineConditions,
-	listingScoreExpression,
 } from "#/lib/listing-filters";
+import { activeRankingConfigData } from "#/lib/ranking.server";
+import {
+	type RankingConfig,
+	type RankingListing,
+	scoreListing,
+} from "#/lib/ranking-engine";
+import { createDefaultRankingConfig } from "#/lib/ranking-spec";
+import type { ScoreProfile } from "#/lib/ranking-types";
 import { sourceColor } from "#/lib/source-colors";
 
 function numberParam(value: string | null): number | undefined {
 	if (!value) return undefined;
 	const parsed = Number(value);
 	return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function rankingProfile(
+	propertyType: string,
+	selected?: ScoreProfile,
+): ScoreProfile {
+	if (selected) return selected;
+	if (propertyType === "house") return "dom_kolej";
+	if (propertyType === "plot") return "dzialka_kolej";
+	return "kamienica";
 }
 
 export const Route = createFileRoute("/api/listings")({
@@ -55,6 +72,7 @@ export const Route = createFileRoute("/api/listings")({
 						priceKind: listing.priceKind,
 						pricePerM2Pln: listing.pricePerM2Pln,
 						areaM2: listing.areaM2,
+						landAreaM2: listing.landAreaM2,
 						rooms: listing.rooms,
 						floor: listing.floor,
 						floorLabel: listing.floorLabel,
@@ -76,12 +94,7 @@ export const Route = createFileRoute("/api/listings")({
 						images: listing.images,
 						publishedAt: listing.publishedAt,
 						firstSeenAt: listing.firstSeenAt,
-						score: listing.score,
-						scoreProfile: listing.scoreProfile,
-						scores: listing.scores,
-						scoreReasons: listing.scoreReasons,
-						scoreBreakdown: listing.scoreBreakdown,
-						scoreVersion: listing.scoreVersion,
+						scoreSignals: listing.scoreSignals,
 						buildingType: listing.buildingType,
 						buildYear: listing.buildYear,
 						heating: listing.heating,
@@ -92,23 +105,57 @@ export const Route = createFileRoute("/api/listings")({
 					.where(where)
 					.orderBy(
 						filters.sort === "score"
-							? desc(listingScoreExpression(filters.scoreProfile))
+							? desc(listing.lastSeenAt)
 							: desc(listing.lastSeenAt),
 					);
 
-				const rows = returnAll ? await rowsQuery : await rowsQuery.limit(limit);
+				const needsRanking =
+					returnAll ||
+					filters.sort === "score" ||
+					filters.minScore !== undefined ||
+					filters.scoreProfile !== undefined;
+				const rows = needsRanking
+					? await rowsQuery
+					: await rowsQuery.limit(limit);
+
+				const profileKeys = new Set(
+					rows.map((row) =>
+						rankingProfile(row.propertyType, filters.scoreProfile),
+					),
+				);
+				const configEntries = await Promise.all(
+					Array.from(
+						profileKeys,
+						async (profile) =>
+							[profile, await activeRankingConfigData(profile)] as const,
+					),
+				);
+				const configs = new Map<ScoreProfile, RankingConfig>(configEntries);
 
 				const features = rows.flatMap((row) => {
 					if (row.lat === null || row.lng === null) return [];
-					const profile = filters.scoreProfile ?? row.scoreProfile;
-					const score = filters.scoreProfile
-						? (row.scores?.[filters.scoreProfile] ?? row.score)
-						: row.score;
-					const breakdown = profile
-						? row.scoreBreakdown?.profiles[
-								profile as keyof typeof row.scoreBreakdown.profiles
-							]
-						: undefined;
+					const profile = rankingProfile(
+						row.propertyType,
+						filters.scoreProfile,
+					);
+					const config =
+						configs.get(profile) ?? createDefaultRankingConfig(profile);
+					const rankingListing: RankingListing = {
+						...row,
+						publishedAt: row.publishedAt?.getTime() ?? null,
+						firstSeenAt: row.firstSeenAt.getTime(),
+					};
+					const breakdown = row.scoreSignals
+						? scoreListing(rankingListing, config)
+						: null;
+					const score = breakdown?.score ?? null;
+					if (
+						filters.minScore !== undefined &&
+						(score === null || score < filters.minScore)
+					) {
+						return [];
+					}
+					if (filters.scoreProfile && breakdown?.eligible === false) return [];
 					const reasons = breakdown
 						? [
 								...breakdown.contributions
@@ -117,7 +164,7 @@ export const Route = createFileRoute("/api/listings")({
 									.slice(0, 6),
 								...breakdown.penalties.slice(0, 2),
 							].map(({ code, label, points }) => ({ code, label, points }))
-						: (row.scoreReasons ?? []);
+						: [];
 					return [
 						{
 							type: "Feature" as const,
@@ -160,10 +207,10 @@ export const Route = createFileRoute("/api/listings")({
 									row.publishedAt?.getTime() ?? row.firstSeenAt.getTime(),
 								score,
 								scoreProfile: profile,
-								scores: row.scores,
+								scores: score === null ? null : { [profile]: score },
 								scoreReasons: reasons,
-								scoreBreakdown: row.scoreBreakdown,
-								scoreVersion: row.scoreVersion,
+								scoreBreakdown: null,
+								scoreVersion: row.scoreSignals?.version ?? null,
 								buildingType: row.buildingType,
 								buildYear: row.buildYear,
 								heating: row.heating,
@@ -173,14 +220,26 @@ export const Route = createFileRoute("/api/listings")({
 					];
 				});
 
+				if (filters.sort === "score") {
+					features.sort((a, b) => {
+						const scoreDifference =
+							(b.properties.score ?? -1) - (a.properties.score ?? -1);
+						return (
+							scoreDifference ||
+							b.properties.publishedAt - a.properties.publishedAt
+						);
+					});
+				}
+				const visibleFeatures = returnAll ? features : features.slice(0, limit);
+
 				return Response.json(
 					{
 						type: "FeatureCollection",
-						features,
+						features: visibleFeatures,
 						meta: {
 							mode: "points",
-							total: totalRow?.total ?? 0,
-							returned: features.length,
+							total: needsRanking ? features.length : (totalRow?.total ?? 0),
+							returned: visibleFeatures.length,
 							limit: returnAll ? undefined : limit,
 						},
 					},

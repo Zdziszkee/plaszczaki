@@ -1,7 +1,7 @@
 import type { ListingDetails, ListingScoreReason } from "#/lib/listing-details";
 import type { ScoreProfile } from "#/lib/listing-filter-types";
+import { SCORE_PROFILE_LABELS } from "#/lib/ranking-spec";
 import type { RcnComparables } from "#/lib/rcn-types";
-import { SCORE_PROFILE_LABELS } from "#/lib/score-types";
 import { sourceColor } from "#/lib/source-colors";
 
 export type ListingRcnState =

@@ -89,6 +89,14 @@ def _database(tmp_path: Path) -> Database:
     path = tmp_path / "test.db"
     connection = sqlite3.connect(path)
     connection.executescript(sql)
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(listing)").fetchall()}
+    for name, declaration in (
+        ("score_signals", "text"),
+        ("score_signals_version", "text"),
+        ("score_signals_at", "integer"),
+    ):
+        if name not in columns:
+            connection.execute(f"ALTER TABLE listing ADD COLUMN {name} {declaration}")
     connection.commit()
     connection.close()
     return Database(path)

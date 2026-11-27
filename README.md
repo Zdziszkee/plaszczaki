@@ -142,6 +142,18 @@ The layer is viewport-driven and calls `/api/listings` or `/api/listings/cluster
 for the current bounds. Clicking a listing opens a preview with its key
 attributes and the beginning of its description.
 
+### Ranking ofert
+
+`/oferty` is a configurable replacement for the old daily top-offer list. It combines
+hard filters (area, price per m², building type, ceiling height, distance from Kraków
+or Katowice centre, amenities and more) with per-signal scoring weights. Presets are
+stored in SQLite and can be activated, exported or imported.
+
+The Python sidecar only extracts versioned `listing.score_signals`. The TanStack Start
+app owns the declarative profile specification, score calculation, presets and live
+ranking. Run `uv run --directory scraper python -m plaszczaki_scraper signals` after
+schema changes or to backfill all listings.
+
 ### Database
 
 SQLite via `bun:sqlite` and Drizzle ORM.

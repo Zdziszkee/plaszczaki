@@ -1,4 +1,4 @@
-"""Reference geodata for attractiveness scoring.
+"""Reference geodata for deterministic signal extraction.
 
 Fetchers (CLI ``geodata``) download open data into ``data/cache``:
 - GTFS national rail feed (PolishTrainsGTFS: PolRegio, PKP Intercity, Koleje
@@ -8,7 +8,7 @@ Fetchers (CLI ``geodata``) download open data into ``data/cache``:
   OSM Overpass as a fallback, plus OSM amenity POIs.
 - Open-Meteo elevation for house/plot points (mountain proxy).
 
-The scoring module loads whatever is cached; missing files degrade gracefully
+The signal extractor loads whatever is cached; missing files degrade gracefully
 to neutral geo signals. Planned rail comes from the map snapshots committed in
 ``web/public/data`` (planned-rail.geojson, kolej-plus.geojson).
 """
@@ -142,7 +142,7 @@ def _overpass(query: str) -> dict[str, Any]:
             response = httpx.post(
                 endpoint,
                 data={"data": query},
-                headers={"user-agent": "plaszczaki-scoring-geodata/1.0"},
+                headers={"user-agent": "plaszczaki-signals-geodata/1.0"},
                 timeout=360.0,
             )
             response.raise_for_status()
@@ -529,7 +529,7 @@ def _extract_zip_member(archive_path: Path, member: str, destination: Path, *, f
 
 
 def _geodata_headers() -> dict[str, str]:
-    return {"user-agent": "plaszczaki-scoring-geodata/1.0"}
+    return {"user-agent": "plaszczaki-signals-geodata/1.0"}
 
 
 def _read_flatgeobuf_rings(path: Path, transformer: Transformer) -> list[list[list[float]]]:
@@ -743,7 +743,7 @@ def fetch_elevation(points: list[tuple[float, float]], *, rps: float = 1.0) -> d
 
 
 # ---------------------------------------------------------------------------
-# Spatial index + distance helpers used by scoring
+# Spatial index + distance helpers used by signal extraction
 # ---------------------------------------------------------------------------
 
 
@@ -842,7 +842,7 @@ class PlannedSegment:
 
 @dataclass(slots=True)
 class GeoContext:
-    """Everything scoring needs; missing caches mean neutral signals."""
+    """Cached geodata used by signal extraction; missing caches yield null factors."""
 
     stations: list[dict[str, Any]] = field(default_factory=list)
     station_index: GridIndex = field(default_factory=GridIndex)
@@ -981,31 +981,35 @@ class GeoContext:
                 best = distance
         return best
 
-    def planned_rail_bonus(
-        self, lat: float, lng: float, config: dict[str, Any], radius_km: float = 3.0
+    def planned_rail_signal(
+        self,
+        lat: float,
+        lng: float,
+        config: dict[str, Any],
+        radius_km: float | None = None,
     ) -> tuple[float, str | None]:
-        points_map = {
-            "construction": config.get("construction_points", 8),
-            "proposed": config.get("proposed_points", 4),
-            "schematic": config.get("schematic_points", 2),
-            "existing": 0,
-        }
+        """Return a normalized planned-rail factor and the nearest project label."""
+        radius = radius_km if radius_km is not None else float(config.get("radius_km", 3.0))
+        status_factors = config.get(
+            "status_factors",
+            {"construction": 1.0, "proposed": 0.5, "schematic": 0.25},
+        )
         best = 0.0
         label: str | None = None
-        for index in self.planned_index.query(lat, lng, radius_km):
+        for index in self.planned_index.query(lat, lng, radius):
             segment = self.planned[index]
             distance = segment_distance_km(lat, lng, segment.a, segment.b)
-            if distance > radius_km:
+            if distance > radius:
                 continue
-            points = points_map.get(segment.status, 0)
-            if segment.status == "existing":
+            status_factor = float(status_factors.get(segment.status, 0.0))
+            if status_factor <= 0:
                 continue
-            decay = max(0.0, 1.0 - distance / radius_km)
-            value = points * (0.5 + 0.5 * decay)
+            decay = max(0.0, 1.0 - distance / radius)
+            value = status_factor * (0.5 + 0.5 * decay)
             if value > best:
                 best = value
                 label = segment.project or segment.program or segment.status
-        return round(best, 1), label
+        return round(best, 6), label
 
     def walkability(self, lat: float, lng: float, radius_km: float = 1.0) -> float:
         weights = {"grocery": 3, "food": 3, "health": 2, "education": 2, "leisure": 2, "transit": 2}

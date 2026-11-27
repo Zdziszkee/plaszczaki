@@ -42,7 +42,7 @@ from plaszczaki_scraper.regions import RegionRegistry
 from plaszczaki_scraper.review import review_sources
 from plaszczaki_scraper.robots import default_cache_dir
 from plaszczaki_scraper.runner import Runner, RunOptions
-from plaszczaki_scraper.scoring import score_database
+from plaszczaki_scraper.signals import extract_signals_database
 from plaszczaki_scraper.watch import run_watch_lanes, run_watch_once, watch_loop
 
 logger = logging.getLogger(__name__)
@@ -247,13 +247,19 @@ def _parser() -> argparse.ArgumentParser:
         help="re-open rejected jobs so the improved address matcher can retry them",
     )
 
-    score = subparsers.add_parser("score", help="score stored offers for attractiveness and value")
-    score.add_argument("--source", help="only score one source id")
-    score.add_argument("--limit", type=int, help="maximum stored offers to process")
-    score.add_argument("--pending", action="store_true", help="only new or changed offers")
-    score.add_argument("--dry-run", action="store_true", help="calculate without writing")
+    signals = subparsers.add_parser(
+        "signals",
+        aliases=["score"],
+        help="extract normalized ranking signals (legacy alias: score)",
+    )
+    signals.add_argument("--source", help="only extract signals for one source id")
+    signals.add_argument("--limit", type=int, help="maximum stored offers to process")
+    signals.add_argument("--pending", action="store_true", help="only new or changed offers")
+    signals.add_argument("--dry-run", action="store_true", help="calculate without writing")
 
-    geodata = subparsers.add_parser("geodata", help="refresh open-data inputs for scoring")
+    geodata = subparsers.add_parser(
+        "geodata", help="refresh open-data inputs for signal extraction"
+    )
     geodata.add_argument(
         "--part",
         choices=("all", "gtfs", "nature", "poi", "elevation"),
@@ -316,10 +322,10 @@ def _parser() -> argparse.ArgumentParser:
     check = llm_sub.add_parser("check", help="try free models with a tiny JSON request")
     check.add_argument("--limit", type=int, default=10)
     check.add_argument("--timeout", type=float, default=60.0)
-    enrich = llm_sub.add_parser("enrich", help="extract scoring facts from listing descriptions")
+    enrich = llm_sub.add_parser("enrich", help="extract signal facts from listing descriptions")
     enrich.add_argument("--limit", type=int, default=50)
     enrich.add_argument("--dry-run", action="store_true")
-    rerank = llm_sub.add_parser("rerank", help="LLM re-rank the deterministic top-offer shortlist")
+    rerank = llm_sub.add_parser("rerank", help="LLM re-rank recent signal-enriched offers")
     rerank.add_argument("--limit", type=int, default=20)
     rerank.add_argument("--candidates", type=int, default=50)
     rerank.add_argument("--dry-run", action="store_true")
@@ -356,8 +362,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_probe(args)
         if args.command == "geocode":
             return _cmd_geocode(args)
-        if args.command == "score":
-            return _cmd_score(args)
+        if args.command in {"signals", "score"}:
+            return _cmd_signals(args)
         if args.command == "geodata":
             return _cmd_geodata(args)
         if args.command == "rcn":
@@ -447,7 +453,9 @@ def _cmd_run(args: argparse.Namespace) -> int:
                 on_saved=hook,
             ).run()
             if not args.dry_run:
-                result["scoring"] = score_database(db, source_id=source.id, pending_only=True)
+                result["signals"] = extract_signals_database(
+                    db, source_id=source.id, pending_only=True
+                )
     finally:
         client.close()
         store.close()
@@ -624,7 +632,7 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
     store = GeocodeStore()
     results: list[dict[str, Any]] = []
     failed = False
-    scoring: dict[str, Any] | None = None
+    signals: dict[str, Any] | None = None
 
     def hook(batch: Any) -> None:
         for item in batch:
@@ -712,14 +720,14 @@ def _cmd_run_all(args: argparse.Namespace) -> int:
                     if args.fail_fast:
                         break
             if not args.dry_run:
-                scoring = score_database(db, pending_only=True)
+                signals = extract_signals_database(db, pending_only=True)
     finally:
         store.close()
         db.close()
 
     print(
         json.dumps(
-            {"sources": len(results), "results": results, "scoring": scoring},
+            {"sources": len(results), "results": results, "signals": signals},
             ensure_ascii=False,
             indent=2,
         ),
@@ -876,11 +884,11 @@ def _cmd_geocode(args: argparse.Namespace) -> int:
     return 0 if result["failed"] == 0 else 2
 
 
-def _cmd_score(args: argparse.Namespace) -> int:
+def _cmd_signals(args: argparse.Namespace) -> int:
     db = Database(default_database_path())
     try:
         db.verify_schema()
-        report = score_database(
+        report = extract_signals_database(
             db,
             source_id=args.source,
             limit=args.limit,

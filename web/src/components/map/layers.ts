@@ -26,13 +26,14 @@ import {
 } from "./constants";
 import type { ListingFeatureCollection, ListingsMode } from "./listings-types";
 import { type AggregateMapTheme, readAggregateMapTheme } from "./map-theme";
+import { PLANNED_RAIL_SNAPSHOT_VERSION } from "./planned-rail-snapshot";
 
 /** One vector source serves rail, boundaries and the POI heatmap. */
 const STREETS_SOURCE = "streets";
 
 const PLANNED_RAIL_SOURCE = "planned-rail";
 /** Committed OSM snapshot, regenerated with `bun run data:planned-rail`. */
-const PLANNED_RAIL_URL = "/data/planned-rail.geojson";
+const PLANNED_RAIL_URL = `/data/planned-rail.geojson?v=${PLANNED_RAIL_SNAPSHOT_VERSION}`;
 const PLANNED_RAIL_ATTRIBUTION =
 	'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> (ODbL)';
 

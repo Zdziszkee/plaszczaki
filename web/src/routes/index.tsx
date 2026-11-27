@@ -68,10 +68,10 @@ const FEATURES = [
 	{
 		piece: "train-at-dusk",
 		size: 6,
-		eyebrow: "PROPOZYCJE / CODZIENNIE",
-		title: "Top oferty",
+		eyebrow: "RANKING / TWOJE KRYTERIA",
+		title: "Ranking ofert",
 		description:
-			"Codzienna lista mieszkań, domów i działek, które warto sprawdzić jako pierwsze. Porównaj ich zalety i zastanów się, która oferta pasuje do Twoich planów.",
+			"Sam ustaw zakres ofert i wagę cech: metraż, cenę za metr, typ budynku, wysokość sufitów czy odległość od centrum. Wynik przelicza się od razu.",
 		icon: ListOrderedIcon,
 		cta: "Zobacz propozycje",
 		to: "/oferty",
@@ -159,7 +159,7 @@ function App() {
 							<Button asChild variant="outline" size="lg">
 								<Link to="/oferty">
 									<ListOrderedIcon data-icon="inline-start" />
-									Top oferty
+									Ranking ofert
 								</Link>
 							</Button>
 							<Button asChild variant="outline" size="lg">

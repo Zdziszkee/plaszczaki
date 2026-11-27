@@ -32,6 +32,14 @@ def _database(tmp_path: Path) -> Database:
     path = tmp_path / "watch.db"
     connection = sqlite3.connect(path)
     connection.executescript(sql)
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(listing)").fetchall()}
+    for name, declaration in (
+        ("score_signals", "text"),
+        ("score_signals_version", "text"),
+        ("score_signals_at", "integer"),
+    ):
+        if name not in columns:
+            connection.execute(f"ALTER TABLE listing ADD COLUMN {name} {declaration}")
     connection.commit()
     connection.close()
     return Database(path)
@@ -517,22 +525,22 @@ def test_run_watch_lanes_uses_one_pass_per_lane(
         "stealth",
     ]
     assert {call["now_ms"] for call in calls} == {NOW}
-    assert all(call["score_pending"] is False for call in calls)
+    assert all(call["signals_pending"] is False for call in calls)
 
 
-def test_run_watch_once_scores_only_after_all_sources(
+def test_run_watch_once_extracts_signals_only_after_all_sources(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _patch_build(monkeypatch)
     events: list[str] = []
-    original = watch.score_database
+    original = watch.extract_signals_database
 
-    def fake_score(db: Database, **kwargs: Any) -> dict[str, Any]:
-        events.append(f"score:{db.count_listings()}")
+    def fake_signals(db: Database, **kwargs: Any) -> dict[str, Any]:
+        events.append(f"signals:{db.count_listings()}")
         return original(db, **kwargs)
 
-    monkeypatch.setattr(watch, "score_database", fake_score)
+    monkeypatch.setattr(watch, "extract_signals_database", fake_signals)
     with _database(tmp_path) as db:
         report = watch.run_watch_once(
             db=db,
@@ -542,11 +550,11 @@ def test_run_watch_once_scores_only_after_all_sources(
             lock_path=tmp_path / "watch.lock",
         )
 
-    assert report["scoring"] is not None
-    assert events == ["score:0"]
+    assert report["signals"] is not None
+    assert events == ["signals:0"]
 
 
-def test_run_watch_lanes_scores_once_after_every_lane(
+def test_run_watch_lanes_extracts_signals_once_after_every_lane(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -555,14 +563,14 @@ def test_run_watch_lanes_scores_once_after_every_lane(
 
     def fake_run_watch_once(**kwargs: Any) -> dict[str, Any]:
         events.append(f"lane:{kwargs['sources']}")
-        return {"sources": len(kwargs["sources"]), "results": [], "scoring": None}
+        return {"sources": len(kwargs["sources"]), "results": [], "signals": None}
 
-    def fake_score(db: Database, **kwargs: Any) -> dict[str, Any]:
-        events.append("score")
+    def fake_signals(db: Database, **kwargs: Any) -> dict[str, Any]:
+        events.append("signals")
         return {"processed": 0, "updated": 0}
 
     monkeypatch.setattr(watch, "run_watch_once", fake_run_watch_once)
-    monkeypatch.setattr(watch, "score_database", fake_score)
+    monkeypatch.setattr(watch, "extract_signals_database", fake_signals)
     with _database(tmp_path) as db:
         report = watch.run_watch_lanes(
             db=db,
@@ -572,6 +580,6 @@ def test_run_watch_lanes_scores_once_after_every_lane(
         )
 
     assert report["lanes"] == 7
-    assert events[-1] == "score"
-    assert events.count("score") == 1
-    assert all(event != "score" for event in events[:-1])
+    assert events[-1] == "signals"
+    assert events.count("signals") == 1
+    assert all(event != "signals" for event in events[:-1])

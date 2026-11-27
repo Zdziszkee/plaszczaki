@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
 import pytest
 
+from plaszczaki_scraper import signals
 from plaszczaki_scraper.config import repo_root
 from plaszczaki_scraper.db import Database, SchemaError, UpsertResult
+from plaszczaki_scraper.geodata import GeoContext
 from plaszczaki_scraper.models import Listing
 
 
@@ -20,6 +23,14 @@ def _database(tmp_path: Path) -> Database:
     path = tmp_path / "test.db"
     connection = sqlite3.connect(path)
     connection.executescript(_migration_sql())
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(listing)").fetchall()}
+    for name, declaration in (
+        ("score_signals", "text"),
+        ("score_signals_version", "text"),
+        ("score_signals_at", "integer"),
+    ):
+        if name not in columns:
+            connection.execute(f"ALTER TABLE listing ADD COLUMN {name} {declaration}")
     connection.commit()
     connection.close()
     return Database(path)
@@ -187,7 +198,7 @@ def test_canonical_keys_are_set_and_backfilled(tmp_path: Path) -> None:
         assert db.backfill_canonical_keys() == 2
 
 
-def test_pending_score_rows_include_older_versions(tmp_path: Path) -> None:
+def test_pending_signal_rows_include_older_versions(tmp_path: Path) -> None:
     with _database(tmp_path) as db:
         db.upsert_source(
             source_id="otodom",
@@ -198,11 +209,119 @@ def test_pending_score_rows_include_older_versions(tmp_path: Path) -> None:
         db.upsert_listing(_listing())
         row = db.conn.execute("SELECT id FROM listing").fetchone()
         assert row is not None
-        db.update_scores([(50, "nowe_mieszkanie", "{}", "[]", "{}", 1, "1", row["id"])])
+        db.update_signals([("{}", "signals-v1", 1, row["id"])])
 
-        assert list(db.iter_score_rows(pending_only=True)) == []
-        pending = list(db.iter_score_rows(pending_only=True, score_version="2"))
+        assert list(db.iter_signal_rows(pending_only=True)) == []
+        pending = list(db.iter_signal_rows(pending_only=True, signals_version="signals-v2"))
         assert [item["id"] for item in pending] == [row["id"]]
+
+
+def test_signal_writes_leave_legacy_score_columns_untouched(tmp_path: Path) -> None:
+    with _database(tmp_path) as db:
+        db.upsert_source(
+            source_id="otodom",
+            label="Otodom",
+            homepage_url="https://www.otodom.pl",
+            adapter="otodom",
+        )
+        db.upsert_listing(_listing())
+        row = db.conn.execute("SELECT id FROM listing").fetchone()
+        assert row is not None
+        with db.conn:
+            db.conn.execute(
+                """
+                UPDATE listing
+                SET score = 77, score_profile = 'legacy', scores = '{}',
+                    score_reasons = '[]', score_breakdown = '{}',
+                    scored_at = 10, score_version = 'legacy'
+                WHERE id = ?
+                """,
+                (row["id"],),
+            )
+        db.update_signals([('{"version":"signals-v1"}', "signals-v1", 20, row["id"])])
+        stored = db.conn.execute(
+            """
+            SELECT score, score_profile, scores, score_reasons, score_breakdown,
+                   scored_at, score_version, score_signals, score_signals_version,
+                   score_signals_at
+            FROM listing
+            """
+        ).fetchone()
+        assert stored is not None
+        assert stored["score"] == 77
+        assert stored["score_profile"] == "legacy"
+        assert stored["scores"] == "{}"
+        assert stored["score_reasons"] == "[]"
+        assert stored["score_breakdown"] == "{}"
+        assert stored["scored_at"] == 10
+        assert stored["score_version"] == "legacy"
+        assert stored["score_signals_version"] == "signals-v1"
+        assert stored["score_signals_at"] == 20
+
+        assert db.invalidate_signals([row["id"]]) == 1
+        assert db.conn.execute("SELECT score_signals_at FROM listing").fetchone()[0] is None
+
+
+def test_listing_updates_invalidate_signals(tmp_path: Path) -> None:
+    with _database(tmp_path) as db:
+        db.upsert_source(
+            source_id="otodom",
+            label="Otodom",
+            homepage_url="https://www.otodom.pl",
+            adapter="otodom",
+        )
+        db.upsert_listing(_listing())
+        row = db.conn.execute("SELECT id FROM listing").fetchone()
+        assert row is not None
+        db.update_signals([("{}", "signals-v1", 20, row["id"])])
+        assert db.upsert_listing(_listing(price=450_000)) is UpsertResult.UPDATED
+        assert db.conn.execute("SELECT score_signals_at FROM listing").fetchone()[0] is None
+
+
+def test_extract_signals_database_supports_pending_limit_source_and_dry_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(signals.GeoContext, "load", classmethod(lambda cls: GeoContext()))
+    with _database(tmp_path) as db:
+        db.upsert_source(
+            source_id="otodom",
+            label="Otodom",
+            homepage_url="https://www.otodom.pl",
+            adapter="otodom",
+        )
+        db.upsert_listings([_listing(external_id="1"), _listing(external_id="2", price=450_000)])
+
+        dry_run = signals.extract_signals_database(db, limit=1, dry_run=True)
+        assert dry_run["processed"] == 1
+        assert dry_run["updated"] == 0
+        assert db.conn.execute("SELECT count(score_signals) FROM listing").fetchone()[0] == 0
+
+        first = signals.extract_signals_database(db, limit=1)
+        assert first["processed"] == 1
+        assert first["updated"] == 1
+        rows = db.conn.execute(
+            "SELECT score_signals, score_signals_version, score_signals_at FROM listing ORDER BY id"
+        ).fetchall()
+        payload = json.loads(rows[0]["score_signals"])
+        assert payload["version"] == "signals-v1"
+        assert set(payload["profiles"]) == {"kamienica", "nowe_mieszkanie"}
+        assert all(
+            value is not None
+            for profile in payload["profiles"].values()
+            for group in ("signals", "penalties")
+            for value in profile[group].values()
+        )
+        assert rows[0]["score_signals_version"] == "signals-v1"
+        assert rows[0]["score_signals_at"] is not None
+        assert rows[1]["score_signals"] is None
+
+        pending = signals.extract_signals_database(db, pending_only=True)
+        assert pending["processed"] == 1
+        assert pending["updated"] == 1
+        assert signals.extract_signals_database(db, pending_only=True)["processed"] == 0
+
+        assert signals.extract_signals_database(db, source_id="other")["processed"] == 0
+        assert signals.extract_signals_database(db, pending_only=False, limit=1)["processed"] == 1
 
 
 def test_update_listing_geo_sets_canonical_key(tmp_path: Path) -> None:
