@@ -49,11 +49,13 @@ export const DISTANCE_SIGNAL_LABELS = {
 
 export const CITY_CENTERS = {
 	krakow: {
+		city: "Kraków",
 		label: "Kraków — Rynek Główny",
 		lat: 50.0614,
 		lng: 19.9366,
 	},
 	katowice: {
+		city: "Katowice",
 		label: "Katowice — Rynek",
 		lat: 50.2599,
 		lng: 19.0216,
@@ -554,7 +556,7 @@ export function createDefaultRankingConfig(
 			propertyTypes: [],
 			offerTypes: ["sale", "auction"],
 			cities: [],
-			center: "krakow",
+			center: "nearest",
 			maxCenterDistanceKm: null,
 			areaMin: null,
 			areaMax: null,

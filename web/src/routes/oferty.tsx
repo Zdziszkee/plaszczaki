@@ -44,7 +44,7 @@ import {
 	type RankingResult,
 	sanitizeRankingConfig,
 } from "#/lib/ranking-engine";
-import { SCORE_PROFILE_LABELS } from "#/lib/ranking-spec";
+import { CITY_CENTERS, SCORE_PROFILE_LABELS } from "#/lib/ranking-spec";
 import type { RankedListing } from "#/lib/ranking-types";
 
 type RankingSearch = {
@@ -134,6 +134,9 @@ function ResultCard({ item, rank }: { item: RankedListing; rank: number }) {
 								maximumFractionDigits: 1,
 							})}{" "}
 							km od centrum
+							{item.centerCity
+								? ` · ${CITY_CENTERS[item.centerCity].city}`
+								: ""}
 						</Badge>
 					)}
 				</div>

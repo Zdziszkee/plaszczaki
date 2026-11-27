@@ -30,7 +30,11 @@ export const RANKING_PROFILES = [UNIVERSAL_SCORE_PROFILE] as const;
 export type ScoreProfile = (typeof RANKING_PROFILES)[number];
 export type LegacyScoreProfile = (typeof LEGACY_SCORE_PROFILES)[number];
 
-export type RankingCenter = "krakow" | "katowice";
+export const RANKING_CENTER_MODES = ["nearest", "krakow", "katowice"] as const;
+
+export type RankingCenterMode = (typeof RANKING_CENTER_MODES)[number];
+export type RankingCenterCity = Exclude<RankingCenterMode, "nearest">;
+export type RankingCenter = RankingCenterMode;
 export type RankingBooleanFilter = "any" | "yes" | "no";
 export type RankingLargeWindowsFilter = RankingBooleanFilter;
 export type RankingPostedWithin = "all" | "today" | "week" | "month";
@@ -277,6 +281,8 @@ export type RankedListing = {
 	breakdown: RankingBreakdown;
 	pricePerM2Pln: number | null;
 	distanceKm: number | null;
+	/** City whose centre was used to calculate `distanceKm`. */
+	centerCity: RankingCenterCity | null;
 };
 
 export type RankingResult = {

@@ -375,10 +375,17 @@ export default function RankingControls({
 							})
 						}
 					>
-						<option value="">Bez oceny centrum</option>
+						<option value="nearest">
+							Najbliższe duże miasto (Kraków / Katowice)
+						</option>
 						<option value="krakow">Kraków — Rynek Główny</option>
 						<option value="katowice">Katowice — Rynek</option>
+						<option value="">Bez oceny centrum</option>
 					</select>
+					<FieldDescription>
+						Przy „najbliższym” odległość liczona jest do bliższego centrum
+						Krakowa lub Katowic.
+					</FieldDescription>
 				</Field>
 			</ControlGroup>
 
@@ -623,7 +630,9 @@ export default function RankingControls({
 							})
 						}
 					/>
-					<FieldDescription>Odległość w linii prostej.</FieldDescription>
+					<FieldDescription>
+						Odległość w linii prostej do centrum wybranego miasta.
+					</FieldDescription>
 				</Field>
 			</ControlGroup>
 

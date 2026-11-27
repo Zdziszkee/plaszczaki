@@ -267,7 +267,7 @@ describe("ranking configuration", () => {
 		expect(config.filters.priceMin).toBe(5);
 		expect(config.filters.priceMax).toBe(10);
 		expect(config.filters.resultLimit).toBe(25);
-		expect(config.filters.center).toBe("krakow");
+		expect(config.filters.center).toBe("nearest");
 		expect(config.filters.elevator).toBe("yes");
 		expect(config.filters.parking).toBe("no");
 		expect(config.filters.districtHeating).toBe("any");
@@ -567,6 +567,41 @@ describe("ranking filters", () => {
 				filters: { ...config.filters, maxCenterDistanceKm: 1 },
 			}),
 		).toBe(false);
+	});
+
+	it("uses the nearest major city centre by default", () => {
+		const config = sanitizeRankingConfig({
+			...DEFAULT_RANKING_CONFIG,
+			filters: {
+				...DEFAULT_RANKING_CONFIG.filters,
+				center: "nearest",
+			},
+		});
+		const krakow = listing({
+			id: 1,
+			city: "Kraków",
+			lat: CITY_CENTERS.krakow.lat,
+			lng: CITY_CENTERS.krakow.lng,
+		});
+		const katowice = listing({
+			id: 2,
+			city: "Katowice",
+			lat: CITY_CENTERS.katowice.lat,
+			lng: CITY_CENTERS.katowice.lng,
+		});
+		const result = rankListings([krakow, katowice], config, 1000);
+		const byId = new Map(result.items.map((item) => [item.listing.id, item]));
+
+		expect(byId.get(1)?.centerCity).toBe("krakow");
+		expect(byId.get(1)?.distanceKm).toBeCloseTo(0, 5);
+		expect(byId.get(2)?.centerCity).toBe("katowice");
+		expect(byId.get(2)?.distanceKm).toBeCloseTo(0, 5);
+
+		const nearbyKatowice = {
+			...config,
+			filters: { ...config.filters, maxCenterDistanceKm: 1 },
+		};
+		expect(matchesRankingFilters(katowice, nearbyKatowice)).toBe(true);
 	});
 
 	it("derives price per square metre with canonical and plot fallbacks", () => {

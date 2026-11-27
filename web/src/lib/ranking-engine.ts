@@ -13,12 +13,15 @@ import {
 	LEGACY_SCORE_PROFILES,
 	type LegacyScoreProfile,
 	RANKING_CATEGORIES,
+	RANKING_CENTER_MODES,
 	type RankedListing,
 	type RankingBooleanFilter,
 	type RankingBreakdown,
 	type RankingCategory,
 	type RankingCategoryBreakdown,
 	type RankingCategoryWeights,
+	type RankingCenter,
+	type RankingCenterCity,
 	type RankingConfig,
 	type RankingContribution,
 	type RankingDate,
@@ -150,16 +153,46 @@ export function haversineKm(
 	return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(Math.min(1, haversine)));
 }
 
-export function distanceFromCenter(
+export type ResolvedRankingCenter = {
+	city: RankingCenterCity;
+	distanceKm: number;
+};
+
+function nearestCityCenter(lat: number, lng: number): ResolvedRankingCenter {
+	let nearest: ResolvedRankingCenter | null = null;
+	for (const mode of RANKING_CENTER_MODES) {
+		if (mode === "nearest") continue;
+		const point = CITY_CENTERS[mode];
+		const distanceKm = haversineKm(lat, lng, point.lat, point.lng);
+		if (nearest === null || distanceKm < nearest.distanceKm) {
+			nearest = { city: mode, distanceKm };
+		}
+	}
+	// CITY_CENTERS always contains at least one city.
+	return nearest as ResolvedRankingCenter;
+}
+
+export function resolveRankingCenter(
 	listing: RankingListing,
-	center: keyof typeof CITY_CENTERS | null,
-): number | null {
+	center: RankingCenter | null,
+): ResolvedRankingCenter | null {
 	if (!center) return null;
 	const lat = finiteNumber(listing.lat);
 	const lng = finiteNumber(listing.lng);
 	if (lat === null || lng === null) return null;
+	if (center === "nearest") return nearestCityCenter(lat, lng);
 	const point = CITY_CENTERS[center];
-	return haversineKm(lat, lng, point.lat, point.lng);
+	return {
+		city: center,
+		distanceKm: haversineKm(lat, lng, point.lat, point.lng),
+	};
+}
+
+export function distanceFromCenter(
+	listing: RankingListing,
+	center: RankingCenter | null,
+): number | null {
+	return resolveRankingCenter(listing, center)?.distanceKm ?? null;
 }
 
 function listingPrice(listing: RankingListing): number | null {
@@ -296,11 +329,15 @@ function sanitizeFilters(
 				normalizeBuildingType(item),
 			)
 		: [...defaults.buildingTypes];
-	const centerText = nonEmptyString(input.center);
 	const center =
-		centerText === "krakow" || centerText === "katowice"
-			? centerText
-			: defaults.center;
+		Object.hasOwn(input, "center") &&
+		(input.center === null || input.center === "")
+			? null
+			: sanitizeEnum(
+					input.center,
+					RANKING_CENTER_MODES,
+					defaults.center ?? "nearest",
+				);
 
 	const [areaMin, areaMax] = orderedRange(
 		sanitizeNumberFilter(input, "areaMin"),
@@ -1175,6 +1212,10 @@ export function rankListings(
 			}
 			continue;
 		}
+		const center = resolveRankingCenter(
+			listing,
+			sanitized.filters.center ?? null,
+		);
 		ranked.push({
 			rank: 0,
 			listing,
@@ -1182,7 +1223,8 @@ export function rankListings(
 			eligible: breakdown.eligible,
 			breakdown,
 			pricePerM2Pln: derivePricePerM2Pln(listing),
-			distanceKm: distanceFromCenter(listing, sanitized.filters.center ?? null),
+			distanceKm: center?.distanceKm ?? null,
+			centerCity: center?.city ?? null,
 		});
 	}
 	ranked.sort((a, b) =>
