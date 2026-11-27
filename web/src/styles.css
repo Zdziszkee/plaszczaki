@@ -343,6 +343,36 @@ body {
   -webkit-line-clamp: 4;
 }
 
+.listing-description-preview.is-expanded {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+}
+
+.listing-description-toggle {
+  margin-top: 4px;
+  padding: 0;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.listing-popup-action {
+  width: 100%;
+  padding: 6px 8px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  font: inherit;
+  font-weight: 600;
+}
+
 .listing-popup-loading,
 .listing-popup-error {
   display: flex;

@@ -21,12 +21,13 @@ import type {
 import {
 	LAYER_IDS,
 	type LayerToggles,
-	LISTINGS_AGGREGATE_MIN_ZOOM,
+	LISTINGS_POINTS_MIN_ZOOM,
 	MAPBOX_TOKEN,
 	POLAND_BOUNDS,
 	POLAND_CENTER,
 	POLAND_MAX_BOUNDS,
 	POLAND_MIN_ZOOM,
+	RCN_POINTS_MIN_ZOOM,
 } from "./constants";
 import ListingsStatus from "./ListingsStatus";
 import {
@@ -38,7 +39,6 @@ import {
 	addRailLayers,
 	addTerrainLayers,
 	applyToggles,
-	LISTINGS_SOURCE,
 	PLANNED_RAIL_LINE_LAYERS,
 	sync3d,
 	syncListingLayer,
@@ -388,11 +388,34 @@ export default function MapView({
 			const render = (state: ListingDetailsState) => {
 				if (popupRef.current !== popup) return;
 				popup.setHTML(listingPopupHtml(properties, state));
+				const element = popup.getElement();
 				if (state.status === "error") {
-					popup
-						.getElement()
+					element
 						?.querySelector<HTMLButtonElement>("[data-listing-retry]")
 						?.addEventListener("click", loadDetails);
+				}
+				if (state.status === "ready") {
+					if (!state.rcn) {
+						element
+							?.querySelector<HTMLButtonElement>("[data-listing-rcn]")
+							?.addEventListener("click", () => {
+								loadRcn(state.details.id, state.details);
+							});
+					}
+					const description = element?.querySelector<HTMLElement>(
+						"[data-listing-description]",
+					);
+					const descriptionToggle = element?.querySelector<HTMLButtonElement>(
+						"[data-listing-description-toggle]",
+					);
+					descriptionToggle?.addEventListener("click", () => {
+						const expanded =
+							description?.classList.toggle("is-expanded") ?? false;
+						descriptionToggle.setAttribute("aria-expanded", String(expanded));
+						descriptionToggle.textContent = expanded
+							? "Pokaż mniej"
+							: "Pokaż więcej";
+					});
 				}
 			};
 
@@ -446,7 +469,7 @@ export default function MapView({
 					cached &&
 					Date.now() - cached.cachedAt < LISTING_DETAILS_CACHE_TTL_MS
 				) {
-					loadRcn(id, cached.details);
+					render({ status: "ready", details: cached.details });
 					return;
 				}
 				detailsCacheRef.current.delete(id);
@@ -473,7 +496,7 @@ export default function MapView({
 						});
 						requestController = null;
 						detailsRequestRef.current = null;
-						loadRcn(id, details);
+						render({ status: "ready", details });
 					})
 					.catch(() => {
 						if (controller.signal.aborted || popupRef.current !== popup) {
@@ -542,14 +565,6 @@ export default function MapView({
 						? map.queryRenderedFeatures(point, { layers: aggregateLayers })
 								.length > 0
 						: false;
-				const clusterLayers = togglesRef.current.listings
-					? [LAYER_IDS.listingClusters].filter((id) => map.getLayer(id))
-					: [];
-				const hoveringCluster =
-					point && clusterLayers.length > 0
-						? map.queryRenderedFeatures(point, { layers: clusterLayers })
-								.length > 0
-						: false;
 				const rcnLayers = togglesRef.current.rcn
 					? [LAYER_IDS.rcnCluster, LAYER_IDS.rcnPoint].filter((id) =>
 							map.getLayer(id),
@@ -560,11 +575,7 @@ export default function MapView({
 						? map.queryRenderedFeatures(point, { layers: rcnLayers }).length > 0
 						: false;
 				map.getCanvas().style.cursor =
-					hoveringPlanned ||
-					hoveringListing ||
-					hoveringAggregate ||
-					hoveringCluster ||
-					hoveringRcn
+					hoveringPlanned || hoveringListing || hoveringAggregate || hoveringRcn
 						? "pointer"
 						: "";
 
@@ -626,10 +637,7 @@ export default function MapView({
 						popup.remove();
 						map.easeTo({
 							center: [lng, lat],
-							zoom: Math.max(
-								map.getZoom() + 2,
-								LISTINGS_AGGREGATE_MIN_ZOOM + 1,
-							),
+							zoom: LISTINGS_POINTS_MIN_ZOOM,
 						});
 					});
 				return;
@@ -696,48 +704,9 @@ export default function MapView({
 						popup.remove();
 						map.easeTo({
 							center,
-							zoom: Math.max(
-								map.getZoom() + 2,
-								LISTINGS_AGGREGATE_MIN_ZOOM + 1,
-							),
+							zoom: Math.max(map.getZoom() + 2, RCN_POINTS_MIN_ZOOM + 1),
 						});
 					});
-				return;
-			}
-
-			const clusterLayers = togglesRef.current.listings
-				? [LAYER_IDS.listingClusters].filter((id) => map.getLayer(id))
-				: [];
-			const clusterFeature =
-				clusterLayers.length > 0
-					? map.queryRenderedFeatures(event.point, { layers: clusterLayers })[0]
-					: undefined;
-			if (clusterFeature) {
-				closePopup();
-				const geometry = (
-					clusterFeature as unknown as {
-						geometry?: { type: string; coordinates: [number, number] };
-					}
-				).geometry;
-				const clusterId = Number(featureProperties(clusterFeature)?.cluster_id);
-				const source = map.getSource(LISTINGS_SOURCE) as
-					| { getClusterExpansionZoom: (id: number) => Promise<number> }
-					| undefined;
-				if (
-					geometry?.type === "Point" &&
-					source &&
-					Number.isFinite(clusterId)
-				) {
-					const [lng, lat] = geometry.coordinates;
-					source
-						.getClusterExpansionZoom(clusterId)
-						.then((zoom) => {
-							map.easeTo({ center: [lng, lat], zoom });
-						})
-						.catch(() => {
-							// The cluster may disappear between click and expansion.
-						});
-				}
 				return;
 			}
 

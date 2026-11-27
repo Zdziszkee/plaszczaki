@@ -23,6 +23,13 @@ export const Route = createFileRoute("/api/listings")({
 				const search = new URL(request.url).searchParams;
 				const filters = parseListingFilters(search);
 				const bbox = parseBbox(search);
+				const returnAll = search.get("all") === "true";
+				if (returnAll && !bbox) {
+					return Response.json(
+						{ error: "all=true requires a viewport bounding box" },
+						{ status: 400 },
+					);
+				}
 				const conditions = buildListingConditions(filters, bbox);
 				const where = combineConditions(conditions);
 
@@ -34,7 +41,7 @@ export const Route = createFileRoute("/api/listings")({
 					.from(listing)
 					.where(where);
 
-				const rows = await db
+				const rowsQuery = db
 					.select({
 						id: listing.id,
 						sourceId: listing.sourceId,
@@ -49,10 +56,20 @@ export const Route = createFileRoute("/api/listings")({
 						pricePerM2Pln: listing.pricePerM2Pln,
 						areaM2: listing.areaM2,
 						rooms: listing.rooms,
+						floor: listing.floor,
+						floorLabel: listing.floorLabel,
 						city: listing.city,
+						district: listing.district,
+						street: listing.street,
+						addressText: listing.addressText,
 						voivodeship: listing.voivodeship,
 						market: listing.market,
 						sellerType: listing.sellerType,
+						condition: listing.condition,
+						ownership: listing.ownership,
+						parking: listing.parking,
+						balcony: listing.balcony,
+						terrace: listing.terrace,
 						lat: listing.lat,
 						lng: listing.lng,
 						geoSource: listing.geoSource,
@@ -77,8 +94,9 @@ export const Route = createFileRoute("/api/listings")({
 						filters.sort === "score"
 							? desc(listingScoreExpression(filters.scoreProfile))
 							: desc(listing.lastSeenAt),
-					)
-					.limit(limit);
+					);
+
+				const rows = returnAll ? await rowsQuery : await rowsQuery.limit(limit);
 
 				const features = rows.flatMap((row) => {
 					if (row.lat === null || row.lng === null) return [];
@@ -122,10 +140,20 @@ export const Route = createFileRoute("/api/listings")({
 								pricePerM2Pln: row.pricePerM2Pln,
 								areaM2: row.areaM2,
 								rooms: row.rooms,
+								floor: row.floor,
+								floorLabel: row.floorLabel,
 								city: row.city,
+								district: row.district,
+								street: row.street,
+								addressText: row.addressText,
 								voivodeship: row.voivodeship,
 								market: row.market,
 								sellerType: row.sellerType,
+								condition: row.condition,
+								ownership: row.ownership,
+								parking: row.parking,
+								balcony: row.balcony,
+								terrace: row.terrace,
 								geoSource: row.geoSource,
 								image: row.images?.[0] ?? null,
 								publishedAt:
@@ -153,7 +181,7 @@ export const Route = createFileRoute("/api/listings")({
 							mode: "points",
 							total: totalRow?.total ?? 0,
 							returned: features.length,
-							limit,
+							limit: returnAll ? undefined : limit,
 						},
 					},
 					{ headers: { "Cache-Control": "public, max-age=60" } },

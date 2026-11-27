@@ -135,10 +135,12 @@ Kolej Plus project boxes and metadata live in
 `web/scripts/kolej-plus-projects.ts`.
 
 The same map renders scraped offers from `data/plaszczaki.db`. At low zoom it
-shows aggregated cells with counts; from zoom 10 it switches to individual
-listings. The **Oferty** toggle and its filters (offer type, property type,
-price range) are persisted in `localStorage`. The layer is viewport-driven and
-calls `/api/listings` or `/api/listings/clusters` for the current bounds.
+shows aggregated cells with counts; from zoom 14 it switches to every individual
+listing in the viewport without further clustering. The **Oferty** toggle and its
+filters (offer type, property type, price range) are persisted in `localStorage`.
+The layer is viewport-driven and calls `/api/listings` or `/api/listings/clusters`
+for the current bounds. Clicking a listing opens a preview with its key
+attributes and the beginning of its description.
 
 ### Database
 

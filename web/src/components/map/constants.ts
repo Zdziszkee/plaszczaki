@@ -58,8 +58,6 @@ export const COLORS = {
 	listingRent: "#fbbf24",
 	listingAuction: "#f472b6",
 	listingOther: "#94a3b8",
-	/** Clusters are source-agnostic, so they stay a neutral slate. */
-	listingCluster: "#64748b",
 	label: "#e2e8f0",
 	labelHalo: "#020617",
 	boundary: "#c4b5fd",
@@ -114,7 +112,9 @@ export const DEFAULT_TOGGLES: LayerToggles = {
 export const TOGGLES_STORAGE_KEY = "plaszczaki:map:toggles";
 export const LISTINGS_FILTERS_STORAGE_KEY = "plaszczaki:map:listings-filters";
 export const RCN_FILTERS_STORAGE_KEY = "plaszczaki:map:rcn-filters";
-export const LISTINGS_AGGREGATE_MIN_ZOOM = 10;
+/** At this neighbourhood scale (about 1 km on the scale bar), show every offer. */
+export const LISTINGS_POINTS_MIN_ZOOM = 14;
+export const RCN_POINTS_MIN_ZOOM = 10;
 
 export const LAYER_IDS = {
 	railCasing: "rail-casing",
@@ -141,8 +141,6 @@ export const LAYER_IDS = {
 	admin1: "admin-1",
 	admin2: "admin-2",
 	poiHeat: "poi-heat",
-	listingClusters: "listing-clusters",
-	listingClusterCount: "listing-cluster-count",
 	listingPoint: "listing-point",
 	listingScoreLabel: "listing-score-label",
 	listingAggregate: "listing-aggregate",

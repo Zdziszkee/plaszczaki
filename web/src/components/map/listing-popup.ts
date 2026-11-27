@@ -483,8 +483,80 @@ function attributesHtml(details: ListingDetails): string {
 		.join("")}</dl>`;
 }
 
+function quickFloorValue(properties: Record<string, unknown>): string | null {
+	const label = stringValue(properties.floorLabel);
+	if (label) {
+		const numbered = /^(?:floor_)?(\d+)$/i.exec(label);
+		if (numbered) {
+			const floor = Number(numbered[1]);
+			return floor === 0 ? "parter" : `${floor}. piętro`;
+		}
+		if (["ground_floor", "parter"].includes(label.toLowerCase())) {
+			return "parter";
+		}
+		return label;
+	}
+	const floor = numberValue(properties.floor);
+	if (floor === null) return null;
+	if (floor === 0) return "parter";
+	if (floor < 0) return `${Math.abs(floor)}. piętro podziemne`;
+	return `${floor}. piętro`;
+}
+
+/** Facts already present on the pin, shown while full details are loading. */
+function quickAttributesHtml(properties: Record<string, unknown>): string {
+	const candidates: Array<{ label: string; value: string | null }> = [
+		{ label: "Piętro", value: quickFloorValue(properties) },
+		{
+			label: "Typ budynku",
+			value: formatEnum(
+				stringValue(properties.buildingType),
+				BUILDING_TYPE_LABELS,
+			),
+		},
+		{
+			label: "Rok budowy",
+			value: numberValue(properties.buildYear)?.toString() ?? null,
+		},
+		{
+			label: "Rynek",
+			value: formatEnum(stringValue(properties.market), MARKET_LABELS),
+		},
+		{
+			label: "Stan",
+			value: formatEnum(stringValue(properties.condition), CONDITION_LABELS),
+		},
+		{
+			label: "Ogrzewanie",
+			value: formatEnum(stringValue(properties.heating), HEATING_LABELS),
+		},
+		{
+			label: "Własność",
+			value: formatEnum(stringValue(properties.ownership), OWNERSHIP_LABELS),
+		},
+		{
+			label: "Parking",
+			value: formatTokenList(stringValue(properties.parking), PARKING_LABELS),
+		},
+	].filter(
+		(attribute): attribute is { label: string; value: string } =>
+			Boolean(attribute.value) && attribute.value !== "unknown",
+	);
+	if (candidates.length === 0) return "";
+	return `<dl class="listing-attribute-grid">${candidates
+		.slice(0, 8)
+		.map(
+			(attribute) =>
+				`<div class="listing-attribute"><dt>${escapeHtml(attribute.label)}</dt><dd>${escapeHtml(attribute.value)}</dd></div>`,
+		)
+		.join("")}</dl>`;
+}
+
 function rcnComparablesHtml(state: ListingRcnState | undefined): string {
-	if (!state || state.status === "loading") {
+	if (!state) {
+		return `<section class="listing-popup-section" aria-labelledby="listing-rcn-title"><h3 id="listing-rcn-title" class="listing-popup-section-title">Porównanie RCN</h3><button type="button" class="listing-popup-action" data-listing-rcn>Porównaj z RCN</button></section>`;
+	}
+	if (state.status === "loading") {
 		return `<section class="listing-popup-section"><h3 class="listing-popup-section-title">Porównanie RCN</h3><div class="listing-popup-loading" role="status"><span class="listing-popup-spinner" aria-hidden="true"></span>Szukam porównywalnych transakcji…</div></section>`;
 	}
 	if (state.status === "error") {
@@ -534,6 +606,14 @@ function rcnComparablesHtml(state: ListingRcnState | undefined): string {
 	</section>`;
 }
 
+function descriptionHtml(details: ListingDetails): string {
+	const description = details.descriptionPreview;
+	if (!description) {
+		return `<section class="listing-popup-section" aria-labelledby="listing-description-title"><h3 id="listing-description-title" class="listing-popup-section-title">Opis</h3><p class="listing-popup-muted">Brak opisu.</p></section>`;
+	}
+	return `<section class="listing-popup-section" aria-labelledby="listing-description-title"><h3 id="listing-description-title" class="listing-popup-section-title">Opis</h3><p id="listing-description-text" class="listing-description-preview" data-listing-description>${escapeHtml(description)}</p><button type="button" class="listing-description-toggle" data-listing-description-toggle aria-expanded="false" aria-controls="listing-description-text">Pokaż więcej</button></section>`;
+}
+
 /** Popup content for a scraped property listing. */
 export function listingPopupHtml(
 	properties: Record<string, unknown>,
@@ -579,13 +659,16 @@ export function listingPopupHtml(
 			`${numberFormatter.format(numberValue(summary.areaM2) ?? 0)} m²`,
 		);
 	}
+	const address = stringValue(summary.addressText);
 	const location =
+		address ??
 		[
-			typeof summary.district === "string" ? summary.district : "",
-			typeof summary.city === "string" ? summary.city : "",
+			stringValue(summary.street),
+			stringValue(summary.district),
+			stringValue(summary.city),
 		]
-			.filter(Boolean)
-			.join(" · ") || (typeof summary.city === "string" ? summary.city : "");
+			.filter((part): part is string => Boolean(part))
+			.join(" · ");
 	if (location) details.push(location);
 
 	const imageUrl = safeHttpUrl(summary.image);
@@ -634,12 +717,16 @@ export function listingPopupHtml(
 			? ""
 			: `<div class="listing-popup-score"><div><span class="listing-popup-score-value" style="color:${scoreColor}">${score}/100</span>${profile ? `<div class="listing-popup-score-profile">${escapeHtml(profile)}</div>` : ""}</div>${reasons.length ? `<ul class="listing-popup-reasons">${reasons.map((reason) => `<li>${escapeHtml(reason.label)}</li>`).join("")}</ul>` : ""}</div>`;
 
+	const quickAttributes = quickAttributesHtml(summary);
+	const quickContent = quickAttributes
+		? `<section class="listing-popup-section" aria-labelledby="listing-quick-attributes-title"><h3 id="listing-quick-attributes-title" class="listing-popup-section-title">Najważniejsze cechy</h3>${quickAttributes}</section>`
+		: "";
 	const detailContent =
 		state.status === "ready"
-			? `<section class="listing-popup-section" aria-labelledby="listing-attributes-title"><h3 id="listing-attributes-title" class="listing-popup-section-title">Najważniejsze cechy</h3>${attributesHtml(state.details)}</section><section class="listing-popup-section" aria-labelledby="listing-description-title"><h3 id="listing-description-title" class="listing-popup-section-title">Opis</h3><p class="listing-description-preview${state.details.descriptionPreview ? "" : " listing-popup-muted"}">${escapeHtml(state.details.descriptionPreview ?? "Brak opisu.")}</p></section>`
+			? `<section class="listing-popup-section" aria-labelledby="listing-attributes-title"><h3 id="listing-attributes-title" class="listing-popup-section-title">Najważniejsze cechy</h3>${attributesHtml(state.details)}</section>${descriptionHtml(state.details)}`
 			: state.status === "error"
-				? `<div class="listing-popup-error" role="status"><span>Nie udało się pobrać szczegółów.</span><button type="button" class="listing-popup-retry" data-listing-retry>Spróbuj ponownie</button></div>`
-				: `<div class="listing-popup-loading" role="status"><span class="listing-popup-spinner" aria-hidden="true"></span>Ładowanie szczegółów…</div>`;
+				? `${quickContent}<div class="listing-popup-error" role="status"><span>Nie udało się pobrać szczegółów.</span><button type="button" class="listing-popup-retry" data-listing-retry>Spróbuj ponownie</button></div>`
+				: `${quickContent}<div class="listing-popup-loading" role="status"><span class="listing-popup-spinner" aria-hidden="true"></span>Ładowanie szczegółów…</div>`;
 	const rcnContent =
 		state.status === "ready" ? rcnComparablesHtml(state.rcn) : "";
 

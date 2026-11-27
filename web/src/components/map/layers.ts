@@ -1042,8 +1042,6 @@ function ensureListingPinIcon(map: MapboxMap): void {
 function removeListingPoints(map: MapboxMap): void {
 	removeLayer(map, LAYER_IDS.listingScoreLabel);
 	removeLayer(map, LAYER_IDS.listingPoint);
-	removeLayer(map, LAYER_IDS.listingClusterCount);
-	removeLayer(map, LAYER_IDS.listingClusters);
 	removeSource(map, LISTINGS_SOURCE);
 }
 
@@ -1053,7 +1051,7 @@ function removeListingAggregate(map: MapboxMap): void {
 	removeSource(map, LISTINGS_AGG_SOURCE);
 }
 
-/** Individual listings, clustered by Mapbox at high zoom. */
+/** Individual listings, rendered without client-side clustering. */
 export function syncListingPoints(
 	map: MapboxMap,
 	data?: ListingFeatureCollection,
@@ -1063,48 +1061,9 @@ export function syncListingPoints(
 		map.addSource(LISTINGS_SOURCE, {
 			type: "geojson",
 			data: data ?? emptyListings(),
-			cluster: true,
-			clusterMaxZoom: 13,
-			clusterRadius: 48,
 		});
 	} else if (data) {
 		existing.setData(data);
-	}
-
-	if (!map.getLayer(LAYER_IDS.listingClusters)) {
-		map.addLayer({
-			id: LAYER_IDS.listingClusters,
-			type: "circle",
-			source: LISTINGS_SOURCE,
-			filter: ["has", "point_count"],
-			paint: {
-				"circle-color": COLORS.listingCluster,
-				"circle-radius": ["step", ["get", "point_count"], 12, 10, 16, 50, 21],
-				"circle-opacity": 0.92,
-				"circle-stroke-color": COLORS.label,
-				"circle-stroke-width": 1.2,
-				"circle-stroke-opacity": 0.55,
-			},
-		});
-	}
-
-	if (!map.getLayer(LAYER_IDS.listingClusterCount)) {
-		map.addLayer({
-			id: LAYER_IDS.listingClusterCount,
-			type: "symbol",
-			source: LISTINGS_SOURCE,
-			filter: ["has", "point_count"],
-			layout: {
-				"text-field": ["get", "point_count_abbreviated"],
-				"text-size": 11,
-				"text-allow-overlap": true,
-			},
-			paint: {
-				"text-color": COLORS.label,
-				"text-halo-color": COLORS.labelHalo,
-				"text-halo-width": 1,
-			},
-		});
 	}
 
 	ensureListingPinIcon(map);
@@ -1114,7 +1073,6 @@ export function syncListingPoints(
 			id: LAYER_IDS.listingPoint,
 			type: "symbol",
 			source: LISTINGS_SOURCE,
-			filter: ["!", ["has", "point_count"]],
 			layout: {
 				"icon-image": LISTING_PIN_ICON,
 				"icon-anchor": "bottom",
@@ -1147,7 +1105,7 @@ export function syncListingPoints(
 			id: LAYER_IDS.listingScoreLabel,
 			type: "symbol",
 			source: LISTINGS_SOURCE,
-			filter: ["all", ["!", ["has", "point_count"]], ["has", "score"]],
+			filter: ["has", "score"],
 			layout: {
 				"text-field": ["to-string", ["get", "score"]],
 				"text-size": ["interpolate", ["linear"], ["zoom"], 10, 8, 14, 10],
@@ -1390,8 +1348,6 @@ export function applyToggles(map: MapboxMap, toggles: LayerToggles): void {
 	setVisibility(map, LAYER_IDS.admin2, toggles.boundaries);
 	setVisibility(map, LAYER_IDS.poiHeat, toggles.heatmap);
 
-	setVisibility(map, LAYER_IDS.listingClusters, toggles.listings);
-	setVisibility(map, LAYER_IDS.listingClusterCount, toggles.listings);
 	setVisibility(map, LAYER_IDS.listingPoint, toggles.listings);
 	setVisibility(map, LAYER_IDS.listingScoreLabel, toggles.listings);
 	setVisibility(map, LAYER_IDS.listingAggregate, toggles.listings);

@@ -4,7 +4,7 @@ import {
 	filtersToSearchParams,
 	type ListingFilters,
 } from "#/lib/listing-filter-types";
-import { LISTINGS_AGGREGATE_MIN_ZOOM } from "./constants";
+import { LISTINGS_POINTS_MIN_ZOOM } from "./constants";
 import type { ListingFeatureCollection, ListingsMode } from "./listings-types";
 
 type ResponseMeta = {
@@ -106,7 +106,7 @@ export function useListingsLayer({
 
 			const zoom = map.getZoom();
 			const nextMode: ListingsMode =
-				zoom >= LISTINGS_AGGREGATE_MIN_ZOOM ? "points" : "clusters";
+				zoom >= LISTINGS_POINTS_MIN_ZOOM ? "points" : "clusters";
 			const precision = precisionForZoom(zoom);
 			const key = `${nextMode}|${bbox.minLng},${bbox.minLat},${bbox.maxLng},${bbox.maxLat}|${filtersKey}|${precision}|${nonce}`;
 			if (!forceRef.current && key === lastKeyRef.current) return;
@@ -125,7 +125,7 @@ export function useListingsLayer({
 				params.set("precision", String(precision));
 				params.set("limit", "3000");
 			} else {
-				params.set("limit", "2000");
+				params.set("all", "true");
 			}
 
 			const path =

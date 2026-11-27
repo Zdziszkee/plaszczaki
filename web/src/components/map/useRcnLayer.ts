@@ -2,7 +2,7 @@ import type { Map as MapboxMap } from "mapbox-gl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { rcnFiltersToSearchParams } from "#/lib/rcn-filters";
 import type { RcnFeatureCollection, RcnMapFilters } from "#/lib/rcn-types";
-import { LISTINGS_AGGREGATE_MIN_ZOOM } from "./constants";
+import { RCN_POINTS_MIN_ZOOM } from "./constants";
 import type { ListingsMode } from "./listings-types";
 
 type RcnResponse = RcnFeatureCollection & {
@@ -89,7 +89,7 @@ export function useRcnLayer({
 			if (!bbox) return;
 			const zoom = map.getZoom();
 			const nextMode: ListingsMode =
-				zoom >= LISTINGS_AGGREGATE_MIN_ZOOM ? "points" : "clusters";
+				zoom >= RCN_POINTS_MIN_ZOOM ? "points" : "clusters";
 			const precision = precisionForZoom(zoom);
 			const key = `${nextMode}|${bbox.minLng},${bbox.minLat},${bbox.maxLng},${bbox.maxLat}|${filtersKey}|${precision}|${nonce}`;
 			if (!forceRef.current && key === lastKeyRef.current) return;
